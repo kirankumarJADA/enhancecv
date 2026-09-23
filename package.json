@@ -1,0 +1,17 @@
+{
+  "name": "enhancecv",
+  "version": "1.0.0",
+  "private": true,
+  "description": "EnhanceCV — Build a better CV for every job. Truthful, job-specific resume tailoring with transparent ATS analysis.",
+  "scripts": {
+    "install:all": "cd server && npm install && cd ../web && npm install",
+    "dev": "concurrently -n server,web \"npm run dev --prefix server\" \"npm run dev --prefix web\"",
+    "build": "npm run build --prefix server && npm run build --prefix web",
+    "test": "npm test --prefix server",
+    "start": "npm run start --prefix server",
+    "typecheck": "npm run typecheck --prefix server && npm run typecheck --prefix web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
