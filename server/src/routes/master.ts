@@ -1,13 +1,15 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
-import { getDb, newId } from '../db/db';
+import type { PoolClient } from 'pg';
+import { getDb, newId, withTransaction, type Queryable, TS_TEXT } from '../db/db';
 import { requireAuth } from '../middleware/auth';
 import { AppError } from '../middleware/errors';
 import { rateLimit } from '../middleware/rateLimit';
 import { analyseATS } from '../engine/ats';
 import { extractFile } from '../engine/extract';
-import { ResumeData, DEFAULT_SECTION_ORDER, ALL_SECTIONS } from '../types';
+import { track } from '../lib/analytics';
+import { ResumeData, CustomSection, DEFAULT_SECTION_ORDER, ALL_SECTIONS } from '../types';
 
 const router = Router();
 
@@ -26,12 +28,28 @@ export function resumeRowToData(row: { content: string }): ResumeData {
   return JSON.parse(row.content) as ResumeData;
 }
 
-export function getMasterRow(db: ReturnType<typeof getDb>, userId: string) {
-  return db
-    .prepare("SELECT id, user_id, kind, title, content, ats_score, created_at, updated_at FROM resumes WHERE user_id = ? AND kind = 'master' LIMIT 1")
-    .get(userId) as
-    | { id: string; user_id: string; kind: 'master'; title: string; content: string; ats_score: number | null; created_at: string; updated_at: string }
-    | undefined;
+export interface MasterRow {
+  id: string;
+  user_id: string;
+  kind: 'master';
+  title: string;
+  content: string;
+  ats_score: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getMasterRow(db: Queryable, userId: string): Promise<MasterRow | undefined> {
+  const result = await db.query(
+    `SELECT id, user_id, kind, title, content, ats_score,
+            ${TS_TEXT('created_at')} AS created_at,
+            ${TS_TEXT('updated_at')} AS updated_at
+     FROM resumes
+     WHERE user_id = $1 AND kind = 'master'
+     LIMIT 1`,
+    [userId],
+  );
+  return result.rows[0] as MasterRow | undefined;
 }
 
 export function sanitizeResumeData(input: unknown): ResumeData {
@@ -90,8 +108,14 @@ export function sanitizeResumeData(input: unknown): ResumeData {
       proficiency: z.string().max(40).optional().default(''),
     })).max(15).default([]),
     achievements: z.array(z.string().max(500)).max(20).default([]),
-    sectionOrder: z.array(z.enum(['summary', 'experience', 'projects', 'education', 'skills', 'certifications', 'languages', 'achievements'])).default([...DEFAULT_SECTION_ORDER]),
-    hiddenSections: z.array(z.enum(['summary', 'experience', 'projects', 'education', 'skills', 'certifications', 'languages', 'achievements'])).default([]),
+    customSections: z.array(z.object({
+      id: z.string().max(64),
+      title: z.string().min(1).max(80),
+      bullets: z.array(z.string().max(500)).max(20).default([]),
+    })).max(10).default([]),
+    // sectionOrder may contain core keys and 'custom_*' ids.
+    sectionOrder: z.array(z.string().max(48)).default([...DEFAULT_SECTION_ORDER]),
+    hiddenSections: z.array(z.string().max(48)).default([]),
   });
   const parsed = schema.parse(input);
   // ensure ids
@@ -104,9 +128,15 @@ export function sanitizeResumeData(input: unknown): ResumeData {
   parsed.education.forEach((e, i) => ensureId(e, 'edu', i));
   parsed.certifications.forEach((c, i) => ensureId(c, 'cert', i));
   parsed.languages.forEach((l, i) => ensureId(l, 'lang', i));
-  // validate section order covers sections
+  parsed.customSections.forEach((c: CustomSection, i: number) => {
+    if (!c.id || !c.id.startsWith('custom_')) c.id = `custom_${i + 1}_${Math.random().toString(36).slice(2, 8)}`;
+    if (!parsed.sectionOrder.includes(c.id)) parsed.sectionOrder.push(c.id);
+  });
+  // validate section order covers core sections and only references known ids
   for (const s of ALL_SECTIONS) if (!parsed.sectionOrder.includes(s)) parsed.sectionOrder.push(s);
-  parsed.hiddenSections = parsed.hiddenSections.filter((s) => ALL_SECTIONS.includes(s));
+  const known = new Set([...ALL_SECTIONS, ...parsed.customSections.map((c) => c.id)]);
+  parsed.sectionOrder = parsed.sectionOrder.filter((s) => known.has(s));
+  parsed.hiddenSections = parsed.hiddenSections.filter((s) => known.has(s));
   return parsed as ResumeData;
 }
 
@@ -148,9 +178,9 @@ router.post('/parse-upload', requireAuth, rateLimit({ windowMs: 60_000, max: 10 
 });
 
 /** Get the user's Master CV (creates nothing — returns null if absent). */
-router.get('/', requireAuth, (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   const db = getDb();
-  const row = getMasterRow(db, req.user!.uid);
+  const row = await getMasterRow(db, req.user!.uid);
   if (!row) {
     res.json({ master: null });
     return;
@@ -169,34 +199,50 @@ router.get('/', requireAuth, (req, res) => {
 });
 
 /** Create or update the Master CV. */
-router.put('/', requireAuth, rateLimit({ windowMs: 60_000, max: 30 }), (req, res) => {
+router.put('/', requireAuth, rateLimit({ windowMs: 60_000, max: 30 }), async (req, res) => {
   const body = z.object({ resume: z.unknown(), title: z.string().max(120).optional() }).parse(req.body);
   const resume = sanitizeResumeData(body.resume);
   const db = getDb();
-  const row = getMasterRow(db, req.user!.uid);
   const content = JSON.stringify(resume);
   const ats = analyseATS(resume);
-  if (row) {
-    db.prepare("UPDATE resumes SET content = ?, title = ?, ats_score = ?, updated_at = datetime('now') WHERE id = ?")
-      .run(content, body.title || 'Master CV', ats.overallScore, row.id);
-    res.json({ id: row.id, atsScore: ats.overallScore, completeness: computeCompleteness(resume) });
+  const existing = await getMasterRow(db, req.user!.uid);
+
+  let id: string;
+  if (existing) {
+    id = existing.id;
+    await db.query(
+      `UPDATE resumes
+       SET content = $1, title = $2, ats_score = $3, updated_at = NOW()
+       WHERE id = $4`,
+      [content, body.title || 'Master CV', ats.overallScore, existing.id],
+    );
+    track(req.user!.uid, 'master_cv_updated', { atsScore: ats.overallScore });
   } else {
-    const id = newId('res');
-    db.prepare("INSERT INTO resumes (id, user_id, kind, title, content, ats_score) VALUES (?, ?, 'master', ?, ?, ?)")
-      .run(id, req.user!.uid, body.title || 'Master CV', content, ats.overallScore);
-    db.prepare('UPDATE users SET onboarded = 1 WHERE id = ?').run(req.user!.uid);
-    res.status(201).json({ id, atsScore: ats.overallScore, completeness: computeCompleteness(resume) });
+    id = newId('res');
+    // Creating the Master CV also marks onboarding complete — one transaction.
+    await withTransaction(async (client: PoolClient) => {
+      await client.query(
+        `INSERT INTO resumes (id, user_id, kind, title, content, ats_score)
+         VALUES ($1, $2, 'master', $3, $4, $5)`,
+        [id, req.user!.uid, body.title || 'Master CV', content, ats.overallScore],
+      );
+      await client.query('UPDATE users SET onboarded = TRUE WHERE id = $1', [req.user!.uid]);
+    });
+    track(req.user!.uid, 'master_cv_created', { atsScore: ats.overallScore });
+    track(req.user!.uid, 'onboarding_completed', {});
   }
+
+  res.status(existing ? 200 : 201).json({ id, atsScore: ats.overallScore, completeness: computeCompleteness(resume) });
 });
 
 /** Compute (and cache) the ATS analysis for the Master CV. */
-router.get('/ats', requireAuth, (req, res) => {
+router.get('/ats', requireAuth, async (req, res) => {
   const db = getDb();
-  const row = getMasterRow(db, req.user!.uid);
+  const row = await getMasterRow(db, req.user!.uid);
   if (!row) throw new AppError('NO_MASTER_CV', 'Create your Master CV first.', 400);
   const resume = resumeRowToData(row);
   const analysis = analyseATS(resume);
-  db.prepare("UPDATE resumes SET ats_score = ? WHERE id = ?").run(analysis.overallScore, row.id);
+  await db.query('UPDATE resumes SET ats_score = $1 WHERE id = $2', [analysis.overallScore, row.id]);
   res.json({ analysis, completeness: computeCompleteness(resume) });
 });
 

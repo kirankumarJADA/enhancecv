@@ -146,6 +146,7 @@ export function makeMasterCV(): ResumeData {
     achievements: [
       'Won internal hackathon 2023 with an automated reconciliation prototype.',
     ],
+    customSections: [],
     sectionOrder: [...DEFAULT_SECTION_ORDER],
     hiddenSections: [],
   };

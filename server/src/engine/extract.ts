@@ -9,6 +9,7 @@ import {
   ResumeData,
   DEFAULT_SECTION_ORDER,
 } from '../types';
+import { AppError } from '../middleware/errors';
 import { findSkillsInText, splitSkillList } from '../lib/skills';
 import { isBulletLine, normalizeWhitespace, stripBulletPrefix, wordCount } from '../lib/text';
 
@@ -354,6 +355,7 @@ export function extractResumeFromText(rawText: string): ExtractionResult {
     certifications,
     languages,
     achievements,
+    customSections: [],
     sectionOrder: [...DEFAULT_SECTION_ORDER],
     hiddenSections: [],
   };
@@ -379,10 +381,10 @@ export async function extractFile(file: Express.Multer.File): Promise<Extraction
       text = text.replace(/[^\x20-\x7E\n]/g, ' ');
     }
   } else {
-    throw new Error('UNSUPPORTED_FILE_TYPE');
+    throw new AppError('UNSUPPORTED_FILE_TYPE', 'Unsupported file type. Please upload a PDF, DOCX or TXT file.', 400);
   }
   if (!text || text.replace(/\s/g, '').length < 40) {
-    throw new Error('PARSE_FAILED');
+    throw new AppError('PARSE_FAILED', 'We could not read this file. It may be empty, scanned, or corrupted.', 422);
   }
   return extractResumeFromText(text);
 }

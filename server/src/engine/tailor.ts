@@ -73,6 +73,28 @@ function masterNumbers(master: ResumeData): Set<string> {
   return nums;
 }
 
+/**
+ * Check one candidate bullet against the Master CV without mutating anything.
+ * Used by the AI agent's Truth Guard to pre-validate AI-proposed rewrites:
+ * technologies/claims must exist in the master, and no new numbers may appear
+ * (small ints 1–2 digits are tolerated as list indices/counts).
+ */
+export function isBulletTruthful(
+  bullet: string,
+  master: ResumeData,
+  masterSkills?: Set<string>,
+  masterNums?: Set<string>
+): { ok: boolean; unsupported: string[] } {
+  const skills = masterSkills ?? masterClaimTokens(master);
+  const nums = masterNums ?? masterNumbers(master);
+  const unsupported = [
+    ...claimsInText(bullet).filter((c) => !skills.has(c)),
+  ];
+  const bulletNums = [...bullet.matchAll(/\d+(?:[.,]\d+)?%?/g)].map((m) => m[0]);
+  unsupported.push(...bulletNums.filter((n) => !nums.has(n) && !/^\d{1,2}$/.test(n)));
+  return { ok: unsupported.length === 0, unsupported: [...new Set(unsupported)] };
+}
+
 function yearsOfExperience(master: ResumeData): number | null {
   let earliest: number | null = null;
   for (const e of master.experience) {
@@ -186,6 +208,8 @@ export async function tailorResume(
       before: oldSummary,
       after: newSummary,
       reason: 'Reframed around the target role using only facts already in your Master CV (role, experience span, evidenced skills, quantified achievement, education).',
+      label: 'summary',
+      evidence: 'Master CV → summary, experience dates, evidenced skills',
     });
   }
 
@@ -233,6 +257,8 @@ export async function tailorResume(
           before: original,
           after: text,
           reason: reason || 'Strengthened phrasing without adding new facts.',
+          label: 'bullet_rewrite',
+          evidence: `Master CV → Experience → ${exp.company} (same facts, stronger phrasing)`,
         });
       }
       return text;
@@ -252,6 +278,8 @@ export async function tailorResume(
           before: original,
           after: local.text,
           reason: local.reason || 'Strengthened phrasing without adding new facts.',
+          label: 'bullet_rewrite',
+          evidence: `Master CV → Projects → ${proj.name} (same facts, stronger phrasing)`,
         });
         return local.text;
       }
@@ -277,6 +305,8 @@ export async function tailorResume(
       before: originalTech.join(', '),
       after: sortedTech.join(', '),
       reason: 'Reordered so the skills this job actually asks for appear first. No skills were added or removed.',
+      label: 'skills_ordering',
+      evidence: 'Master CV → Technical Skills (reordering only — identical skill set)',
     });
   }
 
@@ -297,6 +327,8 @@ export async function tailorResume(
         before: original.join(' | '),
         after: sorted.join(' | '),
         reason: 'Moved the bullets most relevant to this job to the top. Content unchanged.',
+        label: 'ordering',
+        evidence: 'Master CV → same bullets, relevance-ranked against the job requirements',
       });
     }
   }

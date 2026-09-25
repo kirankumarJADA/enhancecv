@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Curevo AI Job Saver",
+  "version": "1.0.0",
+  "description": "Save job postings from supported job pages straight into your Curevo AI account. Works only with visible page content — no scraping of authenticated or protected sites.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["http://localhost:4000/*", "https://*/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Save job to Curevo AI"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

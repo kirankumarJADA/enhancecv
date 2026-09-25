@@ -2,7 +2,7 @@
 // the resume editor's editing pane.
 
 import { useState } from 'react';
-import type { ResumeData, ExperienceItem, ProjectItem, EducationItem, CertificationItem, LanguageItem } from '../types';
+import type { ResumeData, ExperienceItem, ProjectItem, EducationItem, CertificationItem, LanguageItem, CustomSection } from '../types';
 
 type Patch = (fn: (draft: ResumeData) => void) => void;
 
@@ -382,6 +382,41 @@ export default function ResumeFormEditor({ resume, onChange, showPersonal = true
       <Accordion title="Achievements">
         <AchievementsSection resume={resume} patch={onChange} />
       </Accordion>
+      {(resume.customSections || []).map((cs, i) => (
+        <Accordion key={cs.id} title={cs.title || 'Custom section'} subtitle="custom section">
+          <CustomSectionEditor
+            section={cs}
+            onChange={(next) => onChange((d) => { d.customSections[i] = next; })}
+            onRemove={() => onChange((d) => {
+              d.customSections = d.customSections.filter((_, j) => j !== i);
+              d.sectionOrder = d.sectionOrder.filter((k) => k !== cs.id);
+              d.hiddenSections = d.hiddenSections.filter((k) => k !== cs.id);
+            })}
+          />
+        </Accordion>
+      ))}
+      <button type="button" className="btn-secondary" onClick={() => onChange((d) => {
+        const id = `custom_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+        d.customSections.push({ id, title: '', bullets: [''] });
+        d.sectionOrder.push(id as typeof d.sectionOrder[number]);
+      })}>
+        + Add custom section (Publications, Volunteering, Interests…)
+      </button>
+    </div>
+  );
+}
+
+function CustomSectionEditor({ section, onChange, onRemove }: { section: CustomSection; onChange: (s: CustomSection) => void; onRemove: () => void }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-end gap-2">
+        <div className="flex-1">
+          <label className="label">Section title</label>
+          <input className="input" value={section.title} placeholder="e.g. Publications" onChange={(e) => onChange({ ...section, title: e.target.value })} />
+        </div>
+        <button type="button" className="btn-ghost mb-0.5 text-red-600 hover:bg-red-50" onClick={onRemove}>✕ Remove</button>
+      </div>
+      <BulletList label="Entries" bullets={section.bullets} onChange={(b) => onChange({ ...section, bullets: b })} />
     </div>
   );
 }

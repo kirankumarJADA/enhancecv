@@ -10,6 +10,7 @@ export default function Signup() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [devActionUrl, setDevActionUrl] = useState('');
   const { refresh } = useAuth();
   const navigate = useNavigate();
 
@@ -22,9 +23,10 @@ export default function Signup() {
     }
     setBusy(true);
     try {
-      await api.post('/auth/signup', { name, email, password });
+      const res = await api.post<{ user: { devActionUrl?: string } }>('/auth/signup', { name, email, password });
+      if (res.user.devActionUrl) setDevActionUrl(res.user.devActionUrl);
       await refresh();
-      navigate('/onboarding', { replace: true });
+      if (!res.user.devActionUrl) navigate('/onboarding', { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not create your account. Please try again.');
     } finally {
@@ -61,6 +63,14 @@ export default function Signup() {
             {busy && <Spinner className="h-4 w-4" />} Create account
           </button>
         </form>
+        {devActionUrl && (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800" role="status">
+            <p className="font-semibold">Verify your email to finish setup.</p>
+            <p className="mt-1 text-xs">This deployment has no email provider configured, so here is your verification link directly:</p>
+            <a className="mt-1.5 block break-all font-mono text-xs text-brand-700 underline" href={devActionUrl}>{devActionUrl}</a>
+            <button className="btn-primary mt-3 w-full py-2.5" onClick={() => navigate('/onboarding', { replace: true })}>Continue anyway →</button>
+          </div>
+        )}
         <p className="mt-6 text-center text-sm text-ink-500">
           Already have an account?{' '}
           <Link className="font-semibold text-brand-600 hover:text-brand-700" to="/login">Sign in</Link>

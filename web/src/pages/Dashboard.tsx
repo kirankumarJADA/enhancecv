@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { EmptyState, ScoreBar, ScoreRing } from '../components/ui';
-import type { ATSAnalysis } from '../types';
+import type { ATSAnalysis, UsageSnapshot } from '../types';
 
 interface DashboardData {
   user: { name: string; email: string; targetRole: string } | null;
@@ -15,10 +15,12 @@ interface DashboardData {
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [usage, setUsage] = useState<UsageSnapshot | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     void api.get<DashboardData>('/dashboard').then(setData).catch(() => setData(null));
+    void api.get<UsageSnapshot>('/ai/usage').then(setUsage).catch(() => setUsage(null));
   }, []);
 
   if (!data) return null;
@@ -43,6 +45,21 @@ export default function Dashboard() {
           Tailor My CV to a Job
         </button>
       </div>
+
+      {/* Monthly usage */}
+      {usage && (
+        <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="text-sm text-ink-600">
+            <span className="font-semibold text-ink-900">{usage.plan} plan</span> — this month:
+            {usage.features.map((f) => (
+              <span key={f.feature} className={`ml-2 ${f.used >= f.limit ? 'font-semibold text-red-600' : ''}`}>
+                {f.used}/{f.limit} {f.feature}
+              </span>
+            ))}
+          </p>
+          <Link className="text-xs font-semibold text-brand-600 hover:text-brand-700" to="/app/billing">Manage plan →</Link>
+        </div>
+      )}
 
       {/* Stat cards */}
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

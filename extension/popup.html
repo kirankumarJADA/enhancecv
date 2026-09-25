@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      body { width: 340px; font: 13px/1.5 system-ui, sans-serif; margin: 0; padding: 14px; color: #101828; }
+      h1 { font-size: 15px; margin: 0 0 2px; display: flex; align-items: center; gap: 6px; }
+      .logo { width: 18px; height: 18px; border-radius: 4px; background: #2547eb; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; }
+      p.hint { color: #667085; margin: 2px 0 10px; }
+      label { display: block; font-weight: 600; margin: 8px 0 3px; }
+      input { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid #d0d5dd; border-radius: 8px; font: inherit; }
+      button { margin-top: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 8px; background: #2547eb; color: #fff; font-weight: 600; cursor: pointer; }
+      button.secondary { background: #eef2f6; color: #101828; }
+      button:disabled { opacity: .5; cursor: default; }
+      #status { margin-top: 9px; font-size: 12px; min-height: 32px; }
+      .ok { color: #067647; } .err { color: #b42318; }
+      .job { border: 1px solid #e4e7ec; border-radius: 8px; padding: 8px; margin-top: 8px; }
+      .job b { display: block; }
+      .muted { color: #667085; font-size: 11px; }
+      a { color: #2547eb; }
+    </style>
+  </head>
+  <body>
+    <h1><span class="logo">C</span> Curevo Job Saver</h1>
+    <p class="hint">Save the job on the current tab to your Curevo account.</p>
+
+    <div id="connect-view">
+      <label for="api-url">Curevo API URL</label>
+      <input id="api-url" placeholder="http://localhost:4000" />
+      <label for="api-token">API token</label>
+      <input id="api-token" type="password" placeholder="Paste the token from Curevo → Profile" />
+      <button id="connect">Connect</button>
+      <p class="muted">Create the token in Curevo AI (Profile → Browser extension token). The token is stored locally in your browser and sent only to your Curevo API.</p>
+    </div>
+
+    <div id="save-view" style="display:none">
+      <div id="job" class="job" style="display:none"></div>
+      <button id="save">Save this job</button>
+      <button id="disconnect" class="secondary">Disconnect</button>
+    </div>
+
+    <div id="status" role="status"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>

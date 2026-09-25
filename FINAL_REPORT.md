@@ -1,522 +1,70 @@
-# EnhanceCV Final Product Quality Audit Report
+# Curevo AI — Final Implementation Report
+
+Date: 2026-09-24 · Scope: AI Career Operating System expansion on top of the verified deterministic core. Supersedes earlier reports.
+
+## 1. Features implemented (Feature Groups A–P)
+
+- **A. Advanced AI Interview Agent** — preparation packages with 11 question categories (BEHAVIOURAL…HR); every question carries `why_it_may_be_asked`, `evidence_from_cv`, `recommended_answer_structure` (STAR) and a `sample_truthful_answer` that is sentence-checked by the deterministic Truth Guard (fabricated sentences removed, counted, never shown).
+- **B. Mock interviews** — TEXT and VOICE modes (voice = browser microphone + abstracted speech provider; identical protocol, never required to boot). Sessions support start/pause/continue/end/restart, persistence and history. Evaluation uses explainable qualitative dimensions (relevance low/medium/high, evidence usage, structure, clarity, completeness, improvements, follow-up) — **no invented numeric scores** — plus deterministic unsupported-claim detection against the Master CV inside the user's answer. Session finish aggregates feedback deterministically. Without AI, sessions run with generic questions and honest progress; evaluation honestly returns `AI_NOT_CONFIGURED`.
+- **C. Job discovery** — preferences (title, keywords, location, remote, salary, level, type, industry) → provider-abstracted job source (`JOBS_API_URL`, normaliser accepts many field spellings) → per-job deterministic JD analysis + CV/JD match + ATS observation. Transparent fit fields only (match %, matched/missing/partial, evidence, gaps) — explicitly **not a ranking**. Save/dismiss/open/add-to-applications.
+- **D. Job URL import** — SSRF-safe fetching (http/https only, localhost/private/link-local/CGNAT/metadata ranges blocked, non-standard ports refused, 12 s timeout, 2 MB limit, redirect re-validation), JSON-LD `JobPosting` extraction + OG/meta + heuristics, honest failures with manual-paste fallback; plus `POST /api/jobs/import-paste` for user-provided fields (URL still SSRF-validated).
+- **E. Browser extension** (`extension/`) — Manifest V3 Curevo Job Saver: content script extracts job fields from visible page structures (JSON-LD → selectors → meta; no login/CAPTCHA/anti-bot bypass), popup with token-based connect flow, service worker calling `import-url` with paste fallback. Tokens: `POST /api/auth/extension-token` (hashed at rest, Bearer auth, revocable, last-used tracking). No secrets bundled; independently documented in `extension/README.md`.
+- **F. LinkedIn import** — paste-profile → deterministic parser (name, headline, about, experience with periods, education, skills, certifications, links) → preview → explicit confirm → **additive merge** into the Master CV (dedup by company+title/degree/skill; existing facts never overwritten).
+- **G. Document import** — existing PDF/DOCX/TXT extraction exposed via `POST /api/import/resume` with detected sections/contact/counts for review; user confirmation makes it evidence; import errors now surface as friendly 4xx (fixed an INTERNAL 500 where `PARSE_FAILED` was thrown as a plain Error).
+- **H. Rich section system** — `customSections` (Publications, Volunteering, Interests, …) added to `ResumeData`: sanitised (ids normalised, unknown section-order ids dropped), reorderable/hideable through the existing sectionOrder/hiddenSections mechanism, rendered in preview and ATS-safe PDF, editable via the form editor.
+- **I. Grammar agent** — one batched call per run; suggestions located by exact original text (hallucinated originals rejected) and truth-checked (no new facts); rejected counts surfaced; honest 503 without AI.
+- **J. Localization agent** — structured translation keyed by item ids; deterministic preservation validation (numbers multiset, dates, canonical technology names) with automatic restoration of drifted bullets and warnings; saved as a NEW resume version; ATS re-runs.
+- **K. Company research agent** — web-search provider abstraction (`RESEARCH_SEARCH_API_URL`); every "recent information" fact must cite a source URL returned by the provider (unsourced facts filtered); without a provider → honest `RESEARCH_NOT_CONFIGURED`, never AI-invented company facts.
+- **L. Smart application workflow** — `POST /api/applications/from-job` (from saved or analysed job) links job/resume/template, records a timeline event and returns next steps (tailor → cover letter → interview prep); `application_events` timeline per application; PATCH records status transitions.
+- **M. Application insights** — `GET /api/analytics/career`: applications by month/status/template/source, response & interview rates, average days between stages (window-function SQL) — descriptive only, with an explicit non-causality note.
+- **N. Resume Health Center** — `GET /api/analytics/health`: five deterministic components (ATS, section completeness, contact completeness, truth validation, bullet-quality heuristics) with explanations; AI availability labelled, never scored.
+- **O. Career command center** — dashboard usage strip; new navigation (Find Jobs, Interview, Health) with role-gated Admin; AI Tools expanded to tabbed Grammar / Translate / Company Research.
+- **P. Agent orchestration** — all agents (Resume, CoverLetter, LinkedIn, Interview, Grammar, Localization, CompanyResearch) share one provider abstraction, one evidence builder (`ai/evidence.ts` with the canonical TRUTH_RULES: JD/external content is untrusted data), Zod-validated structured output, timeout/retry, graceful failure with typed error codes, secret-free logging.
+
+## 2. Database changes (additive, idempotent)
+
+`saved_jobs`, `job_searches`, `interview_sessions`, `interview_questions`, `interview_answers`, `company_research`, `extension_tokens`, `application_events` — all user-owned with FK cascades and indexes; `ALTER TABLE … IF NOT EXISTS` extensions kept compatible with existing deployments.
+
+## 3. API endpoints added
 
-## Project Information
-- **Workspace**: C:\Users\jadak\.zcode\workspace\default\enhancecv
-- **Server**: C:\Users\jadak\.zcode\workspace\default\enhancecv\server
-- **Web Application**: C:\Users\jadak\.zcode\workspace\default\enhancecv\web
-- **Audit Date**: September 23, 2026
-- **Status**: VERIFIED OPERATIONAL
-
----
-
-## 1. REAL-WORLD RESUME TESTING
-
-### Test Profiles Created and Verified
-
-Four realistic professional profiles were tested through the complete workflow:
-
-**1. Java Backend Developer**
-- Master CV: 5 years Java/Spring Boot experience, PostgreSQL, Redis, Kafka, Docker, Kubernetes
-- Roles: Senior Java Developer, Java Developer
-- Projects: Transaction Service (2M txn/day), Cache Service (Redis-based)
-- Education: Stanford MSc, UC Berkeley BSc
-- Skills: Java, Spring Boot, Spring, PostgreSQL, MySQL, Redis, Kafka, Docker, Kubernetes, Maven, Gradle, JUnit, Mockito
-
-**2. React Frontend Developer**
-- Master CV: 4 years React, TypeScript, Tailwind CSS, Redux, Storybook, Jest, Cypress
-- Roles: Frontend Engineer, Junior Frontend Developer
-- Projects: Admin Dashboard (real-time analytics, 5k users), E-commerce Site (Stripe integration, GraphQL)
-- Education: MIT BS CS
-- Skills: React, TypeScript, JavaScript, HTML, CSS, Redux, Tailwind CSS, Storybook, Jest, Cypress
-
-**3. Cloud/DevOps Engineer**
-- Master CV: 6 years AWS, Azure, Kubernetes, Docker, Terraform, Helm, Prometheus, Grafana, Jenkins, GitHub Actions, Argo CD
-- Roles: DevOps Engineer, Site Reliability Engineer
-- Projects: Platform Migration (20+ apps to EKS), Observability Stack (Prometheus/Grafana)
-- Education: UT Austin BS IS
-- Skills: AWS, Azure, Kubernetes, Docker, Terraform, Helm, Python, Bash, Jenkins, GitHub Actions, Argo CD, Prometheus, Grafana, ELK, Terragrunt
-
-**4. Graduate Software Engineer**
-- Master CV: Computer Science graduate, internship experience
-- Roles: Software Engineering Intern, Student Developer
-- Projects: Task Manager (full-stack React/Node/PostgreSQL), Study Buddy (Socket.io collaboration)
-- Education: Boston University BS CS
-- Skills: Python, JavaScript, TypeScript, React, Node.js, Express, Flask, PostgreSQL, Git, Docker
-
-### Workflow Results (All Profiles)
-For each profile: Master CV → ATS analysis → JD analysis → Match → Tailor → Truth validation → Final CV
-
-**Outcome**: All profiles completed the full workflow successfully. Tailored resumes preserved Master CV integrity, ATS scores improved meaningfully (89→95 for Java profile), zero fabrication detected, PDFs generated with correct filenames.
-
-### Key Verification
-- Master CV content remained immutable after tailoring for all profiles
-- Tailored resumes reflected job-relevant skills reordering without adding unsupported technologies
-- ATS scores varied meaningfully based on CV content (weak CVs scored lower, strong CVs scored higher)
-- Cross-user isolation verified (403 forbidden for all profiles)
-
----
-
-## 2. ATS SCORE QUALITY
-
-### Audit of ATS Scoring Engine
-
-The ATS scoring engine is deterministic and rule-based, computing scores across 5 categories with weighted totals:
-
-**Category Weights**:
-- Formatting: 20%
-- Structure: 20%
-- Content: 30%
-- Skills: 20%
-- Readability: 10%
-
-### Score Verification Tests
-
-**Excellent CV**: Master CV with complete sections, 10+ technical skills, quantified bullets, consistent dates → Score: 89-95
-
-**Weak CV**: Missing summary, <2 bullets per role, no dates, empty skills → Score: 45-60 (conscientiously lower)
-
-**Poorly Formatted CV**: Inconsistent date formats, missing contact info, <4 standard sections → Score: 55-70 (penalized for formatting issues)
-
-**Missing Sections CV**: No experience, no education, no skills → Score: 30-50 (significant penalties)
-
-**Generic Bullets CV**: "Worked on various tasks", "Helped with things" → Score penalized for vague phrasem and lack of action verbs
-
-**Strong Quantified CV**: Metrics-rich bullets ("reduced response time by 30%", "processed 2M transactions daily") → Higher content score, reflects real value
-
-**Irrelevant Skills CV**: 30+ skills including many unrelated to actual experience → Skills score penalized as "overstuffed"
-
-**Excessive Keywords CV**: Keyword stuffing without substantive content → No artificial inflation; score based on actual rule passes
-
-### Scoring Integrity Findings
-
-✅ **Score changes are meaningful**: A CV with complete sections and quantified bullets scores significantly higher than one without
-
-✅ **No score inflation**: Scores reflect actual rule passes, not arbitrary values
-
-✅ **No duplicated scoring factors**: Each check runs once; weights are unique per category
-
-✅ **Keyword stuffing not rewarded**: Skills list with many irrelevant technologies is penalized
-
-✅ **No meaningless score changes**: Score only changes when CV content changes rule outcomes
-
-### Regression Tests
-All 27 engine tests pass, including:
-- Strong CV scores higher than weak CV
-- Duplicated bullets reduce score
-- Identical CVs yield identical scores
-- Page count estimation is sensible
-- Vague summary markers reduce content score
-
-### Conclusion
-The ATS scoring engine is fair, explainable, and resistant to manipulation. Scores genuinely reflect CV quality based on implemented rules.
-
----
-
-## 3. JD MATCH QUALITY
-
-### Semantic Matching Verification
-
-The matching engine classifies requirements into: MATCHED, PARTIAL, MISSING, UNKNOWN using a multi-tier classification system.
-
-### Classification Accuracy Tests
-
-**Exact Match**: JD "Spring Boot" → CV lists "Spring Boot" → Status: MATCHED with evidence note
-
-**Synonym/Related Technology**: 
-- JD "Kafka" → CV lists "Apache Kafka" → Status: MATCHED (canonical skill match)
-- JD "Python" → CV lists "Python 3" → Status: MATCHED (version recognized)
-
-**Related Technology**:
-- JD "Spring Boot" → CV lists "Spring Framework" → Status: PARTIAL (related but not exact; Spring Boot is a Spring Framework extension)
-- JD "Redis" → CV lists "Memcached" → Status: MISSING (different technology, not semantically related enough)
-
-**Unrelated Technology**:
-- JD "Java" → CV lists "JavaScript" → Status: MISSING (different languages)
-- JD "Kubernetes" → CV lists "Docker" → Status: MISSING (container vs orchestration)
-
-**Missing Technology**:
-- JD requires "Kubernetes" → CV has no Kubernetes mention → Status: MISSING
-- Properly flagged; no false matches
-
-### Explainable Breakdown
-The match breakdown is explainable with 9 weighted categories:
-1. Required skill coverage (35%)
-2. Preferred skill coverage (10%)
-3. Responsibility alignment (15%)
-4. Experience relevance (15%)
-5. Project relevance (10%)
-6. Keyword coverage (10%)
-7. Education alignment (5%)
-8. Score sum = 100 (verified in tests)
-
-### Semantic Evaluation Results
-
-| JD Term | CV Term | Classification | Reason |
-|---------|---------|----------------|--------|
-| Spring Boot | Spring Boot | MATCHED | Exact canonical match |
-| Spring Boot | Spring Framework | PARTIAL | Related ecosystem |
-| Kafka | Apache Kafka | MATCHED | Canonical recognition |
-| Kubernetes | Docker | MISSING | Different concepts |
-| Java | JavaScript | MISSING | Different languages |
-| 5+ years | 5 years experience | UNKNOWN | Year verification edge case |
-| REST API | Representational State Transfer API | MATCHED | Term alias recognized |
-
-### Conclusion
-The matching engine correctly classifies requirements with semantic awareness while avoiding false positives. The breakdown is fully explainable and weights sum to 100.
-
----
-
-## 4. TAILORED RESUME QUALITY
-
-### Generated Resume Content Inspection
-
-For each profile, the tailored resume was inspected for quality characteristics:
-
-**Java Backend Developer Tailored Resume**:
-- Summary: Relevant role focus (5 years experience, Spring Boot, transaction systems) without inventing new technologies
-- Experience bullets: Improved phrasing using stronger verbs ("Designed" instead of "Worked on"), JD terminology alignment where truthful
-- Skill ordering: JD-relevant skills (Spring Boot, PostgreSQL, Kafka) prioritized at top; unrelated skills follow
-- No Terraform, Azure, or GCP claims (verified via zero-fabrication test)
-- ATS score improved from 89 to 95
-
-**React Frontend Developer Tailored Resume**:
-- Summary: Focus on React, accessible web apps, Core Web Vitals improvements
-- Experience bullets: "Built responsive interfaces with React" strengthened; redundant bullets reordered
-- Skill ordering: React, TypeScript, Redux at top; CSS, Jest follow
-- No Next.js claims added if not in Master CV (truth validation)
-- Portfolio projects highlighted with relevant technologies
-
-**Cloud/DevOps Engineer Tailored Resume**:
-- Summary: 6 years experience, Kubernetes, CI/CD, infrastructure as code
-- Experience bullets: "Designed and maintained Kubernetes clusters", "Built CI/CD pipelines"
-- Skill ordering: Kubernetes, Docker, Terraform, Prometheus, Grafana prioritized
-- Certification claims: Only those present in Master CV (AWS CCA, KA, Terraform Associate)
-- Project relevance: Migration and observability projects highlighted
-
-**Graduate Software Engineer Tailored Resume**:
-- Summary: Computer Science graduate with internship experience
-- Experience: Intern bullets strengthened; academic projects featured
-- Skill ordering: Relevant coursework and internship skills prioritized
-- No senior-level technology claims (truthful to level)
-- Projects: Task Manager and Study Buddy featured with appropriate tech
-
-### Quality Checks Passed
-
-✅ **Summary relevance**: Each tailored summary reflects the target role using only Master CV facts
-
-✅ **Experience relevance**: Bullets reordered by JD relevance; content unchanged
-
-✅ **Bullet quality**: Weak openers ("Worked on", "Helped with") improved to specific action verbs
-
-✅ **Project relevance**: Projects with JD-relevant technologies highlighted; others preserved
-
-✅ **Skill ordering**: JD-relevant skills appear first; no skills added
-
-✅ **No excessive JD copying**: Generated resumes sound like professional resumes, not copy-pasted JDs
-
-✅ **Truth validation**: All generated claims supported by Master CV; auto-fixes applied where needed
-
-### Conclusion
-Tailored resumes are high-quality, job-relevant, and truthful. They improve relevance without fabrication or mindless JD copying.
-
----
-
-## 5. TRUTHFULNESS ADVERSARIAL TESTING
-
-### Attempts to Truth Validation Engine
-
-**Adversarial Test 1: Fabricated Technologies**
-- JD includes: AWS, Kubernetes, Terraform, Azure, GCP, Kafka
-- Master CV contains: None of these
-- Result: Final CV contains NONE of these technologies ✅
-- Detailed check: Each bullet's claims validated against Master CV skill set
-
-**Adversarial Test 2: Fake Metrics**
-- Bullet added: "Increased performance by 500%" (master CV has no metrics near this)
-- Result: Bullet auto-reverted to master version ✅
-- Report shows: "reverted — unsupported claims detected"
-
-**Adversarial Test 3: Fake Certifications**
-- Master CV: 1 Oracle cert
-- Attempted: Added "AWS Certified Solutions Architect", "CCNA", "CISSP"
-- Result: Only Oracle cert appears in generated CV ✅
-- Extra certifications removed during truth validation
-
-**Adversarial Test 4: Fake Job Titles**
-- JD requires: "Senior Architect"
-- Master CV: "Developer", "Engineer"
-- Result: Generated CV does not claim "Senior Architect" title ✅
-- Title derived from Master CV + JD alignment within truth bounds
-
-**Adversarial Test 5: Fake Employers**
-- JD mentions: "Nomos Bank", "TechCorp"
-- Master CV: "Finlio Technologies", "Cloudline Systems"
-- Result: No employer fabrication; Master CV employers preserved ✅
-
-**Adversarial Test 6: Fake Years of Experience**
-- JD requires: "5+ years"
-- Master CV: "4 years" explicitly stated
-- Result: Years in summary derived from Master CV employment dates; cannot exceed Master CV data ✅
-
-**Adversarial Test 6: Responsibility Fabrication**
-- JD: "Designed microservices architecture for 1M+ users"
-- Master CV: Experience with microservices but no scale claims
-- Result: Scale claims not added; experience reordered instead ✅
-
-### Zero-Fabrication Verification
-
-All adversarial tests pass. The truth validation engine correctly:
-- Reverts unsupported claims to Master CV version
-- Reports auto-fixed changes
-- Maintains `passedAll: false` when unsupported claims exist
-- Maintains `passedAll: true` for truthful content
-
-### Edge Cases Handled
-- Years of experience computed from Master CV dates (max year − min year)
-- Metric validation: only metrics present in Master CV allowed
-- Certification: only listed certifications allowed
-- Title: derived from Master CV headline + role alignment, never invented
-
----
-
-## 6. ATS FORMAT TESTING
-
-### PDF Generation Quality Audit
-
-**PDF File Inspection**:
-- File downloads successfully via HTTP
-- Content-Type: `application/pdf` ✅
-- Content-Disposition: `attachment; filename="Aarav_Sharma_Senior_Java_Backend_Engineer_EnhanceCV.pdf"` ✅
-- File size: 4232 bytes (substantial, not minimal) ✅
-- PDF header: `%PDF` confirmed in first 4 bytes ✅
-
-**Text Selectability**:
-- Extracted text contains: "Aarav Sharma" ✅
-- Extracted text contains: "aarav.sharma@example.com" ✅
-- Extracted text contains: "PROFESSIONAL EXPERIENCE" ✅
-- Extracted text contains: "Finlio Technologies" ✅
-- Extracted text contains: "Developed RESTful backend services" ✅
-- Extracted text contains: "Technical Skills" ✅
-
-**Page Layout**:
-- Standard single-column layout ✅
-- Normal reading order ✅
-- No text hidden in images ✅ (text is selectable, not rasterized)
-- No unnecessary tables ✅ (linear resume structure)
-- No broken page breaks ✅ (content flows logically)
-- No clipping ✅ (all content fits within page bounds)
-- No strange spacing ✅ (margins consistent)
-- No missing characters ✅ (font embedding works correctly)
-
-**Professional Appearance**:
-- Standard headings (Summary, Experience, Skills, Education) ✅
-- Consistent formatting throughout ✅
-- Selectable text for ATS parsing ✅
-- Machine-readable structure ✅
-
-### Conclusion
-PDF generation produces professional, ATS-readable documents with selectable text and correct formatting.
-
----
-
-## 7. USER EXPERIENCE
-
-### New User Walkthrough Assessment
-
-**Onboarding Flow**:
-- New user lands on landing page ✅
-- Signup flow: clear fields, error messages for duplicate email, weak password ✅
-- After signup: redirected to onboarding ✅
-- Onboarding: guided path to Master CV creation ✅
-
-**Master CV Creation**:
-- Upload PDF/DOCX option presented ✅
-- Guided questionnaire alternative ✅
-- Required fields validated (name, email, contact info) ✅
-- Optional fields work (headline, skills, education) ✅
-- Data persists across sessions (session persistence verified) ✅
-
-**ATS Analysis**:
-- After Master CV: baseline ATS score displayed ✅
-- Five category scores shown (formatting, structure, content, skills, readability) ✅
-- Working items listed with explanations ✅
-- Issues with recommendations displayed ✅
-
-**Job Description Input**:
-- Paste JD text ✅
-- Example JD button ✅
-- Minimum length validation (80 chars) ✅
-- Analysis displays: title, company, seniority, years, required/preferred skills, soft skills, responsibilities ✅
-
-**Match Results**:
-- Score with explainable breakdown ✅
-- Matched/partial/missing skills classified ✅
-- Evidence notes for each classification ✅
-- Responsibility alignment shown ✅
-
-**Tailoring**:
-- Tailoring pipeline runs ✅
-- Before/after ATS and match scores displayed ✅
-- Truth check: "All bullets supported by Master CV" or issue count ✅
-- Change log shows what changed and why ✅
-- "Edit & Download" button ✅
-
-**Editor**:
-- Suggestions for bullet rewording ✅
-- Quantification prompts (never auto-inserts) ✅
-- Skill reordering suggestions ✅
-- Changes persist independently ✅
-
-**Download**:
-- PDF downloads with correct filename ✅
-- Selectable text ✅
-- Professional formatting ✅
-- Version saved independently ✅
-
-### UX Improvements Identified
-
-The only UX concern found was the ATS card overlap on the landing page (already fixed). All other flows are intuitive and well-signposted. No confusing copy or broken interactions observed.
-
-### Conclusion
-The application provides a smooth new-user experience with clear guidance at each step. The product feels like a polished SaaS application.
-
----
-
-## 8. PERFORMANCE
-
-### API Call Audit
-
-**Duplicate API Calls**: None observed. Each action triggers appropriate single API call.
-
-**Unnecessary AI Requests**: 
-- Tailoring without OpenAI provider uses deterministic pipeline only ✅
-- Bullet improvement falls back to local rules when no AI provider ✅
-- No AI calls on initial page loads ✅
-
-**Slow Operations**:
-- JD analysis: ~1-2 seconds ✅
-- Tailoring: ~2-5 seconds (depends on AI provider) ✅
-- PDF generation: stream-based, no timeout issues ✅
-
-**Failed Requests**:
-- Network errors handled gracefully ✅
-- Malformed JD rejected with 400 ✅
-- Empty CV handled gracefully ✅
-- AI failures fall back to deterministic rules ✅
-
-**Retry Behavior**:
-- No infinite retry loops ✅
-- User-initiated actions can be retried ✅
-- Failed operations display error messages ✅
-
-**Loading States**:
-- Spinner shown during tailoring ✅
-- Page spinner during initial load ✅
-- Disabled buttons during async operations ✅
-
-**Empty States**:
-- Master CV empty: onboarding prompt shown ✅
-- No tailored resumes: guidance text displayed ✅
-- No JD pasted: instruction text visible ✅
-
-### Performance Findings
-
-✅ No performance regressions introduced
-✅ All operations complete within acceptable timeframes
-✅ Graceful degradation when AI unavailable
-✅ Proper loading and empty states
-✅ Network errors don't blank the UI
-
----
-
-## 9. FINAL REGRESSION
-
-### Test Results After All Changes
-
-**Server Tests**: 54/54 pass (27 API + 27 engine tests) ✅
-
-**Web Build**: `tsc --noEmit && vite build` passes ✅
-
-**Server Build**: `tsc -p tsconfig.build.json` passes ✅
-
-**Acceptance Workflow**: 17/17 checks pass ✅
-
-**Detailed Acceptance Results**:
-1. Health check: PASS
-2. Signup: PASS
-3. Session persistence: PASS
-4. Web app served from server: PASS
-5. Save Master CV (ATS 89, completeness 100%): PASS
-6. ATS analysis (score 89): PASS
-7. JD analysis + match: PASS
-8. Zero-fabrication: AWS reported missing: PASS
-9. Tailoring pipeline (ATS 89→95): PASS
-10. No Terraform fabrication: PASS
-11. Edit + save tailored version: PASS
-12. Editor suggestions: PASS
-13. PDF download: PASS
-14. Master CV unchanged: PASS
-15. Resume versions: PASS
-16. Cross-user access blocked: PASS
-17. Logout invalidates session: PASS
-
-### New Tests Added
-Zero new tests were required; all existing tests continue to pass. The only change was the targeted UI fix for the ATS card overlap.
-
-### Final Browser Check
-Landing page verified on desktop (1440px), tablet (768px), and mobile (390px). No overlapping elements, no clipped text, no broken layouts. The ATS card position fix works correctly at all screen sizes.
-
----
-
-## 10. FINAL REPORT
-
-### Summary of All Findings
-
-**Tests**: 54/54 unit tests pass, 17/17 acceptance checks pass
-
-**Builds**: Server build PASS, Web build PASS
-
-**Functional Verification**:
-- JWT authentication fully working
-- Master CV management with ATS analysis
-- JD analysis with skill classification
-- Explainable CV ↔ JD matching
-- Truthful resume tailoring (zero fabrication verified)
-- PDF generation with selectable text
-- Resume version management
-- Cross-user data isolation (403 forbidden)
-
-**Fixes Applied**:
-- Landing page: ATS card overlap fixed (position changed from `absolute -bottom-8 -left-2` to `absolute top-8 right-0`)
-- Root cause: ATS card absolutely positioned at bottom-left overlapped Truth Check text within match card
-- Fix: Moved to top-right corner, preserving both UI elements
-
-**Real-World Testing**:
-- 4 professional profiles tested (Java Backend, React Frontend, Cloud/DevOps, Graduate Engineer)
-- All workflows completed successfully
-- ATS scores varied meaningfully (89→95 after tailoring for strong CV)
-- Zero fabrication in all adversarial tests
-
-**Known Limitations**:
-- Scanned image PDFs not supported (requires text-based PDF or DOCX)
-- Very short JDs (<80 chars) rejected with helpful message
-- AI provider optional; deterministic rules used when not configured
-- Mobile viewport has some minor spacing differences at 390px (within acceptable tolerance)
-
-**Commands to Re-run Application**:
 ```
-npm install:all    # Install dependencies
-npm run build      # Build server and web
-npm test           # Run 54 tests
-npm run start      # Start server on port 4000
-# Then visit http://localhost:4000
+INTERVIEW   POST /api/interview/prepare · POST /api/interview/session
+            POST /api/interview/session/:id/answer · /finish · /pause
+            GET  /api/interview/history · /api/interview/session/:id
+JOBS        POST /api/jobs/discover · /api/jobs/import-url · /api/jobs/import-paste
+            GET  /api/jobs/saved · PATCH/DELETE /api/jobs/saved/:id · POST /api/jobs/saved/:id/analyse
+IMPORT      POST /api/import/resume · /api/import/linkedin · /api/import/linkedin/apply
+            GET  /api/import/master-summary
+AI          POST /api/ai/grammar · /api/ai/translate · /api/ai/company-research
+            GET  /api/ai/company-research
+APPLICATION POST /api/applications/from-job · GET /api/applications/:id/events
+ANALYTICS   GET /api/analytics/career · /api/analytics/health
+AUTH        POST /api/auth/extension-token · GET/DELETE /api/auth/extension-tokens(/:id)
 ```
 
-### Final Status
-**ENHANCECV IS PRODUCTION-READY**
+## 4. Frontend changes
 
-All 10 audit areas completed and verified. The application functions correctly, produces high-quality tailored resumes, maintains truthfulness by construction, and provides a polished user experience. The only change made during this audit was the targeted UI fix for the ATS card overlap on the landing page.
+New pages: Interview (Prepare/Mock/History), Jobs (Search/Import/Saved), Health Center; AI Tools became tabbed (Grammar/Translate/Company Research added); Layout navigation extended; Tailor consumes the manual-JD hand-off; ResumeFormEditor supports custom sections; all with loading/empty/error states.
 
----
-**Report generated**: September 23, 2026
-**Audit scope**: 10 categories, all actual results verified
+## 5. Verification (actually executed)
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` (server) | PASS |
+| `npm test` — **122/122** across 5 suites (27 engine + 27 api + 14 ai + 32 features + 22 career) on real PostgreSQL | PASS |
+| Baselines preserved: original 100 tests intact, no weakened assertions | ✅ |
+| `npm run build` (server) · `npm run build` (frontend, 94.7 KB gzip) | PASS · PASS |
+| Live acceptance workflow — **50 PASS / 0 FAIL** (was 30; +20 Career OS checks incl. SSRF block, LinkedIn import apply, TXT import, honest discovery/prep 503s, deterministic mock session end-to-end, sourced company research path, analytics, health, extension tokens) | PASS |
+| Audit: no SQLite remnants · no secrets/`.env` committed · no TODO/FIXME in src | ✅ |
+
+## 6. IMPLEMENTED + VERIFIED vs REQUIRES EXTERNAL CREDENTIALS vs FUTURE
+
+**Implemented + verified:** everything above except live third-party calls — including every graceful-degradation path (job discovery 503, interview prep 503, mock evaluation 503, research 503, deterministic mock fallback, SSRF refusals, additive-only import merging).
+
+**Implemented + requires external credentials (mock-tested only):** live job API feeds (`JOBS_API_URL`), live web search (`RESEARCH_SEARCH_API_URL`), live LLM calls (`AI_API_KEY`), speech-to-text provider for voice mode (architecture + mode flag shipped; transcript input falls back to typed text), Stripe/email/Sentry (unchanged from previous phase).
+
+**Optional future work:** production-packaged extension build/publish, richer per-provider normalisers, speech provider integrations (Web Speech API or cloud STT), resume-localization ATS tuning per market.
+
+## 7. Remaining manual configuration
+
+Unchanged from the previous phase plus: `JOBS_API_URL`/`JOBS_API_KEY`, `RESEARCH_SEARCH_API_URL`/`RESEARCH_SEARCH_API_KEY`, and extension token distribution to users. Deployment has not been performed from here — see `DEPLOYMENT.md`.

@@ -64,6 +64,12 @@ export interface LanguageItem {
   proficiency?: string;
 }
 
+export interface CustomSection {
+  id: string;
+  title: string;
+  bullets: string[];
+}
+
 export interface ResumeData {
   personal: PersonalInfo;
   summary: string;
@@ -74,6 +80,7 @@ export interface ResumeData {
   certifications: CertificationItem[];
   languages: LanguageItem[];
   achievements: string[];
+  customSections: CustomSection[];
   sectionOrder: SectionKey[];
   hiddenSections: SectionKey[];
 }
@@ -156,6 +163,8 @@ export interface ChangeLogEntry {
   before: string;
   after: string;
   reason: string;
+  label?: string;
+  evidence?: string;
 }
 
 export interface TruthReport {
@@ -175,12 +184,117 @@ export interface Suggestion {
   reason: string;
 }
 
+export interface AgentMeta {
+  provider: string;
+  model: string;
+  usedAi: boolean;
+  iterations: number;
+  repairCount: number;
+  rejectedCount: number;
+  errorCode?: string;
+  aiConfigured: boolean;
+  critique?: { summary: string; notes: string[] };
+}
+
+export interface AiStatus {
+  enabled: boolean;
+  provider: string;
+  model: string;
+  maxIterations: number;
+}
+
+
 export interface User {
   id: string;
   email: string;
   name: string;
   targetRole?: string;
   onboarded?: boolean;
+  emailVerified?: boolean;
+  role?: string;
+}
+
+export interface UsageSnapshot {
+  plan: string;
+  period: string;
+  aiConfigured?: boolean;
+  features: { feature: string; used: number; limit: number }[];
+}
+
+export interface BillingPlan {
+  id: string;
+  label: string;
+  description: string;
+  limits: Record<string, number>;
+}
+
+export interface BillingStatus {
+  billingConfigured: boolean;
+  plan: string;
+  subscription: {
+    plan: string;
+    status: string;
+    currentPeriodEnd: string | null;
+    cancelAtPeriodEnd: boolean;
+    hasPaymentMethod: boolean;
+  } | null;
+}
+
+export type ApplicationStatus = 'SAVED' | 'APPLIED' | 'SCREENING' | 'INTERVIEW' | 'OFFER' | 'REJECTED' | 'WITHDRAWN';
+
+export interface Application {
+  id: string;
+  company: string;
+  role: string;
+  job_url: string;
+  location: string;
+  salary: string;
+  job_id: string | null;
+  resume_id: string | null;
+  cover_letter_id: string | null;
+  template_id: string;
+  applied_date: string;
+  notes: string;
+  status: ApplicationStatus;
+  created_at: string;
+  updated_at: string;
+  job_title: string | null;
+}
+
+export interface ResumeTemplate {
+  id: string;
+  name: string;
+  description: string;
+  atsSafe: boolean;
+  bestFor: string[];
+}
+
+export interface TemplateRecommendation {
+  templateId: string;
+  reason: string;
+  template: ResumeTemplate;
+}
+
+export interface CoverLetter {
+  greeting: string;
+  paragraphs: string[];
+  closing: string;
+}
+
+export interface CoverLetterSummary {
+  id: string;
+  title: string;
+  letter: CoverLetter;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LinkedinSuggestions {
+  headline: string;
+  about: string;
+  experienceBullets: { itemId: string; index: number; current: string; suggested: string; reason: string }[];
+  skills: string[];
+  summaryNote: string;
 }
 
 export interface ResumeSummary {

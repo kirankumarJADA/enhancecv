@@ -21,6 +21,7 @@ function emptyResume(): ResumeData {
     certifications: [],
     languages: [],
     achievements: [],
+    customSections: [],
     sectionOrder: ['summary', 'experience', 'projects', 'skills', 'education', 'certifications', 'languages', 'achievements'],
     hiddenSections: [],
   };

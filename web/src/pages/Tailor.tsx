@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { ScoreBar, ScoreRing, Spinner, StatusChip } from '../components/ui';
 import { useToast } from '../state/ToastContext';
-import type { ChangeLogEntry, JobAnalysis, MatchAnalysis, ResumeData, TruthReport } from '../types';
+import type { AgentMeta, AiStatus, ChangeLogEntry, JobAnalysis, MatchAnalysis, ResumeData, TruthReport } from '../types';
 
 interface TailorResponse {
   runId: string;
@@ -14,9 +14,60 @@ interface TailorResponse {
   changeLog: ChangeLogEntry[];
   truth: TruthReport;
   resume: ResumeData;
+  agent?: AgentMeta;
 }
 
 type Stage = 'input' | 'analysed' | 'generating' | 'result';
+
+/**
+ * Pipeline stage descriptions shown while the request is in flight.
+ * Honesty rule: while the single request is running the backend cannot report
+ * intermediate progress, so this indicator NEVER claims steps are complete —
+ * it rotates the current activity message only. Real completion is shown
+ * exclusively from the actual server response on the result screen.
+ */
+const PIPELINE_STAGES = [
+  { label: 'Preparing your CV', detail: 'Loading your Master CV and verified evidence…' },
+  { label: 'Reading the job description', detail: 'Extracting required skills, seniority and keywords…' },
+  { label: 'Matching your experience', detail: 'Comparing every requirement against your Master CV…' },
+  { label: 'Optimizing resume content', detail: 'Rewriting weak bullets with facts you already have…' },
+  { label: 'Checking factual accuracy', detail: 'Validating every generated claim against your Master CV…' },
+  { label: 'Rechecking ATS compatibility', detail: 'Recalculating the ATS score with the deterministic engine…' },
+  { label: 'Reviewing the final resume', detail: 'Critique pass on clarity, relevance and alignment…' },
+];
+
+function TailoringProgress({ aiEnabled, provider, model }: { aiEnabled: boolean; provider?: string; model?: string }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setElapsed((e) => e + 1), 2200);
+    return () => clearInterval(t);
+  }, []);
+  const stage = PIPELINE_STAGES[Math.min(elapsed, PIPELINE_STAGES.length - 1)];
+
+  return (
+    <div className="mx-auto max-w-xl py-16 text-center">
+      <Spinner className="h-10 w-10 text-brand-500" />
+      <h2 className="mt-6 text-lg font-semibold text-ink-900" aria-live="polite">
+        {aiEnabled ? `AI agent tailoring your CV${provider ? ` (${provider}${model ? ` · ${model}` : ''})` : ''}…` : 'Tailoring your CV…'}
+      </h2>
+      <div className="mx-auto mt-8 max-w-sm rounded-2xl border border-ink-100 bg-white p-5 text-left">
+        <p className="text-sm font-medium text-ink-800">{stage.label}</p>
+        <p className="mt-1 text-sm text-ink-500">{stage.detail}</p>
+        <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-ink-100">
+          <div className="h-full w-1/3 animate-pulse rounded-full bg-brand-500" />
+        </div>
+      </div>
+      <ol className="mx-auto mt-6 max-w-sm space-y-1 text-left text-xs text-ink-400">
+        {PIPELINE_STAGES.map((s) => (
+          <li key={s.label}>• {s.label}</li>
+        ))}
+      </ol>
+      <p className="mt-6 text-xs text-ink-400">
+        Usually a few seconds. Truth validation runs on every generated claim before anything reaches you.
+      </p>
+    </div>
+  );
+}
 
 export default function Tailor() {
   const [stage, setStage] = useState<Stage>('input');
@@ -26,11 +77,19 @@ export default function Tailor() {
   const [match, setMatch] = useState<MatchAnalysis | null>(null);
   const [result, setResult] = useState<TailorResponse | null>(null);
   const [busy, setBusy] = useState(false);
+  const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
   const toast = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
     document.title = 'Tailor Your CV — EnhanceCV';
+    void api.get<AiStatus>('/ai/status').then(setAiStatus).catch(() => setAiStatus(null));
+    // Hand-off from the Jobs → Import page ("paste manually" flow).
+    const manual = sessionStorage.getItem('curevo_manual_jd');
+    if (manual) {
+      setJdText(manual);
+      sessionStorage.removeItem('curevo_manual_jd');
+    }
   }, []);
 
   async function loadExample() {
@@ -108,18 +167,8 @@ export default function Tailor() {
 
   // ---------------- GENERATING ----------------
   if (stage === 'generating') {
-    return (
-      <div className="mx-auto max-w-xl py-24 text-center">
-        <Spinner className="h-10 w-10 text-brand-500" />
-        <h2 className="mt-6 text-lg font-semibold text-ink-900">Tailoring your CV…</h2>
-        <ol className="mx-auto mt-6 max-w-xs space-y-2 text-left text-sm text-ink-500">
-          <li>✓ Running the tailoring engine</li>
-          <li>✓ Improving weak bullets (evidence-checked)</li>
-          <li>✓ Validating every claim against your Master CV</li>
-          <li>✓ Scoring the tailored result</li>
-        </ol>
-      </div>
-    );
+    const ai = aiStatus?.enabled;
+    return <TailoringProgress aiEnabled={!!ai} provider={aiStatus?.provider} model={aiStatus?.model} />;
   }
 
   // ---------------- RESULT ----------------
@@ -158,6 +207,36 @@ export default function Tailor() {
           </div>
         </div>
 
+        {/* AI agent transparency */}
+        {result.agent && (
+          <div className="card p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-ink-900">AI agent</h2>
+              <span className={`chip ${result.agent.usedAi ? 'bg-brand-50 text-brand-700' : 'bg-ink-100 text-ink-600'}`}>
+                {result.agent.usedAi ? `${result.agent.provider} · ${result.agent.model}` : 'Deterministic engine only'}
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-ink-500">
+              {result.agent.iterations} AI iteration(s) · {result.agent.rejectedCount} unsupported claim(s) rejected ·{' '}
+              {result.agent.repairCount} repaired · scores recalculated by the deterministic engine
+            </p>
+            {result.agent.errorCode && (
+              <p className="mt-1 text-xs text-amber-700">AI provider issue ({result.agent.errorCode}) — deterministic result guaranteed.</p>
+            )}
+            {result.agent.critique && result.agent.critique.notes.length > 0 && (
+              <div className="mt-3 rounded-xl border border-ink-100 bg-ink-50/60 p-4">
+                <p className="text-xs font-semibold text-ink-700">AI critique</p>
+                <p className="mt-1 text-xs text-ink-600">{result.agent.critique.summary}</p>
+                <ul className="mt-2 space-y-1 text-xs text-ink-500">
+                  {result.agent.critique.notes.slice(0, 5).map((n, i) => (
+                    <li key={i}>• {n}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Truth check */}
         <div className="card p-6">
           <div className="flex items-center justify-between">
@@ -178,25 +257,35 @@ export default function Tailor() {
 
         {/* Change log */}
         <div className="card p-6">
-          <h2 className="text-sm font-semibold text-ink-900">What changed ({result.changeLog.length} improvements)</h2>
-          <div className="mt-4 space-y-4">
-            {result.changeLog.slice(0, 12).map((c, i) => (
-              <div key={i} className="rounded-xl border border-ink-100 p-4">
-                <div className="flex items-center gap-2">
-                  <span className="chip bg-brand-50 text-brand-700">{c.type}</span>
-                  <span className="text-xs font-medium text-ink-500">{c.section}</span>
-                </div>
-                <p className="mt-2 text-xs text-ink-500">{c.reason}</p>
-                {c.before && c.after && c.before !== c.after && (
-                  <div className="mt-2 grid gap-2 text-sm">
-                    <p className="rounded-lg bg-red-50/70 px-3 py-2 text-red-800"><span className="font-semibold">Before:</span> {c.before.length > 240 ? `${c.before.slice(0, 240)}…` : c.before}</p>
-                    <p className="rounded-lg bg-emerald-50/70 px-3 py-2 text-emerald-900"><span className="font-semibold">After:</span> {c.after.length > 240 ? `${c.after.slice(0, 240)}…` : c.after}</p>
+          <h2 className="text-sm font-semibold text-ink-900">Change explanations ({result.changeLog.length})</h2>
+          <p className="mt-1 text-xs text-ink-400">Every modification with its reason and the evidence it came from.</p>
+          <div className="mt-4 space-y-3">
+            {result.changeLog.map((c, i) => (
+              <details key={i} className="rounded-xl border border-ink-100 p-4" open={i === 0}>
+                <summary className="cursor-pointer">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="chip bg-brand-50 text-brand-700">{c.label || c.type}</span>
+                    <span className="text-xs font-medium text-ink-600">{c.section}</span>
                   </div>
+                  <p className="mt-1.5 text-xs text-ink-500">{c.reason}</p>
+                </summary>
+                {c.before && c.after && c.before !== c.after ? (
+                  <div className="mt-3 grid gap-2 text-sm">
+                    <p className="rounded-lg bg-red-50/70 px-3 py-2 text-red-800"><span className="font-semibold">Original:</span> {c.before.length > 300 ? `${c.before.slice(0, 300)}…` : c.before}</p>
+                    <p className="rounded-lg bg-emerald-50/70 px-3 py-2 text-emerald-900"><span className="font-semibold">Updated:</span> {c.after.length > 300 ? `${c.after.slice(0, 300)}…` : c.after}</p>
+                  </div>
+                ) : (
+                  <p className="mt-3 rounded-lg bg-ink-50 px-3 py-2 text-sm text-ink-600">{c.after === '(removed)' ? 'Content removed — see above.' : c.after}</p>
                 )}
-              </div>
+                {c.evidence && (
+                  <p className="mt-2 text-xs text-ink-400">
+                    <span className="font-semibold text-ink-500">Evidence:</span> {c.evidence}
+                  </p>
+                )}
+              </details>
             ))}
           </div>
-          {result.changeLog.length > 12 && <p className="mt-3 text-xs text-ink-400">…and {result.changeLog.length - 12} more. Open the editor to review everything.</p>}
+          {result.changeLog.length > 12 && <p className="mt-3 text-xs text-ink-400">Showing all {result.changeLog.length} changes — open the editor to review the full resume.</p>}
         </div>
 
         <div className="flex justify-center">

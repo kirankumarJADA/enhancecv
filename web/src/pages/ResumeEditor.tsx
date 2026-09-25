@@ -9,7 +9,7 @@ import ResumeFormEditor from '../components/ResumeFormEditor';
 import ResumePreview from '../components/ResumePreview';
 import { ScoreRing, Spinner, StatusChip } from '../components/ui';
 import { useToast } from '../state/ToastContext';
-import type { ATSAnalysis, MatchAnalysis, ResumeData, SectionKey, Suggestion } from '../types';
+import type { ATSAnalysis, AiStatus, MatchAnalysis, ResumeData, ResumeTemplate, SectionKey, Suggestion } from '../types';
 
 const SECTION_LABELS: Record<SectionKey, string> = {
   summary: 'Summary',
@@ -34,6 +34,11 @@ export default function ResumeEditor() {
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<'suggestions' | 'analysis'>('suggestions');
   const [pane, setPane] = useState<'edit' | 'preview'>('edit'); // mobile toggle
+  const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
+  const [aiCritique, setAiCritique] = useState<{ summary: string; notes: string[] } | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [templates, setTemplates] = useState<ResumeTemplate[]>([]);
+  const [templateId, setTemplateId] = useState('classic');
   const undoStack = useRef<ResumeData[]>([]);
   const redoStack = useRef<ResumeData[]>([]);
   const toast = useToast();
@@ -43,10 +48,12 @@ export default function ResumeEditor() {
     if (!id) return;
     void (async () => {
       try {
-        const r = await api.get<{ resume: { title: string; content: ResumeData; kind: 'master' | 'tailored' } }>(`/resumes/${id}`);
+        const r = await api.get<{ resume: { title: string; content: ResumeData; kind: 'master' | 'tailored'; templateId?: string } }>(`/resumes/${id}`);
         setTitle(r.resume.title);
         setResume(r.resume.content);
         setKind(r.resume.kind);
+        if (r.resume.templateId) setTemplateId(r.resume.templateId);
+        api.get<{ templates: ResumeTemplate[] }>('/templates').then((t) => setTemplates(t.templates)).catch(() => {});
         const [a, s] = await Promise.all([
           api.get<{ analysis: ATSAnalysis }>(`/resumes/${id}/ats`),
           api.get<{ suggestions: Suggestion[] }>(`/resumes/${id}/suggestions`),
@@ -68,6 +75,10 @@ export default function ResumeEditor() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    void api.get<AiStatus>('/ai/status').then(setAiStatus).catch(() => setAiStatus(null));
+  }, []);
 
   const apply = useCallback((fn: (draft: ResumeData) => void) => {
     setResume((r) => {
@@ -106,7 +117,7 @@ export default function ResumeEditor() {
     if (!resume) return;
     setBusy(true);
     try {
-      const res = await api.put<{ atsScore: number }>(`/resumes/${id}`, { resume, title });
+      const res = await api.put<{ atsScore: number }>(`/resumes/${id}`, { resume, title, templateId });
       const a = await api.get<{ analysis: ATSAnalysis }>(`/resumes/${id}/ats`);
       setAts(a.analysis);
       const s = await api.get<{ suggestions: Suggestion[] }>(`/resumes/${id}/suggestions`);
@@ -156,6 +167,26 @@ export default function ResumeEditor() {
     toast.show('Suggestion applied — remember to save.', 'success');
   }
 
+  async function runAiCritique() {
+    if (!id) return;
+    setAiBusy(true);
+    try {
+      const res = await api.post<{ critique: { summary: string; notes: string[] }; suggestions: Suggestion[] }>('/ai/critique', { resumeId: id });
+      setAiCritique(res.critique);
+      setSuggestions((list) => [...res.suggestions, ...list.filter((x) => x.kind !== 'ai-critique')]);
+      setTab('suggestions');
+      if (res.suggestions.length === 0) {
+        toast.show('AI review complete — no further truth-safe improvements found.', 'info');
+      } else {
+        toast.show(`AI review found ${res.suggestions.length} truth-safe suggestion(s).`, 'success');
+      }
+    } catch (err) {
+      toast.show(err instanceof ApiError ? err.message : 'AI review failed.', 'error');
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
   function toggleSection(key: SectionKey) {
     apply((d) => {
       d.hiddenSections = d.hiddenSections.includes(key)
@@ -196,7 +227,15 @@ export default function ResumeEditor() {
         <div className="flex flex-wrap items-center gap-2">
           <button className="btn-ghost" onClick={undo} disabled={undoStack.current.length === 0} aria-label="Undo">↶ Undo</button>
           <button className="btn-ghost" onClick={redo} disabled={redoStack.current.length === 0} aria-label="Redo">↷ Redo</button>
-          <button className="btn-secondary" onClick={() => downloadFile(`/api/resumes/${id}/pdf`, `${title || 'resume'}.pdf`)}>Download PDF</button>
+          <select
+            className="input w-36 py-2 text-xs"
+            aria-label="Resume template"
+            value={templateId}
+            onChange={(e) => { setTemplateId(e.target.value); setDirty(true); }}
+          >
+            {templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.atsSafe ? ' · ATS' : ''}</option>)}
+          </select>
+          <button className="btn-secondary" onClick={() => downloadFile(`/api/resumes/${id}/pdf?template=${encodeURIComponent(templateId)}`, `${title || 'resume'}.pdf`)}>Download PDF</button>
           <button className="btn-primary" onClick={() => void save()} disabled={busy || !dirty}>
             {busy && <Spinner className="h-4 w-4" />} Save
           </button>
@@ -271,6 +310,12 @@ export default function ResumeEditor() {
             </div>
           )}
 
+          {aiStatus?.enabled && (
+            <button className="btn-secondary w-full" onClick={() => void runAiCritique()} disabled={aiBusy}>
+              {aiBusy && <Spinner className="h-4 w-4" />} AI Review ({aiStatus.model})
+            </button>
+          )}
+
           <div className="card overflow-hidden">
             <div className="flex border-b border-ink-100" role="tablist">
               <button className={`flex-1 px-4 py-3 text-sm font-semibold ${tab === 'suggestions' ? 'border-b-2 border-brand-600 text-brand-700' : 'text-ink-500'}`} role="tab" aria-selected={tab === 'suggestions'} onClick={() => setTab('suggestions')}>
@@ -281,6 +326,18 @@ export default function ResumeEditor() {
               </button>
             </div>
             <div className="max-h-[60vh] space-y-3 overflow-y-auto p-4">
+              {aiCritique && tab === 'suggestions' && (
+                <div className="rounded-xl border border-brand-100 bg-brand-50/60 p-4">
+                  <p className="text-xs font-semibold text-brand-800">AI review</p>
+                  <p className="mt-1 text-xs text-ink-600">{aiCritique.summary}</p>
+                  <ul className="mt-2 space-y-1 text-xs text-ink-500">
+                    {aiCritique.notes.slice(0, 5).map((n, i) => (
+                      <li key={i}>• {n}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-[11px] text-ink-400">Every AI suggestion below was validated against your Master CV before being shown.</p>
+                </div>
+              )}
               {tab === 'suggestions' ? (
                 suggestions.length === 0 ? (
                   <p className="py-6 text-center text-sm text-ink-400">No suggestions right now — save to re-run the checker.</p>

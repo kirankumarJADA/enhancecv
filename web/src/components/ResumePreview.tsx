@@ -29,7 +29,7 @@ function Dates({ start, end, current }: { start?: string; end?: string; current?
 
 export default function ResumePreview({ resume, scale = 1 }: { resume: ResumeData; scale?: number }) {
   const p = resume.personal;
-  const visible: SectionKey[] = (resume.sectionOrder?.length ? resume.sectionOrder : (Object.keys(SECTION_LABELS) as SectionKey[])).filter(
+  const visible: string[] = (resume.sectionOrder?.length ? resume.sectionOrder : (Object.keys(SECTION_LABELS) as SectionKey[])).filter(
     (k) => !(resume.hiddenSections || []).includes(k)
   );
 
@@ -43,6 +43,20 @@ export default function ResumePreview({ resume, scale = 1 }: { resume: ResumeDat
       {linkBits.length > 0 && <div style={{ fontSize: 11.5, color: '#2b6cb0' }}>{linkBits.join('  |  ')}</div>}
 
       {visible.map((key) => {
+        if (key.startsWith('custom_')) {
+          const custom = (resume.customSections || []).find((c) => c.id === key);
+          if (!custom || custom.bullets.filter(Boolean).length === 0) return null;
+          return (
+            <section key={key}>
+              <Heading>{custom.title}</Heading>
+              <ul style={{ margin: 0, paddingLeft: 16 }}>
+                {custom.bullets.filter(Boolean).map((b, i) => (
+                  <li key={i} style={{ listStyle: 'disc' }}>{b}</li>
+                ))}
+              </ul>
+            </section>
+          );
+        }
         switch (key) {
           case 'summary':
             if (!resume.summary?.trim()) return null;

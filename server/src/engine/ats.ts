@@ -44,8 +44,8 @@ interface AnalysisContext {
   visibleSections: Set<SectionKey>;
 }
 
-function sectionLabel(key: SectionKey): string {
-  const labels: Record<SectionKey, string> = {
+function sectionLabel(key: SectionKey | string): string {
+  const labels: Record<string, string> = {
     summary: 'Summary',
     experience: 'Experience',
     projects: 'Projects',
@@ -55,7 +55,7 @@ function sectionLabel(key: SectionKey): string {
     languages: 'Languages',
     achievements: 'Achievements',
   };
-  return labels[key];
+  return labels[key] || 'custom section';
 }
 
 function collectBullets(resume: ResumeData): string[] {

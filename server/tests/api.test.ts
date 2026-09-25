@@ -1,18 +1,28 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+import type { Express } from 'express';
 import { buildApp } from '../src/app';
+import { getDb } from '../src/db/db';
 import { makeMasterCV, makeFrontendCV, JAVA_JD, REACT_JD } from './fixtures';
 import { ResumeData } from '../src/types';
 
-// Isolated data dir for this test run
-const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ecv-test-'));
-process.env.DATA_DIR = dataDir;
+// ---------------------------------------------------------------------------
+// Test database strategy: the API integration suite runs against a REAL
+// PostgreSQL database (never faked/mocked). Configure it with
+// TEST_DATABASE_URL; the default matches the local development instance
+// documented in server/.env.example:
+//   docker run -d --name ecv-pg -e POSTGRES_PASSWORD=ecvlocal \
+//     -e POSTGRES_DB=enhancecv_test -p 5434:5432 postgres:15-alpine
+// Tables are truncated before the run.
+// ---------------------------------------------------------------------------
+const testDatabaseUrl =
+  process.env.TEST_DATABASE_URL ||
+  process.env.DATABASE_URL ||
+  'postgres://postgres:ecvlocal@localhost:5434/enhancecv_test';
+process.env.DATABASE_URL = testDatabaseUrl;
 process.env.JWT_SECRET = 'test-secret';
 
-const app = buildApp();
+let app: Express;
 
 function agent() {
   return request.agent(app);
@@ -34,9 +44,22 @@ async function saveMaster(a: ReturnType<typeof agent>, cv?: ResumeData) {
 let userA: ReturnType<typeof agent>;
 let userB: ReturnType<typeof agent>;
 
+async function truncateAll(): Promise<void> {
+  const db = getDb();
+  await db.query(
+    'TRUNCATE tailoring_runs, match_analyses, ats_analyses, job_analyses, job_descriptions, resumes, users CASCADE',
+  );
+}
+
 beforeAll(async () => {
+  app = await buildApp();
+  await truncateAll();
   userA = await signup();
   userB = await signup('user2@test.dev', 'User Two');
+});
+
+afterAll(async () => {
+  await truncateAll();
 });
 
 // ---------------------------------------------------------------- AUTH ----
@@ -70,7 +93,7 @@ describe('Authentication', () => {
     const out = await a.post('/api/auth/logout');
     expect(out.status).toBe(200);
     const after = await a.get('/api/auth/me');
-    expect([401, 500].includes(after.status) ? 401 : after.status).toBe(401);
+    expect(after.status).toBe(401);
   });
 });
 

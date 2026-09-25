@@ -1,0 +1,28 @@
+version: "3.9"
+
+# Local development stack: PostgreSQL for the EnhanceCV API.
+# Usage:
+#   docker compose up -d
+#   cp server/.env.example server/.env   (then set DATABASE_URL as below)
+# DATABASE_URL=postgres://postgres:ecvlocal@localhost:5434/enhancecv
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: ecv-pg
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ecvlocal
+      POSTGRES_DB: enhancecv
+    ports:
+      - "5434:5432"
+    volumes:
+      - ecv_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  ecv_pgdata:

@@ -153,5 +153,136 @@ const out = await call('POST', '/auth/logout');
 const meAfter = await call('GET', '/auth/me');
 check(out.status === 200 && meAfter.status === 401, 'logout invalidates session');
 
+// Restore session for the extended platform checks (fresh login).
+cookie = '';
+const relogin = await call('POST', '/auth/login', { email, password: 'password123' });
+check(relogin.status === 200, 're-login works');
+
+// 18. email verification state
+const meVerified = await call('GET', '/auth/me');
+check(meVerified.data.user.emailVerified === false, 'email verification state exposed');
+const resend = await call('POST', '/auth/resend-verification', { email });
+check(resend.status === 200 && resend.data.emailConfigured === false, 'verification resend (dev console mode)');
+
+// 19. templates
+const tpl = await call('GET', '/templates');
+check(tpl.status === 200 && tpl.data.templates.length === 6 && tpl.data.templates.every((t) => t.atsSafe), 'templates listed (6 ATS-safe)');
+const rec = await call('GET', '/templates/recommendation');
+check(rec.status === 200 && rec.data.templateId && rec.data.reason, 'template recommendation (deterministic)', rec.data.templateId);
+const sel = await call('PUT', '/templates/select', { templateId: 'technical' });
+check(sel.status === 200, 'template selection saved');
+
+// 20. PDF with the selected template
+const pdfT = await fetch(`${BASE}/resumes/${versionId}/pdf?template=technical`, { headers: { cookie } });
+const pdfTBuf = Buffer.from(await pdfT.arrayBuffer());
+check(pdfT.status === 200 && pdfTBuf.subarray(0, 4).toString() === '%PDF', 'template-aware PDF download', `${pdfTBuf.length} bytes`);
+
+// 21. usage endpoint
+const usage = await call('GET', '/ai/usage');
+check(usage.status === 200 && usage.data.plan === 'FREE' && usage.data.features.length === 11, 'usage snapshot', usage.data.features.map((f) => `${f.feature} ${f.used}/${f.limit}`).join(', '));
+
+// 22. billing status (unconfigured → honest state)
+const billing = await call('GET', '/billing/status');
+check(billing.status === 200 && billing.data.billingConfigured === false && billing.data.plan === 'FREE', 'billing status (unconfigured)');
+const billingPlans = await call('GET', '/billing/plans');
+check(billingPlans.data.plans.length === 3, 'billing plans listed');
+const checkout = await call('POST', '/billing/checkout', { planId: 'PRO' });
+check(checkout.status === 503 && checkout.data.error.code === 'BILLING_UNAVAILABLE', 'checkout honest 503 without Stripe');
+
+// 23. applications
+const appCreate = await call('POST', '/applications', { company: 'Nomos Bank', role: 'Senior Java Backend Engineer', status: 'APPLIED', resumeId: versionId, appliedDate: '09/2026' });
+check(appCreate.status === 201, 'application created');
+const appList = await call('GET', '/applications');
+check(appList.status === 200 && appList.data.applications.length === 1 && appList.data.summary.byStatus.APPLIED === 1, 'application list + summary');
+const appPatch = await call('PATCH', `/applications/${appCreate.data.id}`, { status: 'INTERVIEW' });
+check(appPatch.status === 200, 'application status change');
+
+// 24. cover letter + linkedin (AI unconfigured → honest 503, never faked)
+const cov = await call('POST', '/ai/cover-letter', {});
+check(cov.status === 503 && cov.data.error.code === 'AI_NOT_CONFIGURED', 'cover letter honest 503 without AI provider');
+const li = await call('POST', '/ai/linkedin', {});
+check(li.status === 503 && li.data.error.code === 'AI_NOT_CONFIGURED', 'linkedin honest 503 without AI provider');
+
+// 25. admin authorization (normal user → 403)
+const adminForbidden = await call('GET', '/admin/stats');
+check(adminForbidden.status === 403, 'admin stats blocked for normal users');
+
+// 26. request id correlation
+const rid = await fetch(`${BASE}/definitely-not-a-route`);
+check(rid.headers.get('x-request-id') !== null, 'request id header present');
+
+// 27. cross-user isolation on the new resources
+cookie = '';
+await call('POST', '/auth/signup', { name: 'Isolation 2', email: `iso2_${Date.now()}@test.dev`, password: 'password123' });
+const crossApp = await fetch(`${BASE}/applications/${appCreate.data.id}`, { headers: { cookie } });
+check([403, 404].includes(crossApp.status), 'cross-user application access blocked', `status ${crossApp.status}`);
+const crossTpl = await fetch(`${BASE}/templates/recommendation`, { headers: { cookie } });
+check([200, 400].includes(crossTpl.status), 'templates scoped per user');
+cookie = cookieA; // restore user A's session for the remaining checks
+
+// 28. SSRF protection on URL import
+const ssrf = await call('POST', '/jobs/import-url', { url: 'http://169.254.169.254/latest/meta-data' });
+check(ssrf.status === 400 && ['BLOCKED_URL', 'INVALID_URL'].includes(ssrf.data.error.code), 'SSRF: private/metadata URL blocked');
+
+// 29. LinkedIn import: preview -> confirm -> master merged additively
+const liProfile = `Acceptance User
+Backend Engineer at Finlio
+
+Experience
+Software Engineer at Finlio Technologies
+08/2022 - Present
+- Developed RESTful backend services using Java and Spring Boot.
+Contractor at gadgetcorp
+01/2021 - 05/2021
+- Built integrations with Python.
+
+Education
+BSc, University of Leeds 2017 - 2021
+
+Skills
+Java, Spring Boot, PostgreSQL
+
+Certifications
+Oracle Certified Professional: Java SE 17`;
+const liPreview = await call('POST', '/import/linkedin', { text: liProfile });
+check(liPreview.status === 200 && liPreview.data.preview.experience.length >= 2, 'LinkedIn import preview parsed');
+const liApply = await call('POST', '/import/linkedin/apply', { profile: liPreview.data.preview });
+check(liApply.status === 200 && liApply.data.merged === true, 'LinkedIn import applied to Master CV additively', `${liApply.data.changes?.length || 0} changes`);
+
+// 30. Resume import (TXT)
+const form = new FormData();
+const cvText = ['Tom Ellis', 'tom@ex.com', '+44 7700 900123', '', 'SUMMARY', 'Graduate developer with project experience in Python and web technologies.', '', 'SKILLS', 'Python, Git, SQL'].join('\n');
+form.append('file', new Blob([new Uint8Array(Buffer.from(cvText))], { type: 'text/plain' }), 'cv.txt');
+const impRes = await fetch(`${BASE}/import/resume`, { method: 'POST', headers: { cookie }, body: form });
+const imp = await impRes.json();
+if (impRes.status !== 200) console.error('IMP DEBUG', impRes.status, JSON.stringify(imp).slice(0, 200));
+check(impRes.status === 200 && imp.detected.contact.email === true, 'document import (TXT) with detected sections');
+
+// 31. job discovery honest 503 without provider
+const disc = await call('POST', '/jobs/discover', { title: 'engineer' });
+check(disc.status === 503 && disc.data.error.code === 'JOB_SOURCE_NOT_CONFIGURED', 'job discovery honest 503 without provider');
+
+// 32. interview prep honest 503 (AI unconfigured) + deterministic mock session
+const prep = await call('POST', '/interview/prepare', { jobId });
+check(prep.status === 503 && prep.data.error.code === 'AI_NOT_CONFIGURED', 'interview prep honest 503 without AI');
+const mockStart = await call('POST', '/interview/session', { jobId, mode: 'TEXT' });
+check(mockStart.status === 201 && mockStart.data.questions.length >= 4, 'mock session (deterministic fallback questions)');
+const q0 = mockStart.data.questions[0];
+const mockAnswer = await call('POST', `/interview/session/${mockStart.data.sessionId}/answer`, { questionId: q0.id, answer: 'I built REST APIs with Java and Spring Boot at Finlio, improving PostgreSQL performance by 30%.' });
+check(mockAnswer.status === 503 && mockAnswer.data.error.code === 'AI_NOT_CONFIGURED', 'mock answer evaluation honest 503 without AI');
+const mockFinish = await call('POST', `/interview/session/${mockStart.data.sessionId}/finish`);
+check(mockFinish.status === 200 && mockFinish.data.overallFeedback.length > 20, 'mock session finish with aggregate feedback');
+
+// 33. career analytics + health center
+const career = await call('GET', '/analytics/career');
+check(career.status === 200 && typeof career.data.responseRate === 'number', 'career analytics (descriptive)');
+const health = await call('GET', '/analytics/health');
+check(health.status === 200 && health.data.components.length === 5 && health.data.components.every((c) => c.engine === 'deterministic'), 'health center (5 deterministic components)');
+
+// 34. extension token: issue + Bearer auth
+const extTok = await call('POST', '/auth/extension-token', { name: 'acceptance' });
+check(extTok.status === 201 && extTok.data.token.startsWith('cvt_'), 'extension token issued');
+const bearerMe = await fetch(`${BASE}/auth/me`, { headers: { Authorization: `Bearer ${extTok.data.token}` } });
+check(bearerMe.status === 200, 'extension Bearer auth works');
 console.log(`\n${failures === 0 ? 'ALL ACCEPTANCE CHECKS PASSED' : failures + ' CHECKS FAILED'}`);
 process.exit(failures === 0 ? 0 : 1);

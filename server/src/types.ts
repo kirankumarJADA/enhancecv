@@ -94,6 +94,12 @@ export interface SkillsData {
   soft: string[];
 }
 
+export interface CustomSection {
+  id: string;          // 'custom_<slug>_<rand>' — also used in sectionOrder
+  title: string;       // e.g. Publications, Volunteering, Interests
+  bullets: string[];
+}
+
 export interface ResumeData {
   personal: PersonalInfo;
   summary: string;
@@ -104,8 +110,9 @@ export interface ResumeData {
   certifications: CertificationItem[];
   languages: LanguageItem[];
   achievements: string[];
-  sectionOrder: SectionKey[];
-  hiddenSections: SectionKey[];
+  customSections: CustomSection[];
+  sectionOrder: SectionKey[];  // core keys + 'custom_*' ids
+  hiddenSections: SectionKey[]; // core keys + 'custom_*' ids
 }
 
 export type ResumeKind = 'master' | 'tailored';
@@ -205,6 +212,10 @@ export interface ChangeLogEntry {
   before: string;
   after: string;
   reason: string;
+  /** Human-friendly taxonomy label, e.g. "bullet_rewrite". */
+  label?: string;
+  /** Where the supporting facts come from — never claimed if unsupported. */
+  evidence?: string;
 }
 
 export interface TailoringResult {
