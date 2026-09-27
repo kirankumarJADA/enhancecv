@@ -184,6 +184,63 @@ describe('Cross-origin auth flow (production cookie semantics)', () => {
   });
 });
 
+describe('Production origin without FRONTEND_URL (deployed-failure regression)', () => {
+  it('still allows the built-in production origin when FRONTEND_URL is unset', async () => {
+    delete process.env.FRONTEND_URL;
+    try {
+      const res = await request(app)
+        .post('/api/auth/signup')
+        .set('Origin', PROD_ORIGIN)
+        .send({ name: 'Built-in', email: 'builtin@test.dev', password: 'password123' });
+      expect([201, 409]).toContain(res.status); // created, or already exists from earlier tests
+      expect(res.headers['access-control-allow-origin']).toBe(PROD_ORIGIN);
+      expect(res.headers['access-control-allow-credentials']).toBe('true');
+    } finally {
+      process.env.FRONTEND_URL = PROD_ORIGIN;
+    }
+  });
+});
+
+describe('CORS headers on success and error responses', () => {
+  it('actual POST /api/auth/signup carries ACAO + credentials', async () => {
+    const res = await request(app)
+      .post('/api/auth/signup')
+      .set('Origin', PROD_ORIGIN)
+      .send({ name: 'CORS POST', email: 'corspost@test.dev', password: 'password123' });
+    expect([201, 409]).toContain(res.status);
+    expect(res.headers['access-control-allow-origin']).toBe(PROD_ORIGIN);
+    expect(res.headers['access-control-allow-credentials']).toBe('true');
+  });
+
+  it('API validation-error responses (400) still include ACAO', async () => {
+    const res = await request(app)
+      .post('/api/auth/signup')
+      .set('Origin', PROD_ORIGIN)
+      .send({ name: '', email: 'not-an-email', password: 'x' });
+    expect(res.status).toBe(400);
+    expect(res.headers['access-control-allow-origin']).toBe(PROD_ORIGIN);
+    expect(res.headers['access-control-allow-credentials']).toBe('true');
+  });
+
+  it('authentication-error responses (401) still include ACAO', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .set('Origin', PROD_ORIGIN)
+      .send({ email: 'corspost@test.dev', password: 'wrong-password' });
+    expect(res.status).toBe(401);
+    expect(res.headers['access-control-allow-origin']).toBe(PROD_ORIGIN);
+    expect(res.headers['access-control-allow-credentials']).toBe('true');
+  });
+
+  it('not-found responses (404) still include ACAO', async () => {
+    const res = await request(app)
+      .get('/api/definitely-not-a-route')
+      .set('Origin', PROD_ORIGIN);
+    expect(res.status).toBe(404);
+    expect(res.headers['access-control-allow-origin']).toBe(PROD_ORIGIN);
+  });
+});
+
 describe('Cookie options by environment', () => {
   it('production: SameSite=None + Secure (cross-site Vercel → Render)', () => {
     const opts = sessionCookieOptions(true);

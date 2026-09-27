@@ -1,15 +1,20 @@
 // CORS origin allow-list.
 //
-// - FRONTEND_URL (production frontend origin, e.g. the Vercel domain) is
-//   appended to the local development origins.
-// - Trailing slashes are normalised so `https://app.vercel.app/` matches
-//   `https://app.vercel.app`.
-// - Requests without an Origin header (curl, Stripe webhooks, same-origin
-//   server calls) are allowed through — the browser is the only enforcer of
-//   CORS, and no origin means no cross-origin read to protect.
+// - The production frontend origin is built in (the Vercel deployment this
+//   backend exists to serve), so the deployed backend never silently loses
+//   CORS if FRONTEND_URL is unset or mistyped on the hosting provider.
+// - FRONTEND_URL (if configured) is honoured and joins the allow-list, as do
+//   the local development origins.
+// - Trailing slashes and case are normalised so variants of the same origin
+//   match exactly once.
+// - Requests without an Origin header (curl, Stripe webhooks, server-to-server)
+//   are allowed through — the browser is the only enforcer of CORS, and no
+//   origin means no cross-origin read to protect.
 // - Unapproved origins get NO Access-Control-Allow-Origin header, so browsers
 //   block the response. We never reflect arbitrary origins, and we never use
 //   '*' together with credentials.
+
+const BUILTIN_PRODUCTION_ORIGINS = ['https://enhancecv-orpin.vercel.app'];
 
 const DEV_ORIGINS = [
   'http://localhost:5173',
@@ -24,8 +29,8 @@ function normalise(origin: string): string {
 
 export function allowedOrigins(): string[] {
   const configured = (process.env.FRONTEND_URL || '').trim();
-  const list = configured ? [configured, ...DEV_ORIGINS] : [...DEV_ORIGINS];
-  return list.map(normalise);
+  const list = [...BUILTIN_PRODUCTION_ORIGINS, ...(configured ? [configured] : []), ...DEV_ORIGINS];
+  return [...new Set(list.map(normalise))];
 }
 
 /** cors origin callback: allow-list only; no wildcard with credentials. */
