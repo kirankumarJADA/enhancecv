@@ -1,5 +1,6 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
+import cors from 'cors';
 import helmet from 'helmet';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -7,6 +8,7 @@ import './middleware/async'; // async route rejections → central errorHandler
 import { config } from './config';
 import { errorHandler, notFoundHandler } from './middleware/http';
 import { newRequestId } from './lib/monitoring';
+import { corsOriginCheck } from './lib/cors';
 import { getAiProvider } from './ai/provider';
 import authRoutes from './routes/auth';
 import masterRoutes from './routes/master';
@@ -44,6 +46,19 @@ export async function buildApp(): Promise<express.Express> {
     res.setHeader('X-Request-Id', (req as express.Request & { requestId?: string }).requestId!);
     next();
   });
+
+  // CORS: the production frontend (Vercel) and the API (Render) live on
+  // different origins, so browser requests need credentialed CORS. The
+  // allow-list comes from FRONTEND_URL plus the local development origins —
+  // never '*'. Requests without an Origin header (curl, Stripe webhooks,
+  // server-to-server) pass through untouched.
+  app.use(cors({
+    origin: corsOriginCheck,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    maxAge: 86400,
+  }));
 
   // Stripe webhook needs the RAW body for signature verification — mount the
   // raw parser for that path BEFORE the global JSON parser.

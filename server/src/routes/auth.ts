@@ -32,15 +32,27 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-function setSession(res: Response, uid: string, email: string): void {
-  const token = signSession({ uid, email });
-  res.cookie(config.cookieName, token, {
+/**
+ * Session cookie options.
+ *
+ * Production frontend (Vercel) and API (Render) are DIFFERENT origins, i.e. a
+ * cross-site context: browsers only send cookies marked `SameSite=None` on
+ * cross-site requests, and `SameSite=None` requires `Secure` (HTTPS). Local
+ * development stays same-origin (`SameSite=Lax`) — never weakened.
+ */
+export function sessionCookieOptions(isProd: boolean) {
+  return {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: config.isProd,
+    sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
+    secure: isProd,
     maxAge: config.sessionDays * 24 * 60 * 60 * 1000,
     path: '/',
-  });
+  };
+}
+
+function setSession(res: Response, uid: string, email: string): void {
+  const token = signSession({ uid, email });
+  res.cookie(config.cookieName, token, sessionCookieOptions(config.isProd));
 }
 
 async function sendVerificationEmail(email: string, token: string): Promise<EmailSendResult> {

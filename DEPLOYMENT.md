@@ -35,17 +35,17 @@
 
 - **Root directory:** `web`
 - Build command `npm run build` (default framework detection: Vite).
-- The frontend calls the API at the same origin (`/api/...`). On Vercel, add a rewrite so API requests go to the Render service:
+- **Environment variable (required):** `VITE_API_URL=https://curevo-ai.onrender.com` — baked into the bundle at build time; the frontend sends every request to `${VITE_API_URL}/api/...` with `credentials: 'include'`. Without it, the frontend falls back to same-origin `/api/...` (local dev via the Vite proxy).
 
-```json
-{
-  "rewrites": [
-    { "source": "/api/:path*", "destination": "https://YOUR-RENDER-SERVICE.onrender.com/api/:path*" }
-  ]
-}
-```
+### Cross-origin connection (Vercel → Render)
 
-- Because the API then runs on a different origin, session cookies need same-site-friendly settings: the server already sends `SameSite=Lax; Secure` cookies in production, and Vercel forwards cookies per-domain. If cookie issues occur across domains, prefer serving frontend and API under one domain (Vercel rewrite as above) — this is the supported setup.
+The deployed frontend and backend are on different origins, so:
+
+1. **CORS:** the backend allow-lists the frontend origin — set `FRONTEND_URL=https://enhancecv-orpin.vercel.app` on Render. Local dev origins (`http://localhost:5173` etc.) are always allowed. There is no wildcard; requests without an Origin header (Stripe webhooks, server-to-server) pass through.
+2. **Cookies:** in production the session cookie is `HttpOnly; Secure; SameSite=None` — required for cross-site requests. Local development keeps `SameSite=Lax`. Never relax this to a wildcard-origin policy.
+3. Preflight (`OPTIONS`) requests are answered automatically for all routes with `Content-Type` and `Authorization` allowed.
+
+No Vercel rewrite is required: the browser calls the Render origin directly.
 
 ## 4. Local development
 
