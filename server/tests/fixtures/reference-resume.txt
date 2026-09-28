@@ -1,0 +1,46 @@
+Aarav Sharma
++91 98765 43210 | aarav.sharma@gmail.com
+linkedin.com/in/aaravsharma | github.com/aaravsharma | https://aaravsharma.dev
+
+SUMMARY
+Data science student with hands-on virtual internship experience across machine learning, cloud, and data analytics.
+
+EXPERIENCE
+
+Data Science Virtual Intern
+Altair (via AICTE NEAT & EduSkills)
+Remote
+Jan 2025 – Mar 2025
+
+• Completed 240-hour Google AI-ML & Altair Data Science Master Virtual Internship covering machine learning, data analysis, and AI, organised by NEAT Cell, AICTE and EduSkills.
+• Applied Google AI-ML techniques and Altair Data Science tools to real-world scenario-based exercises under structured mentorship.
+
+Cloud Virtual Intern
+AICTE NEAT (AWS Academy Curriculum, EduSkills)
+Remote
+Apr 2024 – Jun 2024
+
+• Completed 10-week AWS Academy cloud internship covering cloud computing, AWS services, and cloud architecture; earned AWS Academy Graduate credentials in Cloud Foundations and Cloud Architecting (May 2024).
+• Provisioned containerised Java services on AWS EC2, applying cloud architecture patterns under industry mentorship.
+
+EDUCATION
+B.Tech Computer Science, VIT University 2022 – 2026
+
+SKILLS
+Languages: Python, Java, SQL
+Frameworks: Pandas, NumPy
+Cloud & DevOps: AWS EC2, Docker
+Tools: Git, Excel
+
+PROJECTS
+Sales Dashboard with Altair
+Technologies: Python, Altair
+• Built an interactive sales dashboard over a 10k-row dataset with filters and export support.
+
+CERTIFICATIONS & INTERESTS
+AWS Academy Graduate — Cloud Foundations (May 2024)
+Google AI-ML Virtual Internship Certificate (Mar 2025)
+Interests: kabaddi, chess, stock market analysis
+
+LANGUAGES
+English (Fluent), Hindi (Native), Telugu (Conversational)

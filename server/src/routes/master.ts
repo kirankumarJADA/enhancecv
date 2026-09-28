@@ -63,6 +63,7 @@ export function sanitizeResumeData(input: unknown): ResumeData {
       github: z.string().max(240).optional().default(''),
       portfolio: z.string().max(240).optional().default(''),
       headline: z.string().max(120).optional().default(''),
+      otherLinks: z.array(z.string().max(240)).max(10).optional().default([]),
     }),
     summary: z.string().max(3000).default(''),
     experience: z.array(z.object({
@@ -74,6 +75,7 @@ export function sanitizeResumeData(input: unknown): ResumeData {
       endDate: z.string().max(20).default(''),
       current: z.boolean().default(false),
       bullets: z.array(z.string().max(2000)).default([]),
+      dateDisplay: z.string().max(40).optional().default(''),
     })).max(20).default([]),
     projects: z.array(z.object({
       id: z.string().max(64).default(''),
@@ -91,6 +93,7 @@ export function sanitizeResumeData(input: unknown): ResumeData {
       startDate: z.string().max(20).default(''),
       endDate: z.string().max(20).default(''),
       grade: z.string().max(40).optional().default(''),
+      dateDisplay: z.string().max(40).optional().default(''),
     })).max(10).default([]),
     skills: z.object({
       technical: z.array(z.string().max(80)).max(60).default([]),

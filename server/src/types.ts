@@ -44,6 +44,8 @@ export interface PersonalInfo {
   github?: string;
   portfolio?: string;
   headline?: string; // current / target job title, e.g. "Java Backend Engineer"
+  /** Other public links found in the resume (LeetCode, Twitter, blog…). */
+  otherLinks?: string[];
 }
 
 export interface ExperienceItem {
@@ -55,6 +57,8 @@ export interface ExperienceItem {
   endDate: string; // "" or "Present"
   current: boolean;
   bullets: string[];
+  /** Original date text as printed in the source document, e.g. "Jan 2025 – Mar 2025". */
+  dateDisplay?: string;
 }
 
 export interface ProjectItem {
@@ -74,6 +78,8 @@ export interface EducationItem {
   startDate: string;
   endDate: string;
   grade?: string;
+  /** Original date text as printed in the source document. */
+  dateDisplay?: string;
 }
 
 export interface CertificationItem {

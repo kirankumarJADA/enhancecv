@@ -46,18 +46,35 @@ AUTH        POST /api/auth/extension-token · GET/DELETE /api/auth/extension-tok
 
 New pages: Interview (Prepare/Mock/History), Jobs (Search/Import/Saved), Health Center; AI Tools became tabbed (Grammar/Translate/Company Research added); Layout navigation extended; Tailor consumes the manual-JD hand-off; ResumeFormEditor supports custom sections; all with loading/empty/error states.
 
-## 5. Verification (actually executed)
+## 5. Layout-aware resume extraction engine (upgrade)
+
+The heuristic flat-text parser was replaced with a single deterministic, layout-aware pipeline (concepts studied from the MIT-licensed OpenResume-based `dhanushk-offl/resume-parser`, `Praveenkanna16/resume-parser` and `akpante3/react-resume-parser`; implemented independently, no code copied).
+
+**Architecture** — one canonical pipeline, three ingestion adapters feeding one intermediate representation:
+
+| Stage | Implementation |
+|---|---|
+| PDF ingestion | `pdfjs-dist` (authoritative; pdf-parse removed from extraction): per-page text items with x/y/width/height/font, baseline-proximity line grouping, horizontal-gap segmentation (keeps right-aligned dates and two-column text out of one sentence), vertical-gutter column detection with reading-order reconstruction (full-width header → left column → right column), page-number header/footer removal |
+| DOCX ingestion | `mammoth.convertToHtml` → bold-run/list-item/heading aware line walker (extractRawText fallback) |
+| TXT ingestion | normalized lines |
+| IR | `ParsedLine` { text, bold, isListItem, page, x, y, width, height, column, index } |
+| Sections | normalized heading matching (SUMMARY/PROFILE/OBJECTIVE, EXPERIENCE/WORK EXPERIENCE/PROFESSIONAL EXPERIENCE/EMPLOYMENT/INTERNSHIP(S) EXPERIENCE, EDUCATION/ACADEMIC BACKGROUND, TECHNICAL SKILLS/SKILLS & TOOLS, PROJECTS, CERTIFICATIONS (& INTERESTS combined-heading split), ACHIEVEMENTS, LANGUAGES, LINKS, PUBLICATIONS, VOLUNTEERING) |
+| Entities | feature-scored role-vs-company-vs-location assignment (internships/trainees/apprentices are real experience, never filtered), token-stitched phone numbers (+91/+44/parens/dashes; year ranges rejected), strict link classification (emails scrubbed first → portfolio can never be gmail/yahoo/hotmail/outlook; LinkedIn/GitHub captured separately; social profiles → otherLinks; bare non-personal-TLD domains ignored) |
+| Dates | month-name/MM-YYYY/YYYY ranges + Present/Current; year-only dates stay year-only and mid-text years ("Marketing 2025 cohort", "Class of 2026") never anchor entities |
+| Validation | per-section confidence, wrapped-bullet continuation merge, duplicate entry collapse, end-before-start chronology flags, heading-missing/multi-column warnings — all surfaced for user review; no AI, no fabricated fields |
+
+**Regression proof (reference resume with two virtual internships that previously parsed as "No work experience detected" with portfolio = gmail.com):** `experience.length === 2` (Data Science Virtual Intern @ Altair (via AICTE NEAT & EduSkills), Jan 2025 – Mar 2025 · Cloud Virtual Intern @ AICTE NEAT (AWS Academy Curriculum, EduSkills), Apr 2024 – Jun 2024, Remote, 2 verbatim bullets each); email stays an email; portfolio = `https://aaravsharma.dev`; certifications (AWS Academy Graduate, Google AI-ML) and interests (kabaddi, chess, stock market analysis) preserved separately; education/projects/skills/languages intact; same result from TXT, layout-aware PDF and DOCX paths. `dateDisplay` preserves the original date text end-to-end (sanitize + web types updated additively).
+
+## 6. Verification (actually executed)
 
 | Check | Result |
 |---|---|
 | `npm run typecheck` (server) | PASS |
-| `npm test` — **122/122** across 5 suites (27 engine + 27 api + 14 ai + 32 features + 22 career) on real PostgreSQL | PASS |
-| Baselines preserved: original 100 tests intact, no weakened assertions | ✅ |
-| `npm run build` (server) · `npm run build` (frontend, 94.7 KB gzip) | PASS · PASS |
-| Live acceptance workflow — **50 PASS / 0 FAIL** (was 30; +20 Career OS checks incl. SSRF block, LinkedIn import apply, TXT import, honest discovery/prep 503s, deterministic mock session end-to-end, sourced company research path, analytics, health, extension tokens) | PASS |
-| Audit: no SQLite remnants · no secrets/`.env` committed · no TODO/FIXME in src | ✅ |
+| `npm test` — **172/172** across 7 suites on real PostgreSQL (146 prior tests intact, no weakened assertions, + 26 extraction regression tests incl. two-column PDF reading order, wrapped bullets, year-only dates, international phones, malformed/corrupt files) | PASS |
+| `npm run build` (server) · `npm run typecheck` (web) · `npm run build` (web, 94.8 KB gzip) | PASS · PASS · PASS |
+| Audit: no TODO/FIXME in extraction code · `pdf-parse` zero imports in production code (ambient d.ts remains for the unrelated PDF-render test) · one canonical extraction pipeline | ✅ |
 
-## 6. IMPLEMENTED + VERIFIED vs REQUIRES EXTERNAL CREDENTIALS vs FUTURE
+## 7. IMPLEMENTED + VERIFIED vs REQUIRES EXTERNAL CREDENTIALS vs FUTURE
 
 **Implemented + verified:** everything above except live third-party calls — including every graceful-degradation path (job discovery 503, interview prep 503, mock evaluation 503, research 503, deterministic mock fallback, SSRF refusals, additive-only import merging).
 
@@ -65,6 +82,6 @@ New pages: Interview (Prepare/Mock/History), Jobs (Search/Import/Saved), Health 
 
 **Optional future work:** production-packaged extension build/publish, richer per-provider normalisers, speech provider integrations (Web Speech API or cloud STT), resume-localization ATS tuning per market.
 
-## 7. Remaining manual configuration
+## 8. Remaining manual configuration
 
 Unchanged from the previous phase plus: `JOBS_API_URL`/`JOBS_API_KEY`, `RESEARCH_SEARCH_API_URL`/`RESEARCH_SEARCH_API_KEY`, and extension token distribution to users. Deployment has not been performed from here — see `DEPLOYMENT.md`.
