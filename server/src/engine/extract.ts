@@ -27,6 +27,7 @@ import {
   parseSkills,
   parseProjects,
   parseCertifications,
+  parseInterestLines,
   parseLanguages,
   parseAchievements,
   parseSummary,
@@ -146,7 +147,8 @@ export function extractFromLines(input: ParsedLine[], meta: ExtractionMeta): Ext
     tech: p.tech,
   }));
 
-  const { certifications, interestLines } = parseCertifications(sections);
+  const certifications = parseCertifications(sections);
+  const interestLines = parseInterestLines(sections);
   const certificationItems = certifications.map((c, i) => ({
     id: makeId('cert', i + 1),
     name: c.name,
@@ -226,6 +228,7 @@ export function extractFromLines(input: ParsedLine[], meta: ExtractionMeta): Ext
     certifications: certificationItems.length,
     sectionKeys,
     anyHeadingFound: sections.some((s) => s.key !== 'header'),
+    flattenedTwoColumn: meta.flattenedTwoColumn,
     meta,
   });
 
@@ -236,11 +239,25 @@ export function extractFromLines(input: ParsedLine[], meta: ExtractionMeta): Ext
   return { resume, confidence: validation.confidence, rawText: fullText, notes, meta };
 }
 
+/**
+ * Flattened two-column detection (F7): genuine single-column TXT resumes
+ * rarely contain wide mid-line whitespace runs; text exports of two-column
+ * PDFs are full of them. Detection happens on the RAW text because
+ * normalizeWhitespace collapses the gaps before lines are built.
+ */
+function detectFlattenedTwoColumn(rawText: string): boolean {
+  const rawLines = rawText.split('\n').map((l) => l.trim()).filter(Boolean);
+  if (rawLines.length < 6) return false;
+  const gappy = rawLines.filter((l) => /\S\s{3,}\S/.test(l));
+  return gappy.length >= 3 && gappy.length / rawLines.length >= 0.25;
+}
+
 export function extractResumeFromText(rawText: string): ExtractionResult {
   const lines = linesFromText(rawText);
   return extractFromLines(lines, {
     pageCount: 1,
     multiColumn: false,
+    flattenedTwoColumn: detectFlattenedTwoColumn(rawText),
     sectionOrderDetected: [],
     warnings: [],
   });
@@ -268,6 +285,7 @@ export async function extractFile(file: Express.Multer.File): Promise<Extraction
     return extractFromLines(layout.lines, {
       pageCount: layout.pageCount,
       multiColumn: layout.multiColumn,
+      flattenedTwoColumn: false,
       sectionOrderDetected: [],
       warnings: [],
     });
@@ -293,6 +311,7 @@ export async function extractFile(file: Express.Multer.File): Promise<Extraction
       return extractFromLines(lines, {
         pageCount: 1,
         multiColumn: false,
+        flattenedTwoColumn: false,
         sectionOrderDetected: [],
         warnings: [],
       });

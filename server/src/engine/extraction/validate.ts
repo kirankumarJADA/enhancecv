@@ -18,6 +18,7 @@ export interface ValidationInput {
   certifications: number;
   sectionKeys: Set<string>;
   anyHeadingFound: boolean;
+  flattenedTwoColumn: boolean;
   meta: ExtractionMeta;
 }
 
@@ -80,6 +81,11 @@ export function validateExtraction(input: ValidationInput): ValidationOutput {
   }
   warnings.push(...chronologyWarnings(input.experience, 'n experience'));
   warnings.push(...chronologyWarnings(input.education, 'n education'));
+  if (input.flattenedTwoColumn) {
+    warnings.push(
+      'This document appears to be a flattened two-column text export. Import the original PDF for more reliable layout extraction.',
+    );
+  }
   if (input.meta.multiColumn) {
     warnings.push('A multi-column layout was detected and reading order was reconstructed. Please verify nothing is out of place.');
   }

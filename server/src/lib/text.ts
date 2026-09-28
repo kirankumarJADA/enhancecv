@@ -24,13 +24,13 @@ export function sentenceCase(text: string): string {
 
 export function stripBulletPrefix(line: string): string {
   return line
-    .replace(/^\s*[\u2022\u25aa\u25cf\u2023\u2043\-–—*o>]\s+/, '')
+    .replace(/^\s*[\u2022\u25aa\u25cf\u2023\u2043\u00b7\-–—*o>]\s+/, '')
     .replace(/^\s*\d+[.)]\s+/, '')
     .trim();
 }
 
 export function isBulletLine(line: string): boolean {
-  return /^\s*[\u2022\u25aa\u25cf\u2023\u2043\-–—*]\s+\S/.test(line) || /^\s*\d+[.)]\s+\S/.test(line);
+  return /^\s*[\u2022\u25aa\u25cf\u2023\u2043\u00b7\-–—*]\s+\S/.test(line) || /^\s*\d+[.)]\s+\S/.test(line);
 }
 
 export function containsMetric(text: string): boolean {

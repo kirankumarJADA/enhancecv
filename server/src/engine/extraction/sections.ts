@@ -10,7 +10,7 @@ import { findDateRange } from './dates';
 type HeadingDef = { key: string; re: RegExp };
 
 const HEADING_DEFS: HeadingDef[] = [
-  { key: 'summary', re: /^(professional\s+|career\s+|profile\s+|executive\s+)?(summary|profile|objective|about(\s+me)?)(\s+summary)?$/i },
+  { key: 'summary', re: /^(professional\s+|career\s+|profile\s+|executive\s+|personal\s+)?(summary|profile|objective|about(\s+me)?)(\s+summary)?$/i },
   {
     key: 'experience',
     re: new RegExp(

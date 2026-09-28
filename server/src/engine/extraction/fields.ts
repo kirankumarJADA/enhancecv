@@ -61,8 +61,14 @@ const COMPANY_KEYWORD_RE = new RegExp(
 const LOCATION_ONLY_RE = /^(remote|hybrid|on-?site|work\s+from\s+home|wfh)\b/i;
 const CITY_LOCATION_RE = /^[A-Z][a-zA-Z.'’-]+(?:\s[A-Z][a-zA-Z.'’-]+)*,\s*(?:[A-Z]{2}\b|[A-Z][a-zA-Z]+)$/;
 const LOCATION_INLINE_RE = /\b([A-Z][a-zA-Z.'’-]+(?:\s[A-Z][a-zA-Z.'’-]+)*),\s*(?:[A-Z]{2}\b|[A-Z][a-zA-Z]+)\b/;
-const DEGREE_RE = /\b(b\.?\s?tech|b\.?\s?e\.?|b\.?\s?sc|b\.?\s?com|b\.?\s?ba|bachelor(?:'s)?|master(?:'s)?|m\.?\s?sc|m\.?\s?tech|m\.?\s?e\.?|m\.?\s?com|m\.?\s?a\.?|mba|mbbs|ph\.?\s?d|doctorate|post\s+graduate\s+diploma|pg\s+diploma|diploma|associate(?:'s)?\s+degree|hsc|sslc|intermediate)\b/i;
+// Degree vocabulary (case/punctuation tolerant). Alternation is ordered so
+// longer tokens win: "BSc" must match b sc before b s, "BBA" before "BA".
+const DEGREE_RE = /\b(b\.?\s?tech|b\.?\s?sc|b\.?\s?com|b\.?\s?b\.?\s?a\.?|b\.?\s?a\.?|b\.?\s?s\.?|b\.?\s?e\.?|bachelor'?s?|master'?s?|m\.?\s?tech|m\.?\s?sc|m\.?\s?com|m\.?\s?b\.?\s?a\.?|m\.?\s?a\.?|m\.?\s?s\.?|m\.?\s?e\.?|mba|mbbs|ph\.?\s?d|doctorate|post\s+graduate\s+diploma|pg\s+diploma|diploma|associate(?:'s)?\s+degree|beng|meng|hnd|a[\s-]?levels?|hsc|sslc|intermediate)\b/i;
 const INSTITUTION_RE = /\b(university|institute|college|school|polytechnic|vidyalaya|vidyalay|academy|campus|iit|nit|iiit|vit|bits)\b/i;
+// Strong institution evidence for the heading-less fallback: only these words
+// mark a line as education (deliberately excludes "academy"/"campus", which
+// appear in real employer names like "AWS Academy").
+const STRONG_INSTITUTION_RE = /\b(university|institute|college|polytechnic|iit|nit|iiit|vidyalaya|vidyalay)\b/i;
 
 /** Sections that must never contribute experience entries in the heading-less fallback scan. */
 const NON_EXPERIENCE_KEYS = new Set([
@@ -348,7 +354,11 @@ export function assignRoleCompany(candidates: string[]): { title: string; compan
       const rolePick = withRoleKw.reduce((a, b) => (b.r - b.c > a.r - a.c ? b : a));
       title = rolePick.t;
       const remaining = scored.filter((s) => s.i !== rolePick.i);
-      const companyPick = remaining.reduce((a, b) => (b.c - b.r > a.c - a.r ? b : a));
+      // Never assign a person's name as the employer when any other
+      // candidate carries company evidence.
+      const companyEligible = remaining.filter((s) => s.c > 0 || !looksLikeName(s.t));
+      const pool = companyEligible.length > 0 ? companyEligible : remaining;
+      const companyPick = pool.reduce((a, b) => (b.c - b.r > a.c - a.r ? b : a));
       company = companyPick.t;
       if (remaining.length > 1) {
         const locRest = remaining.filter((s) => s.i !== companyPick.i);
@@ -378,8 +388,8 @@ export function parseExperience(sections: SectionSpan[], warnings: string[]): Ra
   } else {
     // No standard employment heading — scan the rest of the document for
     // date-anchored entry blocks. Sections that are definitely not experience
-    // are excluded by section evidence so projects/certifications/education
-    // can never inflate the experience count.
+    // are excluded by section evidence, and contact/name/education lines are
+    // excluded by line evidence so they can never become fake employers.
     warnings.push('No EXPERIENCE heading was found — experience entries were detected heuristically. Please review.');
     lines = sections
       .filter((s) => !NON_EXPERIENCE_KEYS.has(s.key))
@@ -388,15 +398,48 @@ export function parseExperience(sections: SectionSpan[], warnings: string[]): Ra
         const t = l.text.trim();
         if (!t) return false;
         if (EMAIL_RE.test(t) || /^https?:\/\//i.test(t)) return false;
-        if (DEGREE_RE.test(t) && INSTITUTION_RE.test(t)) return false;
+        if (LINKEDIN_RE.test(t) || GITHUB_RE.test(t)) return false;
+        if (/^(linkedin|github|portfolio|email|phone)\s*[:\-–]/i.test(t)) return false;
+        // contact line: a phone plus at most a few surrounding words
+        const phone = extractPhoneFromLine(t);
+        if (phone && t.replace(phone, '').replace(/\D/g, '').trim() === '' && t.replace(phone, '').split(/\s+/).filter(Boolean).length <= 4) return false;
+        // candidate name line: never an employer (date lines like
+        // "Jan 2025 – Mar 2025" look like two capitalized words once digits
+        // are stripped, so require a digit-free line; role lines such as
+        // "Data Science Virtual Intern" also look like names, so any role
+        // keyword keeps the line in the experience pool)
+        if (!/\d/.test(t) && !findDateRange(t) && !ROLE_KEYWORD_RE.test(t) && looksLikeName(t)) return false;
+        // bare location line ("Austin, TX" / "Remote")
+        if (CITY_LOCATION_RE.test(t) || /^remote$/i.test(t.trim())) return false;
+        // education evidence: degree token OR strong institution keyword
+        if (DEGREE_RE.test(t) || STRONG_INSTITUTION_RE.test(t)) return false;
         return true;
       });
   }
 
   const entries: RawExperience[] = [];
   let pending: string[] = [];
+  // Post-date collection (F2): header lines that FOLLOW a date-bearing title
+  // line ("Software Engineer   Mar 2019 - Present" / "Acme Systems") belong to
+  // the entry just created, until the first bullet or the next entry anchor.
+  let postLines: string[] = [];
+  let collectingPost = false;
+
+  const flushPost = () => {
+    const current = entries[entries.length - 1];
+    if (collectingPost && current && postLines.length > 0) {
+      const assigned = assignRoleCompany(postLines);
+      if (!current.company) current.company = assigned.company;
+      if (!current.location) current.location = assigned.location;
+      if (!current.title && assigned.title) current.title = assigned.title;
+      if (assigned.ambiguous && !current.title) current.ambiguous = true;
+    }
+    postLines = [];
+    collectingPost = false;
+  };
 
   const startEntry = (inlineText: string, range: { start: string; end: string; current: boolean; display: string }) => {
+    flushPost(); // any unclaimed post-date lines belong to the previous entry
     const inlineParts = splitInlineHeader(inlineText);
     const candidates = [...pending, ...inlineParts];
     pending = [];
@@ -412,12 +455,14 @@ export function parseExperience(sections: SectionSpan[], warnings: string[]): Ra
       bullets: [],
       ambiguous,
     });
+    collectingPost = true;
   };
 
   for (const line of lines) {
     const text = line.text.trim();
     if (!text) continue;
     if (line.isListItem || isBulletLine(text)) {
+      flushPost(); // bullets close the post-date header block
       if (entries.length > 0) entries[entries.length - 1].bullets.push(stripBulletPrefix(text));
       continue;
     }
@@ -438,6 +483,7 @@ export function parseExperience(sections: SectionSpan[], warnings: string[]): Ra
     const lastEntry = entries[entries.length - 1];
     const lastBullet = lastEntry?.bullets[lastEntry.bullets.length - 1] || '';
     const continuesPreviousBullet =
+      !collectingPost &&
       pending.length === 0 &&
       Boolean(lastBullet) &&
       text.length < 200 &&
@@ -447,10 +493,20 @@ export function parseExperience(sections: SectionSpan[], warnings: string[]): Ra
       lastEntry.bullets[lastEntry.bullets.length - 1] = `${lastBullet} ${text}`.replace(/\s+/g, ' ');
       continue;
     }
+    if (collectingPost) {
+      // Header material for the entry just created (company/location below a
+      // title+date line). Capped so a runaway layout cannot absorb a section.
+      postLines.push(text);
+      if (postLines.length > 3) {
+        postLines.shift();
+      }
+      continue;
+    }
     // Non-bullet, non-date line: header material for the NEXT entry.
     pending.push(text);
     if (pending.length > 4) pending.shift();
   }
+  flushPost();
   // leftover pending with no date anchor: cannot belong to any entry
   if (pending.length > 0 && entries.length === 0) {
     warnings.push('Found lines that looked like a role or company but no date range — entries were skipped. Please add them manually.');
@@ -495,7 +551,11 @@ export interface RawEducation {
 }
 
 export function parseEducation(sections: SectionSpan[], warnings: string[]): RawEducation[] {
-  const lines = lineTexts(sections.filter((s) => s.key === 'education').flatMap((s) => s.lines));
+  const lines = lineTexts(
+    sections
+      .filter((s) => s.key.split('+').includes('education'))
+      .flatMap((s) => linesForPart(s, 'education')),
+  );
   const items: RawEducation[] = [];
   for (const text of lines) {
     const degreeMatch = text.match(DEGREE_RE);
@@ -554,16 +614,19 @@ export function parseSkills(sections: SectionSpan[], fullText: string, warnings:
     const clean = token.replace(/\s{2,}/g, ' ').trim().replace(/^[\s•·\-–—]+/, '');
     if (clean && clean.length <= 60 && !arr.some((t) => t.toLowerCase() === clean.toLowerCase())) arr.push(clean);
   };
-  for (const span of sections.filter((s) => s.key === 'skills' || s.key === 'soft')) {
-    for (const raw of span.lines) {
-      const text = stripBulletPrefix(raw.text.trim());
-      if (!text) continue;
-      const categorized = text.match(/^([A-Za-z][A-Za-z &/+-]{1,30}):\s*(.+)$/);
-      const body = categorized ? categorized[2] : text;
-      const target = span.key === 'soft' ? soft : technical;
-      for (const token of splitSkillList(body)) {
-        const isSoft = SOFT_SKILLS.some((s) => s.toLowerCase() === token.trim().toLowerCase());
-        push(isSoft && target === technical ? soft : target, token);
+  for (const span of sections.filter((s) => s.key.split('+').includes('skills') || s.key.split('+').includes('soft'))) {
+    const parts = span.key.split('+').filter((p) => p === 'skills' || p === 'soft');
+    for (const part of parts) {
+      for (const raw of linesForPart(span, part)) {
+        const text = stripBulletPrefix(raw.text.trim());
+        if (!text) continue;
+        const categorized = text.match(/^([A-Za-z][A-Za-z &/+-]{1,30}):\s*(.+)$/);
+        const body = categorized ? categorized[2] : text;
+        const target = part === 'soft' ? soft : technical;
+        for (const token of splitSkillList(body)) {
+          const isSoft = SOFT_SKILLS.some((s) => s.toLowerCase() === token.trim().toLowerCase());
+          push(isSoft && target === technical ? soft : target, token);
+        }
       }
     }
   }
@@ -623,6 +686,70 @@ export function parseProjects(sections: SectionSpan[]): RawProject[] {
   return projects;
 }
 
+// ------------------------------------------------- combined heading routing
+
+const ACHIEVEMENTISH_RE = /^\s*(winner|award|won|gold|silver|bronze|first|second|third|1st|2nd|3rd|top|best|finalist|runner[\s-]?up|medal|honou?r|champion)\b/i;
+
+function isCommaTokenList(t: string): boolean {
+  return t.includes(',') && !/\.\s/.test(t) && t.split(',').length <= 8 && t.split(',').every((p) => p.split(/\s+/).length <= 5);
+}
+
+/** Scores how well a line's content matches one semantic part of a combined heading. */
+function partScore(t: string, part: string): number {
+  switch (part) {
+    case 'education':
+      return (DEGREE_RE.test(t) ? 2 : 0) + (INSTITUTION_RE.test(t) ? 2 : 0);
+    case 'certifications':
+      if (CERT_LINE_RE.test(t)) return 3;
+      if (/(?:19|20)\d{2}/.test(t)) return ACHIEVEMENTISH_RE.test(t) ? 0 : 1;
+      return 0;
+    case 'achievements':
+      if (ACHIEVEMENTISH_RE.test(t)) return 2;
+      return !/(?:19|20)\d{2}/.test(t) && !CERT_LINE_RE.test(t) && t.length > 12 ? 1 : 0;
+    case 'interests':
+      if (/^interests?\s*[:\-]/i.test(t)) return 3;
+      return !/(?:19|20)\d{2}/.test(t) && !CERT_LINE_RE.test(t) && isCommaTokenList(t) ? 2 : 0;
+    case 'skills':
+      return /^skills?\s*[:\-]/i.test(t) ? 2 : 0;
+    case 'experience':
+      return findDateRange(t) ? 1 : 0;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Generic combined-heading router: "CERTIFICATIONS & AWARDS",
+ * "EDUCATION & TRAINING", "SKILLS & LANGUAGES", … Each line goes to the
+ * highest-scoring part (ties: earlier part in the heading), so no combined
+ * section is ever silently discarded.
+ */
+export function splitCombinedLines(span: SectionSpan): Map<string, ParsedLine[]> {
+  const parts = span.key.split('+');
+  const buckets = new Map<string, ParsedLine[]>(parts.map((p) => [p, []]));
+  for (const line of span.lines) {
+    const t = line.text.trim();
+    if (!t) continue;
+    let bestPart = parts[0];
+    let bestScore = -1;
+    for (const part of parts) {
+      const score = partScore(t, part);
+      if (score > bestScore) {
+        bestScore = score;
+        bestPart = part;
+      }
+    }
+    buckets.get(bestPart)!.push(line);
+  }
+  return buckets;
+}
+
+/** Lines of a span belonging to `part`, splitting combined spans generically. */
+export function linesForPart(span: SectionSpan, part: string): ParsedLine[] {
+  if (!span.key.includes('+')) return span.lines;
+  return splitCombinedLines(span).get(part) ?? [];
+}
+
 // ------------------------------------------------- certifications & interests
 
 const CERT_LINE_RE = /\b(certifi|credential|certificate|aws\s+academy|coursera|udemy|nptel|eduskills|oracle\s+certified|microsoft\s+certified|google\s+ai|ibm\s+certified|cisco\s+certified)\b/i;
@@ -637,50 +764,52 @@ export interface RawCertification {
   year: string;
 }
 
-export function parseCertifications(sections: SectionSpan[]): { certifications: RawCertification[]; interestLines: string[] } {
+export function parseCertifications(sections: SectionSpan[]): RawCertification[] {
   const certifications: RawCertification[] = [];
-  const interestLines: string[] = [];
-  for (const span of sections.filter((s) => s.key === 'certifications' || s.key === 'certifications+interests')) {
-    for (const raw of span.lines) {
+  for (const span of sections) {
+    if (!span.key.split('+').includes('certifications')) continue;
+    for (const raw of linesForPart(span, 'certifications')) {
       const text = stripBulletPrefix(raw.text.trim());
       if (!text) continue;
-      const interestsPrefixed = text.match(/^interests?\s*[:\-]\s*(.+)$/i);
-      if (interestsPrefixed) {
-        interestLines.push(interestsPrefixed[1]);
-        continue;
-      }
-      const pushCert = (line: string) => {
-        const year = line.match(/(?:19|20)\d{2}/)?.[0] || '';
-        const issuer =
-          KNOWN_ISSUERS.find((i) => new RegExp(`\\b${i.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(line)) || '';
-        certifications.push({ name: line, issuer, year });
-      };
-      if (span.key === 'certifications') {
-        pushCert(text);
-      } else {
-        // combined "Certifications & Interests" heading: split by content
-        const hasYear = /(?:19|20)\d{2}/.test(text);
-        if (CERT_LINE_RE.test(text) || hasYear) pushCert(text);
-        else interestLines.push(text);
-      }
+      const year = text.match(/(?:19|20)\d{2}/)?.[0] || '';
+      const issuer =
+        KNOWN_ISSUERS.find((i) => new RegExp(`\\b${i.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text)) || '';
+      certifications.push({ name: text, issuer, year });
     }
   }
-  return { certifications, interestLines };
+  return certifications;
+}
+
+/** Interests from standalone INTERESTS sections and the interests part of combined headings. */
+export function parseInterestLines(sections: SectionSpan[]): string[] {
+  const interestLines: string[] = [];
+  for (const span of sections) {
+    if (!span.key.split('+').includes('interests')) continue;
+    for (const raw of linesForPart(span, 'interests')) {
+      const text = stripBulletPrefix(raw.text.trim());
+      if (!text) continue;
+      const prefixed = text.match(/^interests?\s*[:\-]\s*(.+)$/i);
+      interestLines.push(prefixed ? prefixed[1] : text);
+    }
+  }
+  return interestLines;
 }
 
 // ----------------------------------------------------- languages, achievements, custom
 
 export function parseLanguages(sections: SectionSpan[]): { name: string; proficiency?: string }[] {
   const languages: { name: string; proficiency?: string }[] = [];
-  for (const raw of sections.filter((s) => s.key === 'languages').flatMap((s) => s.lines)) {
-    const text = stripBulletPrefix(raw.text.trim());
-    if (!text) continue;
-    for (const part of splitSkillList(text)) {
-      const m = part.match(/^([A-Za-z]+)\s*\(([^)]+)\)$/) || part.match(/^([A-Za-z]+)\s*[-–—:]\s*(.+)$/);
-      if (m) {
-        languages.push({ name: m[1], proficiency: m[2] });
-      } else if (/^[A-Za-z]{3,}$/.test(part)) {
-        languages.push({ name: part });
+  for (const span of sections.filter((s) => s.key.split('+').includes('languages'))) {
+    for (const raw of linesForPart(span, 'languages')) {
+      const text = stripBulletPrefix(raw.text.trim());
+      if (!text) continue;
+      for (const part of splitSkillList(text)) {
+        const m = part.match(/^([A-Za-z]+)\s*\(([^)]+)\)$/) || part.match(/^([A-Za-z]+)\s*[-–—:]\s*(.+)$/);
+        if (m) {
+          languages.push({ name: m[1], proficiency: m[2] });
+        } else if (/^[A-Za-z]{3,}$/.test(part)) {
+          languages.push({ name: part });
+        }
       }
     }
   }
@@ -689,17 +818,19 @@ export function parseLanguages(sections: SectionSpan[]): { name: string; profici
 
 export function parseAchievements(sections: SectionSpan[]): string[] {
   const achievements: string[] = [];
-  for (const raw of sections.filter((s) => s.key === 'achievements').flatMap((s) => s.lines)) {
-    const text = stripBulletPrefix(raw.text.trim());
-    if (text && text.length > 5) achievements.push(text);
+  for (const span of sections.filter((s) => s.key.split('+').includes('achievements'))) {
+    for (const raw of linesForPart(span, 'achievements')) {
+      const text = stripBulletPrefix(raw.text.trim());
+      if (text && text.length > 5) achievements.push(text);
+    }
   }
   return achievements;
 }
 
 export function parseSummary(sections: SectionSpan[]): string {
   const lines = sections
-    .filter((s) => s.key === 'summary')
-    .flatMap((s) => s.lines)
+    .filter((s) => s.key.split('+').includes('summary'))
+    .flatMap((s) => linesForPart(s, 'summary'))
     .map((l) => l.text.trim())
     .filter((t) => t && !isBulletLine(t));
   const summary = normalizeWhitespace(lines.join(' '));

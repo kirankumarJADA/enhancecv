@@ -476,3 +476,145 @@ Software Engineer, Acme Corp 01/2020 - 02/2021
     await expect(extractFile(asFile('image.png', Buffer.from('x'.repeat(100))))).rejects.toMatchObject({ code: 'UNSUPPORTED_FILE_TYPE' });
   });
 });
+
+describe('real-world QA regressions (F1–F7)', () => {
+  it('F1: heading-less fallback never fabricates experience from education or contact lines', () => {
+    const text = `Priya Raghavan
+priya.raghavan@example.com | +1 415 555 0164 | San Francisco, CA
+
+Senior Data Engineer at Cloudflare, San Francisco — Jan 2020 to Present
+- Own Kafka ingestion pipelines handling 80k events per second.
+- Built dbt models standardising 40 data sources.
+
+Data Engineer at Chewy, Boston — Jun 2017 to Dec 2019
+- Migrated legacy ETL to Airflow, cutting run time by 70%.
+
+MS Computer Science, Georgia Institute of Technology, 2015 - 2017
+BE Computer Engineering, University of Mumbai, 2011 - 2015`;
+    const ex = extractResumeFromText(text);
+    expect(ex.resume.experience.length).toBe(2);
+    expect(ex.resume.experience[0].title).toBe('Senior Data Engineer');
+    expect(ex.resume.experience[0].company).toBe('Cloudflare');
+    expect(ex.resume.experience[1].company).toBe('Chewy');
+    const blob = JSON.stringify(ex.resume.experience).toLowerCase();
+    expect(blob).not.toContain('georgia institute');
+    expect(blob).not.toContain('university of mumbai');
+    expect(blob).not.toContain('priya raghavan');
+    expect(blob).not.toContain('ms computer science');
+  });
+
+  it('F2: company/location lines after a title+date line attach to that entry', () => {
+    const text = `EXPERIENCE
+Software Engineer Mar 2019 - Present
+Acme Systems
+Austin, TX
+• Built billing APIs in Go.
+• Cut invoice generation from 40s to 3s.
+Junior Engineer Jun 2016 - Feb 2019
+Beta Software Ltd
+Leeds, UK
+• Maintained internal tools in Python.`;
+    const ex = extractResumeFromText(text);
+    expect(ex.resume.experience.length).toBe(2);
+    expect(ex.resume.experience[0]).toMatchObject({ title: 'Software Engineer', company: 'Acme Systems', location: 'Austin, TX' });
+    expect(ex.resume.experience[0].bullets.length).toBe(2);
+    expect(ex.resume.experience[1]).toMatchObject({ title: 'Junior Engineer', company: 'Beta Software Ltd', location: 'Leeds, UK' });
+    expect(ex.resume.experience[1].bullets.length).toBe(1);
+    expect(ex.resume.experience[1].bullets[0]).toContain('internal tools');
+  });
+
+  it('F3: combined headings route content to every one of their sections', () => {
+    const text = `PROFESSIONAL EXPERIENCE & INTERNSHIPS
+Data Science Virtual Intern
+Altair (via AICTE NEAT & EduSkills)
+Jan 2025 – Mar 2025
+• Completed a 240-hour internship.
+
+EDUCATION & TRAINING
+MSc Data Science, University of Southampton, 2013 - 2014
+BEng Electronic Engineering, University of Leeds, 2010 - 2013
+
+SKILLS & TECHNOLOGIES
+Python, Terraform, Kubernetes, Grafana
+
+CERTIFICATIONS & AWARDS
+AWS Certified Solutions Architect — Associate (2022)
+Oracle Certified Professional: Java SE 17 (2021)
+Winner, Flipkart Hackathon 2020`;
+    const ex = extractResumeFromText(text);
+    expect(ex.resume.experience.length).toBe(1);
+    expect(ex.resume.experience[0].company).toContain('Altair');
+    expect(ex.resume.education.length).toBe(2);
+    expect(ex.resume.skills.technical).toEqual(expect.arrayContaining(['Python', 'Terraform', 'Kubernetes']));
+    expect(ex.resume.certifications.length).toBe(2);
+    expect(ex.resume.certifications.some((c) => c.name.includes('AWS Certified'))).toBe(true);
+    expect(ex.resume.achievements.some((a) => a.includes('Flipkart Hackathon'))).toBe(true);
+  });
+
+  it('F4: standalone INTERESTS section becomes a custom section', () => {
+    const ex = extractResumeFromText(`EXPERIENCE
+Product Manager, Fintech Labs Jan 2021 - Present
+• Owned the payments roadmap.
+
+INTERESTS
+Hill walking, Board games, Home brewing`);
+    const interests = ex.resume.customSections.find((c) => c.id === 'custom_interests');
+    expect(interests?.bullets).toEqual(['Hill walking', 'Board games', 'Home brewing']);
+  });
+
+  it('F4: "Personal Profile" heading yields a summary', () => {
+    const ex = extractResumeFromText(`James O'Brien
+Personal Profile
+Chartered engineer with twelve years across fintech and telecoms.`);
+    expect(ex.resume.summary).toContain('Chartered engineer');
+  });
+
+  it('F5: extended degree vocabulary (B.S., BA, BEng, MEng, Masters, HND, A-Levels, BBA)', () => {
+    const text = `EDUCATION
+B.S. Computer Science, University of Texas, 2012 - 2016
+BA Economics, University of Washington, 2016 - 2018
+BEng Electronic Engineering, University of Leeds, 2018 - 2021
+MEng Software Engineering, Imperial College London, 2021 - 2022
+Masters Data Science, University of Southampton, 2022 - 2023
+HND Mechanical Engineering, Leeds City College, 2010 - 2012
+A-Levels Mathematics, Physics, Greenford High School, 2008 - 2010
+BBA Business Administration, University of Austin, 2004 - 2008`;
+    const ex = extractResumeFromText(text);
+    expect(ex.resume.education.length).toBe(8);
+    expect(ex.resume.experience.length).toBe(0);
+  });
+
+  it('F6: middle-dot bullets are preserved on the entry', () => {
+    const ex = extractResumeFromText(`work experience
+Product Manager
+Fintech Labs
+Jan 2021 - CURRENT
+· Owned the payments roadmap across 3 squads.
+· Shipped instant payouts to 200k merchants.`);
+    expect(ex.resume.experience.length).toBe(1);
+    expect(ex.resume.experience[0].bullets.length).toBe(2);
+    expect(ex.resume.experience[0].bullets[0]).toContain('payments roadmap');
+    expect(ex.resume.experience[0].current).toBe(true);
+  });
+
+  it('F7: flattened two-column text exports emit the validation warning', () => {
+    const text = `Lena Fischer                        Software Engineer
+Berlin, Germany                     TSB Systems
++49 30 555 0199                     Mar 2020 - Present
+lena.fischer@example.com            Built payment APIs in Go.
+SKILLS                              Led a team of 4.
+Go, Kubernetes, PostgreSQL          Junior Developer
+LANGUAGES                           WebGmbH
+German (Native)                     2017 - 2020
+English (Fluent)                    Built PHP services.`;
+    const ex = extractResumeFromText(text);
+    expect(ex.notes.some((n) => n.includes('flattened two-column text export'))).toBe(true);
+    expect(ex.meta?.flattenedTwoColumn).toBe(true);
+  });
+
+  it('F7: normal single-column text does NOT trigger the flattened warning', () => {
+    const ex = extractResumeFromText(REFERENCE_TXT);
+    expect(ex.notes.some((n) => n.includes('flattened two-column'))).toBe(false);
+    expect(ex.meta?.flattenedTwoColumn).toBe(false);
+  });
+});

@@ -30,6 +30,8 @@ export interface SectionSpan {
 export interface ExtractionMeta {
   pageCount: number;
   multiColumn: boolean;
+  /** Raw-text detection: likely a text export of a two-column PDF. */
+  flattenedTwoColumn: boolean;
   sectionOrderDetected: string[];
   warnings: string[];
 }
