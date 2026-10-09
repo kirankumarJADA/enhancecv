@@ -11,7 +11,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [params] = useSearchParams();
-  const { refresh } = useAuth();
+  const { refresh, logoutWarning, clearLogoutWarning } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -22,6 +22,7 @@ export default function Login() {
     try {
       await api.post('/auth/login', { email, password });
       await refresh();
+      clearLogoutWarning();
       navigate((location.state as { from?: string } | null)?.from || '/app', { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not sign in. Please try again.');
@@ -44,6 +45,11 @@ export default function Login() {
         {params.get('verified') === '0' && (
           <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800" role="alert">
             {params.get('reason') === 'expired' ? 'That verification link expired. Request a new one after signing in.' : 'That verification link was invalid or already used.'}
+          </div>
+        )}
+        {logoutWarning && (
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700" role="alert">
+            {logoutWarning}
           </div>
         )}
         {error && (

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { Logo } from './ui';
 import { useAuth } from '../state/AuthContext';
@@ -22,6 +23,7 @@ const MOBILE_NAV = [NAV[0], NAV[1], NAV[3], NAV[6], NAV[7]];
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [signingOut, setSigningOut] = useState(false);
   const isAdmin = user?.role === 'ADMIN';
 
   return (
@@ -45,12 +47,19 @@ export default function AppLayout() {
               <span className="hidden text-sm font-medium text-ink-700 sm:inline">{user?.name || user?.email}</span>
               <button
                 className="btn-ghost"
+                disabled={signingOut}
                 onClick={async () => {
-                  await logout();
-                  navigate('/');
+                  setSigningOut(true);
+                  const result = await logout();
+                  setSigningOut(false);
+                  // Only a confirmed server-side revocation counts as a
+                  // completed sign-out. When it fails, clearing `user` sends
+                  // this route to /login, which explains what happened — the
+                  // user is never told the sign-out simply succeeded.
+                  if (result.serverRevoked) navigate('/');
                 }}
               >
-                Log out
+                {signingOut ? 'Signing out…' : 'Log out'}
               </button>
             </div>
           </div>
