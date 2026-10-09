@@ -173,7 +173,11 @@ describe('Password reset', () => {
     const reset = await request(app).post('/api/auth/reset-password').send({ token, newPassword: 'newpassword123' });
     expect(reset.status).toBe(200);
 
-    const login = await request(app).post('/api/auth/login').send({ email: 'feata@test.dev', password: 'newpassword123' });
+    // A password reset revokes every previously issued session, including the
+    // cookie this shared agent is still holding. Assert that, then sign the
+    // agent back in so the rest of the suite runs on a valid session.
+    expect((await userA.get('/api/auth/me')).status).toBe(401);
+    const login = await userA.post('/api/auth/login').send({ email: 'feata@test.dev', password: 'newpassword123' });
     expect(login.status).toBe(200);
     // old password no longer works
     const old = await request(app).post('/api/auth/login').send({ email: 'feata@test.dev', password: 'password123' });

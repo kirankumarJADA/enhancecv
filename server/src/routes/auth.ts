@@ -1,8 +1,9 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { getDb, newId } from '../db/db';
-import { signSession, requireAuth } from '../middleware/auth';
+import { getDb, newId, withTransaction, asQueryable } from '../db/db';
+import { signSession, requireAuth, sessionRefFromToken } from '../middleware/auth';
+import { createUserSession, revokeSession, revokeAllSessions } from '../lib/sessions';
 import { AppError } from '../middleware/errors';
 import { rateLimit } from '../middleware/rateLimit';
 import { config } from '../config';
@@ -18,6 +19,7 @@ import {
 } from '../lib/tokens';
 import { sendEmail, isEmailConfigured, type EmailSendResult } from '../lib/email';
 import { track } from '../lib/analytics';
+import { captureError } from '../lib/monitoring';
 
 const router = Router();
 
@@ -50,8 +52,21 @@ export function sessionCookieOptions(isProd: boolean) {
   };
 }
 
-function setSession(res: Response, uid: string, email: string): void {
-  const token = signSession({ uid, email });
+/**
+ * Start a session: record this device's session row, then issue a token that
+ * names it.
+ *
+ * The version must be the user's CURRENT `users.session_version`, because the
+ * token is rejected as soon as it no longer matches what the database holds.
+ */
+export async function startSession(
+  res: Response,
+  uid: string,
+  email: string,
+  sessionVersion: number,
+): Promise<void> {
+  const sessionId = await createUserSession(uid);
+  const token = signSession({ uid, email }, sessionVersion, sessionId);
   res.cookie(config.cookieName, token, sessionCookieOptions(config.isProd));
 }
 
@@ -113,7 +128,8 @@ router.post('/signup', rateLimit({ windowMs: 15 * 60_000, max: 20 }), async (req
   const emailResult = await sendVerificationEmail(body.email, verificationToken);
 
   track(id, 'signup', { emailProvider: emailResult.provider });
-  setSession(res, id, body.email);
+  // A brand-new row starts at session_version 0 (the schema default).
+  await startSession(res, id, body.email, 0);
 
   res.status(201).json({
     user: {
@@ -140,7 +156,7 @@ router.post(
     const db = getDb();
 
     const result = await db.query(
-      'SELECT id, email, password_hash, name, onboarded, email_verified FROM users WHERE lower(email) = lower($1)',
+      'SELECT id, email, password_hash, name, onboarded, email_verified, session_version FROM users WHERE lower(email) = lower($1)',
       [body.email],
     );
 
@@ -152,6 +168,7 @@ router.post(
           name: string;
           onboarded: boolean;
           email_verified: boolean;
+          session_version: number | string;
         }
       | undefined;
 
@@ -160,7 +177,7 @@ router.post(
     }
 
     track(row.id, 'login', {});
-    setSession(res, row.id, row.email);
+    await startSession(res, row.id, row.email, Number(row.session_version));
 
     res.json({
       user: {
@@ -174,7 +191,25 @@ router.post(
   },
 );
 
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
+  // Revoke SERVER-SIDE, not just in the browser, and only for THIS device:
+  // the presented token names one session row, so signing out here leaves the
+  // user's other devices signed in. Clearing the cookie alone would leave a
+  // captured token replayable until it expired.
+  const ref = sessionRefFromToken(req.cookies?.[config.cookieName]);
+  if (ref) {
+    try {
+      await revokeSession(ref.sessionId, ref.uid);
+    } catch (err) {
+      // Tell the caller sign-out did not complete rather than pretending it did.
+      captureError(err, { code: 'SESSION_REVOKE_FAILED', route: req.path });
+      res.clearCookie(config.cookieName, { path: '/' });
+      res.status(503).json({
+        error: { code: 'AUTH_UNAVAILABLE', message: 'Could not complete sign-out. Please try again.' },
+      });
+      return;
+    }
+  }
   res.clearCookie(config.cookieName, { path: '/' });
   res.json({ ok: true });
 });
@@ -300,10 +335,18 @@ router.post('/reset-password', rateLimit({ windowMs: 15 * 60_000, max: 10 }), as
       400,
     );
   }
-  await getDb().query('UPDATE users SET password_hash = $1 WHERE id = $2', [
-    bcrypt.hashSync(body.newPassword, 10),
-    result.userId,
-  ]);
+  // A reset is the recovery path for a possibly-compromised account, so it
+  // revokes EVERY device (not just the one that requested it): the password
+  // change and the revocations commit together, so a token cannot outlive the
+  // reset it was meant to reverse.
+  await withTransaction(async (client) => {
+    const db = asQueryable(client);
+    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [
+      bcrypt.hashSync(body.newPassword, 10),
+      result.userId,
+    ]);
+    await revokeAllSessions(result.userId, db);
+  });
   track(result.userId, 'password_reset_completed', {});
   res.json({ ok: true });
 });

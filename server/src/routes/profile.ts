@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { getDb, TS_TEXT } from '../db/db';
+import { getDb, TS_TEXT, withTransaction, asQueryable } from '../db/db';
 import { requireAuth } from '../middleware/auth';
 import { AppError } from '../middleware/errors';
+import { revokeAllSessions } from '../lib/sessions';
+import { startSession } from './auth';
 
 const router = Router();
 
@@ -45,7 +47,26 @@ router.put('/password', requireAuth, async (req, res) => {
   if (!row || !bcrypt.compareSync(body.currentPassword, row.password_hash)) {
     throw new AppError('INVALID_CREDENTIALS', 'Current password is incorrect.', 401);
   }
-  await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [bcrypt.hashSync(body.newPassword, 10), req.user!.uid]);
+  // Changing the password revokes every OTHER device, then issues a brand-new
+  // session for the device that made the change: the caller stays signed in
+  // while any other session (including one an attacker may hold) stops working
+  // immediately. The password update and the revocations commit together.
+  const uid = req.user!.uid;
+  const version = await withTransaction(async (client) => {
+    const tx = asQueryable(client);
+    await tx.query('UPDATE users SET password_hash = $1 WHERE id = $2', [
+      bcrypt.hashSync(body.newPassword, 10),
+      uid,
+    ]);
+    await revokeAllSessions(uid, tx);
+    const row = (await tx.query('SELECT session_version FROM users WHERE id = $1', [uid])).rows[0] as
+      | { session_version: number | string }
+      | undefined;
+    const value = Number(row?.session_version);
+    if (!Number.isFinite(value)) throw new AppError('NOT_FOUND', 'Account not found.', 404);
+    return value;
+  });
+  await startSession(res, uid, req.user!.email, version);
   res.json({ ok: true });
 });
 

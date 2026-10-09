@@ -181,7 +181,23 @@ async function migrateExtensions(db: Pool): Promise<void> {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'USER';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS template_id TEXT NOT NULL DEFAULT 'classic';
+    -- Session revocation, per-user half: a session JWT is only accepted while
+    -- its sv claim matches this value. Password change / password reset (and a
+    -- future "log out of all devices") bump it.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE resumes ADD COLUMN IF NOT EXISTS template_id TEXT NOT NULL DEFAULT 'classic';
+
+    -- Session revocation, per-device half: one row per device sign-in. The
+    -- token's jti claim names the row, so a normal logout can revoke exactly
+    -- that device without disturbing the user's other sessions.
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      revoked_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
 
     CREATE TABLE IF NOT EXISTS email_verification_tokens (
       id TEXT PRIMARY KEY,

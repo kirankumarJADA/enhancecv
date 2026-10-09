@@ -209,7 +209,9 @@ describe('production startup', () => {
 describe('signing and verification share one validated configuration', () => {
   it('accepts a session it signed', () => {
     process.env.JWT_SECRET = VALID_SECRET;
-    const token = signSession({ uid: 'usr_jwt_test', email: 'jwt@test.dev' });
+    // signSession now also binds the token to one device session (`jti`) and a
+    // session version (`sv`), which together drive server-side revocation.
+    const token = signSession({ uid: 'usr_jwt_test', email: 'jwt@test.dev' }, 0, 'sess_jwt_test');
     const payload = jwt.verify(token, configModule.getJwtSecret()) as { uid: string };
     expect(payload.uid).toBe('usr_jwt_test');
   });

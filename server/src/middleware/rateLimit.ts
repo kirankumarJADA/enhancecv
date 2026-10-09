@@ -27,6 +27,17 @@ export function rateLimit(options: { windowMs: number; max: number; keyFn?: (req
   };
 }
 
+/**
+ * Test-only: clear every bucket.
+ *
+ * The limiter keeps its state in this module, and the suite runs in a single
+ * forked process, so buckets persist across tests and files. Suites that create
+ * many accounts reset between cases instead of lowering any limit.
+ */
+export function __resetRateLimitsForTests(): void {
+  buckets.clear();
+}
+
 // Periodic cleanup so the map does not grow unbounded
 setInterval(() => {
   const now = Date.now();
