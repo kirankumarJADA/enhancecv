@@ -42,6 +42,33 @@ export function getDb(): Pool {
     ssl: shouldUseSsl(connectionString) ? { rejectUnauthorized: false } : false,
   });
 
+  // `pg` re-emits the error of an IDLE pooled client on the pool itself
+  // (pg-pool: `pool.emit('error', err, client)`), which happens when a database
+  // connection is lost — a restart, a network blip, or a server-side idle
+  // timeout. `pg` discards the dead client and opens a fresh connection on the
+  // next query, so the pool recovers on its own; but an EventEmitter 'error'
+  // event with no listener is FATAL in Node. Without this handler a dropped
+  // connection terminated the whole API process, taking the service down for
+  // every user until it was restarted, instead of failing a single request.
+  //
+  // This only LOGS. A failed query still rejects exactly as before, so
+  // authentication and session revocation keep failing closed; a pool error is
+  // never turned into a successful database operation.
+  //
+  // monitoring is imported lazily because it records through this same pool, so
+  // a static import would form a cycle with a module that already imports this
+  // one.
+  pool.on('error', (err: Error) => {
+    void import('../lib/monitoring')
+      .then(({ captureError }) => captureError(err, { code: 'DB_POOL_IDLE_CLIENT_ERROR' }))
+      .catch(() => {
+        // captureError sanitises and never throws, but this handler must not be
+        // able to take the process down, so a logging failure is contained and
+        // reported with a fixed, credential-free message.
+        console.error('[error] code=DB_POOL_IDLE_CLIENT_ERROR message=idle database connection was lost');
+      });
+  });
+
   return pool;
 }
 
