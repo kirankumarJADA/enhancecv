@@ -10,6 +10,7 @@
 // sendEmail never throws into request handling: failures are logged via the
 // monitoring service and surfaced to callers through the returned result.
 
+import { config } from '../config';
 import { captureError } from './monitoring';
 
 export type EmailProviderId = 'console' | 'resend' | 'sendgrid';
@@ -82,10 +83,22 @@ async function sendViaSendgrid(msg: EmailMessage): Promise<boolean> {
 export async function sendEmail(msg: EmailMessage): Promise<EmailSendResult> {
   const provider = activeProvider();
   if (provider === 'console' || !process.env.EMAIL_API_KEY) {
-    // Dev mode: log the full message so flows remain testable without a
-    // provider. Explicitly marked as NOT delivered.
-    console.error(`[email:console] NOT DELIVERED — to=${msg.to} subject="${msg.subject}"\n${msg.text}`);
-    const link = msg.text.match(/https?:\/\/\S+/)?.[0];
+    // No deliverable transport. Verification and password-reset messages carry
+    // single-use tokens, so in PRODUCTION nothing token-bearing is logged and
+    // no action URL is produced — the token stays discoverable only through a
+    // real email. This gate is hard-wired to NODE_ENV on purpose: it must not
+    // depend on whether a provider happens to be configured, otherwise a
+    // misconfigured deployment would hand out usable reset tokens again.
+    if (config.isProd) {
+      console.error(
+        `[email:console] NOT DELIVERED — to=${msg.to} subject="${msg.subject}" (message body withheld: token-bearing content is not logged in production)`,
+      );
+    } else {
+      // Development: log the full message so flows remain testable without a
+      // provider. Explicitly marked as NOT delivered.
+      console.error(`[email:console] NOT DELIVERED — to=${msg.to} subject="${msg.subject}"\n${msg.text}`);
+    }
+    const link = config.isProd ? undefined : msg.text.match(/https?:\/\/\S+/)?.[0];
     return { delivered: false, provider: 'console', actionUrl: link };
   }
   try {

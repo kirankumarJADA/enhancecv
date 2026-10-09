@@ -5,7 +5,7 @@ import helmet from 'helmet';
 import path from 'node:path';
 import fs from 'node:fs';
 import './middleware/async'; // async route rejections → central errorHandler
-import { config } from './config';
+import { config, assertJwtSecretIsSafe } from './config';
 import { errorHandler, notFoundHandler } from './middleware/http';
 import { newRequestId } from './lib/monitoring';
 import { corsOriginCheck } from './lib/cors';
@@ -28,6 +28,11 @@ import insightsRoutes from './routes/insights';
 import { getDb, initializeDatabase } from './db/db';
 
 export async function buildApp(): Promise<express.Express> {
+  // Fail fast, before any request can be served: a production deployment whose
+  // session signing key is missing, the published development fallback, or
+  // shorter than the documented minimum must not start at all.
+  assertJwtSecretIsSafe();
+
   getAiProvider(); // initialise the AI provider singleton from env
   getDb();
   await initializeDatabase();

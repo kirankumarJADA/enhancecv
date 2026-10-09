@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { config } from '../config';
+import { config, getJwtSecret } from '../config';
 
 export interface AuthPayload {
   uid: string;
@@ -17,7 +17,8 @@ declare global {
 }
 
 export function signSession(payload: AuthPayload): string {
-  return jwt.sign(payload, config.jwtSecret, { expiresIn: `${config.sessionDays}d` });
+  // Sign with the same validated accessor used for verification below.
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: `${config.sessionDays}d` });
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
@@ -46,7 +47,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     return;
   }
   try {
-    const payload = jwt.verify(token, config.jwtSecret) as AuthPayload;
+    const payload = jwt.verify(token, getJwtSecret()) as AuthPayload;
     req.user = payload;
     next();
   } catch {

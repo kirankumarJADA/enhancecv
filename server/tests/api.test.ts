@@ -20,7 +20,7 @@ const testDatabaseUrl =
   process.env.DATABASE_URL ||
   'postgres://postgres:ecvlocal@localhost:5434/enhancecv_test';
 process.env.DATABASE_URL = testDatabaseUrl;
-process.env.JWT_SECRET = 'test-secret';
+process.env.JWT_SECRET = 'test-only-jwt-secret-0123456789abcdef'; // >= the production minimum (32 chars)
 
 let app: Express;
 

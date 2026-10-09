@@ -16,7 +16,7 @@
 - **Start command:** `cd server && node dist/index.js`
 - **Environment variables:**
   - `DATABASE_URL` — Supabase connection string (secret)
-  - `JWT_SECRET` — long random string (secret)
+  - `JWT_SECRET` — long random string (secret), **required in production**: at least 32 characters, and not the built-in development fallback. The server refuses to start otherwise. Generate with `openssl rand -hex 32`.
   - `APP_URL` — public URL of the frontend (used in verification/reset email links)
   - `NODE_ENV=production`
   - optional AI agent: `AI_PROVIDER=openai`, `AI_API_KEY` (secret), `AI_MODEL`, `AI_TIMEOUT_MS`, `AI_MAX_RETRIES`, `AI_MAX_ITERATIONS`

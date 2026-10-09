@@ -73,6 +73,20 @@ async function sendResetEmail(email: string, token: string): Promise<EmailSendRe
   });
 }
 
+/**
+ * Development-only convenience: the action link for a verification or
+ * password-reset email when the console (no-provider) transport was used.
+ *
+ * SECURITY INVARIANT: this is hard-gated on NODE_ENV and deliberately does NOT
+ * depend on whether an email provider is configured. In production the API
+ * never returns a token-bearing URL, so a deployment with email delivery
+ * unconfigured or broken cannot hand an attacker a usable reset token.
+ */
+function devOnlyActionUrl(result: EmailSendResult): string | undefined {
+  if (config.isProd) return undefined;
+  return result.actionUrl;
+}
+
 router.post('/signup', rateLimit({ windowMs: 15 * 60_000, max: 20 }), async (req, res) => {
   const body = signupSchema.parse(req.body);
   const db = getDb();
@@ -109,7 +123,7 @@ router.post('/signup', rateLimit({ windowMs: 15 * 60_000, max: 20 }), async (req
       onboarded: false,
       emailVerified: false,
       emailDelivered: emailResult.delivered,
-      devActionUrl: emailResult.actionUrl,
+      devActionUrl: devOnlyActionUrl(emailResult),
     },
   });
 });
@@ -246,15 +260,27 @@ router.post('/forgot-password', rateLimit({ windowMs: 15 * 60_000, max: 5, keyFn
   const row = (await db.query('SELECT id FROM users WHERE lower(email) = lower($1)', [body.email])).rows[0] as
     | { id: string }
     | undefined;
-  let devActionUrl: string | undefined;
-  if (row) {
+
+  // Fail safe: in production a reset token is only ever created when it can
+  // actually be delivered by email. With no provider configured the caller
+  // still gets the same generic response, and no token exists that could be
+  // leaked, logged or reused to take over the account.
+  const canDeliver = !config.isProd || isEmailConfigured();
+  let actionUrl: string | undefined;
+  if (row && canDeliver) {
     const token = await createPasswordResetToken(row.id);
     const emailResult = await sendResetEmail(body.email, token);
     // Dev convenience (console provider only): surface the link since no real
-    // email was sent. Never leaks anything when a real provider is configured.
-    devActionUrl = emailResult.actionUrl;
+    // email was sent. Always undefined in production; also undefined when a
+    // real provider handled the delivery or failed to.
+    actionUrl = devOnlyActionUrl(emailResult);
+  } else if (row && !canDeliver) {
+    // Operational signal only — no address, no token.
+    console.error('[auth] password reset requested but no email provider is configured in production — no reset email was sent');
   }
-  res.json({ ok: true, emailConfigured: isEmailConfigured(), devActionUrl });
+
+  // Identical response for known and unknown addresses (no account enumeration).
+  res.json({ ok: true, emailConfigured: isEmailConfigured(), devActionUrl: actionUrl });
 });
 
 /** Complete a password reset with the emailed token. */

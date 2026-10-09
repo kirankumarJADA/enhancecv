@@ -15,7 +15,7 @@ import { AiProvider, JsonCompletionRequest, parseStructured, __setAiProviderForT
 
 process.env.DATABASE_URL =
   process.env.TEST_DATABASE_URL || process.env.DATABASE_URL || 'postgres://postgres:ecvlocal@localhost:5434/enhancecv_test';
-process.env.JWT_SECRET = 'test-secret';
+process.env.JWT_SECRET = 'test-only-jwt-secret-0123456789abcdef'; // >= the production minimum (32 chars)
 process.env.ADMIN_EMAILS = 'featadmin@test.dev';
 process.env.STRIPE_WEBHOOK_SECRET = 'whsec_testsecret';
 

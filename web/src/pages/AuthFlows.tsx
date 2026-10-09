@@ -94,7 +94,7 @@ export function ForgotPassword() {
             </p>
             {!sent.emailConfigured && (
               <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                This deployment has no email provider configured — the reset link was printed in the server logs instead.
+                This deployment has no email provider configured, so a reset email cannot be sent. Please ask the administrator to reset your password.
               </p>
             )}
             <Link className="btn-secondary mt-6 w-full py-3" to="/login">Back to sign in</Link>

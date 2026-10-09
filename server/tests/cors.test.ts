@@ -24,7 +24,7 @@ function apiUrl(path: string, base: string): string {
 
 process.env.DATABASE_URL =
   process.env.TEST_DATABASE_URL || process.env.DATABASE_URL || 'postgres://postgres:ecvlocal@localhost:5434/enhancecv_test';
-process.env.JWT_SECRET = 'test-secret';
+process.env.JWT_SECRET = 'test-only-jwt-secret-0123456789abcdef'; // >= the production minimum (32 chars)
 // Production frontend origin — read per-request by the CORS layer.
 process.env.FRONTEND_URL = 'https://enhancecv-orpin.vercel.app';
 
