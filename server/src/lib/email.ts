@@ -6,14 +6,17 @@
 //     to check logs or use the link directly.
 //   resend — HTTPS API (EMAIL_API_KEY).
 //   sendgrid — HTTPS API (EMAIL_API_KEY).
+//   brevo — HTTPS API (EMAIL_API_KEY), sender name "Curevo AI".
 //
 // sendEmail never throws into request handling: failures are logged via the
 // monitoring service and surfaced to callers through the returned result.
+// Provider failures surface only as `"<provider> status=<code>"` — response
+// bodies, credentials and message contents are never logged or returned.
 
 import { config } from '../config';
 import { captureError } from './monitoring';
 
-export type EmailProviderId = 'console' | 'resend' | 'sendgrid';
+export type EmailProviderId = 'console' | 'resend' | 'sendgrid' | 'brevo';
 
 export interface EmailMessage {
   to: string;
@@ -30,7 +33,7 @@ export interface EmailSendResult {
 
 function activeProvider(): EmailProviderId {
   const p = (process.env.EMAIL_PROVIDER || 'console').toLowerCase();
-  return p === 'resend' || p === 'sendgrid' ? (p as EmailProviderId) : 'console';
+  return p === 'resend' || p === 'sendgrid' || p === 'brevo' ? (p as EmailProviderId) : 'console';
 }
 
 export function isEmailConfigured(): boolean {
@@ -80,6 +83,35 @@ async function sendViaSendgrid(msg: EmailMessage): Promise<boolean> {
   return true;
 }
 
+/** EMAIL_FROM accepts both "addr" and "Name <addr>"; Brevo needs the bare address. */
+function brevoSenderEmail(): string {
+  const raw = (process.env.EMAIL_FROM || 'noreply@example.com').trim();
+  const angled = raw.match(/<([^>]+)>/);
+  return (angled ? angled[1] : raw).trim();
+}
+
+async function sendViaBrevo(msg: EmailMessage): Promise<boolean> {
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': process.env.EMAIL_API_KEY ?? '',
+      'Content-Type': 'application/json',
+      accept: 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { name: 'Curevo AI', email: brevoSenderEmail() },
+      to: [{ email: msg.to }],
+      subject: msg.subject,
+      textContent: msg.text,
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) {
+    throw new Error(`brevo status=${res.status}`);
+  }
+  return true;
+}
+
 export async function sendEmail(msg: EmailMessage): Promise<EmailSendResult> {
   const provider = activeProvider();
   if (provider === 'console' || !process.env.EMAIL_API_KEY) {
@@ -104,6 +136,8 @@ export async function sendEmail(msg: EmailMessage): Promise<EmailSendResult> {
   try {
     if (provider === 'resend') {
       await sendViaResend(msg);
+    } else if (provider === 'brevo') {
+      await sendViaBrevo(msg);
     } else {
       await sendViaSendgrid(msg);
     }

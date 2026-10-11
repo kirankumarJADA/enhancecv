@@ -21,7 +21,12 @@
   - `NODE_ENV=production`
   - optional AI agent: `AI_PROVIDER=openai`, `AI_API_KEY` (secret), `AI_MODEL`, `AI_TIMEOUT_MS`, `AI_MAX_RETRIES`, `AI_MAX_ITERATIONS`
   - optional billing: `STRIPE_SECRET_KEY` (secret), `STRIPE_PRICE_PRO`, `STRIPE_PRICE_PREMIUM`, `STRIPE_WEBHOOK_SECRET` (secret)
-  - optional email: `EMAIL_PROVIDER` (`resend`|`sendgrid`), `EMAIL_API_KEY` (secret), `EMAIL_FROM`
+  - optional email: `EMAIL_PROVIDER` (`resend`|`sendgrid`|`brevo`), `EMAIL_API_KEY` (secret), `EMAIL_FROM`
+    - For Brevo (domain `curevo.dpdns.org` already authenticated in Brevo):
+      - `EMAIL_PROVIDER=brevo`
+      - `EMAIL_API_KEY=<your Brevo API key>` — add it as a Render **secret environment variable** (never in code, docs or logs)
+      - `EMAIL_FROM=noreply@curevo.dpdns.org` — must be a sender authenticated in Brevo (Senders, or the domain itself)
+      - Brevo sender name is set by the code to `Curevo AI`; verification links use `APP_URL`
   - optional job discovery: `JOBS_API_URL`, `JOBS_API_KEY` (secret)
   - optional company research: `RESEARCH_SEARCH_API_URL`, `RESEARCH_SEARCH_API_KEY` (secret)
   - optional monitoring: `SENTRY_DSN` (secret)
