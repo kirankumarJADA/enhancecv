@@ -33,9 +33,113 @@ export const config = {
   maxUploadBytes: parseInt(process.env.MAX_UPLOAD_BYTES || String(8 * 1024 * 1024), 10),
   webDist: process.env.WEB_DIST || '',
   // Public base URL of the web app — used to build email verification and
-  // password-reset links. Falls back to the API origin in dev.
-  appUrl: (process.env.APP_URL || `http://localhost:${process.env.PORT || 5173}`).replace(/\/$/, ''),
+  // password-reset links. Falls back to the API origin in dev. The value is
+  // trimmed so a whitespace-only APP_URL can never masquerade as configured;
+  // in production the startup gate (assertAppUrlIsSafe) additionally requires
+  // a real https frontend URL.
+  appUrl: ((process.env.APP_URL || '').trim() || `http://localhost:${process.env.PORT || 5173}`).replace(/\/$/, ''),
 };
+
+export type AppUrlProblem = 'missing' | 'invalid' | 'localhost';
+
+export interface AppUrlCheck {
+  ok: boolean;
+  problem?: AppUrlProblem;
+  /** Safe to log or throw: never contains the configured value itself. */
+  message?: string;
+}
+
+export function isLocalHostname(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  return (
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '::1' ||
+    host === '[::1]' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local')
+  );
+}
+
+function parseAppUrl(value: string): URL | null {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pure validation of the public web-app URL.
+ *
+ * Email verification and password-reset links are built from APP_URL. In
+ * production an absent, non-https or localhost value produces links that are
+ * useless to the recipient (or leak tokens to a local listener), so it is
+ * refused. The configured value itself is never echoed back in `message`.
+ */
+export function checkAppUrl(raw: string | undefined, isProd: boolean): AppUrlCheck {
+  if (!isProd) return { ok: true };
+
+  const value = (raw ?? '').trim();
+  if (!value) {
+    return {
+      ok: false,
+      problem: 'missing',
+      message: 'APP_URL must be set when NODE_ENV=production — email verification and password-reset links are built from it.',
+    };
+  }
+
+  const parsed = parseAppUrl(value);
+  if (!parsed) {
+    return {
+      ok: false,
+      problem: 'invalid',
+      message: 'APP_URL must be a valid absolute https:// URL when NODE_ENV=production.',
+    };
+  }
+
+  // Diagnose localhost first: "http://localhost:10000" is more precisely a
+  // localhost misconfiguration than a plain https violation.
+  if (isLocalHostname(parsed.hostname)) {
+    return {
+      ok: false,
+      problem: 'localhost',
+      message: 'APP_URL must point to the live frontend, not localhost, when NODE_ENV=production.',
+    };
+  }
+
+  if (parsed.protocol !== 'https:') {
+    return {
+      ok: false,
+      problem: 'invalid',
+      message: 'APP_URL must use https:// when NODE_ENV=production — reset links carry single-use tokens.',
+    };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Startup gate. Production refuses to boot when APP_URL is missing, not
+ * https, or points to localhost — the same fail-fast convention as the JWT
+ * secret gate — so a misconfigured deployment can never silently email
+ * unusable (localhost) action links. No-op in development.
+ */
+export function assertAppUrlIsSafe(): void {
+  const check = checkAppUrl(process.env.APP_URL, config.isProd);
+  if (!check.ok) {
+    throw new Error(`APP_URL configuration error: ${check.message}`);
+  }
+}
+
+/**
+ * Runtime re-check for request paths that create token-bearing emails
+ * (defense in depth behind the startup gate): false when production is
+ * running with an APP_URL the startup gate would have rejected.
+ */
+export function isSafeAppUrl(): boolean {
+  return checkAppUrl(process.env.APP_URL, config.isProd).ok;
+}
 
 /**
  * Pure validation of the session signing secret.

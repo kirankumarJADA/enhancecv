@@ -6,7 +6,7 @@ import { signSession, requireAuth, sessionRefFromToken } from '../middleware/aut
 import { createUserSession, revokeSession, revokeAllSessions } from '../lib/sessions';
 import { AppError } from '../middleware/errors';
 import { rateLimit } from '../middleware/rateLimit';
-import { config } from '../config';
+import { config, isSafeAppUrl } from '../config';
 import {
   createVerificationToken,
   consumeVerificationToken,
@@ -297,10 +297,12 @@ router.post('/forgot-password', rateLimit({ windowMs: 15 * 60_000, max: 5, keyFn
     | undefined;
 
   // Fail safe: in production a reset token is only ever created when it can
-  // actually be delivered by email. With no provider configured the caller
-  // still gets the same generic response, and no token exists that could be
-  // leaked, logged or reused to take over the account.
-  const canDeliver = !config.isProd || isEmailConfigured();
+  // actually be delivered by email AND the emailed link would point at the
+  // live frontend (a missing/localhost APP_URL produced useless reset links
+  // in production once). With either precondition unmet the caller still gets
+  // the same generic response, and no token exists that could be leaked,
+  // logged or reused to take over the account.
+  const canDeliver = !config.isProd || (isEmailConfigured() && isSafeAppUrl());
   let actionUrl: string | undefined;
   if (row && canDeliver) {
     const token = await createPasswordResetToken(row.id);
@@ -310,8 +312,8 @@ router.post('/forgot-password', rateLimit({ windowMs: 15 * 60_000, max: 5, keyFn
     // real provider handled the delivery or failed to.
     actionUrl = devOnlyActionUrl(emailResult);
   } else if (row && !canDeliver) {
-    // Operational signal only — no address, no token.
-    console.error('[auth] password reset requested but no email provider is configured in production — no reset email was sent');
+    // Operational signal only — no address, no token, no URL.
+    console.error('[auth] password reset requested but email delivery is not safely configured in production (email provider or APP_URL missing/invalid) — no reset email was sent');
   }
 
   // Identical response for known and unknown addresses (no account enumeration).

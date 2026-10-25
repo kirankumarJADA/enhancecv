@@ -174,6 +174,7 @@ export interface AtsCheck {
   weight: number;
   message: string;
   recommendation?: string;
+  skipped?: boolean;
 }
 
 export interface ATSAnalysis {
@@ -194,6 +195,13 @@ export interface ATSAnalysis {
     averageBulletWords: number;
     technicalSkillCount: number;
     estimatedPages: number;
+  };
+  completeness: {
+    isComplete: boolean;
+    totalChecks: number;
+    evaluatedChecks: number;
+    skippedChecks: number;
+    status: 'complete' | 'partial' | 'inconclusive';
   };
 }
 

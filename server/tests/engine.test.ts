@@ -65,6 +65,72 @@ describe('ATS analysis', () => {
   it('estimates page count sensibly', () => {
     expect(estimatePages(makeMasterCV())).toBeLessThanOrEqual(2);
   });
+
+  it('reports complete evaluation status for a normal well-formed CV', () => {
+    const ats = analyseATS(makeMasterCV());
+    expect(ats.completeness).toBeDefined();
+    expect(ats.completeness.isComplete).toBe(true);
+    expect(ats.completeness.status).toBe('complete');
+    expect(ats.completeness.skippedChecks).toBe(0);
+    expect(ats.completeness.evaluatedChecks).toBe(ats.completeness.totalChecks);
+    expect(ats.completeness.totalChecks).toBe(ats.checks.length);
+  });
+
+  it('marks thrown checks as skipped, earns no points, and never displays them in working', () => {
+    // Malform skills property so technical skill checks throw TypeError when filtering
+    const malformed: ResumeData = {
+      ...makeMasterCV(),
+      skills: { soft: ['Communication', 'Teamwork', 'Problem Solving'] } as unknown as ResumeData['skills'],
+    };
+    const ats = analyseATS(malformed);
+    const techPresentCheck = ats.checks.find((c) => c.id === 'skl-technical-present');
+    const noFluffCheck = ats.checks.find((c) => c.id === 'skl-no-fluff-only');
+
+    expect(techPresentCheck).toBeDefined();
+    expect(techPresentCheck?.passed).toBe(false);
+    expect(techPresentCheck?.skipped).toBe(true);
+    expect(techPresentCheck?.message).toContain('Check could not be evaluated');
+
+    expect(noFluffCheck).toBeDefined();
+    expect(noFluffCheck?.passed).toBe(false);
+    expect(noFluffCheck?.skipped).toBe(true);
+
+    // Skipped checks must NEVER appear as positive accomplishments
+    expect(ats.working.some((w) => /skipped|could not be evaluated/i.test(w))).toBe(false);
+
+    // Skipped checks must surface under issues for user awareness
+    expect(ats.issues.some((i) => i.message === techPresentCheck?.message)).toBe(true);
+
+    // Completeness reflects the skipped checks
+    expect(ats.completeness.skippedChecks).toBe(2);
+    expect(ats.completeness.isComplete).toBe(false);
+    expect(ats.completeness.status).toBe('partial');
+  });
+
+  it('scores 0 and marks inconclusive when a category has zero evaluable checks', () => {
+    // Cause all checks in the structure category to throw via simulated field access errors
+    const throwingCv = makeMasterCV();
+    Object.defineProperty(throwingCv, 'experience', {
+      get() { throw new Error('Simulated experience corruption'); },
+    });
+    Object.defineProperty(throwingCv, 'education', {
+      get() { throw new Error('Simulated education corruption'); },
+    });
+    Object.defineProperty(throwingCv, 'summary', {
+      get() { throw new Error('Simulated summary corruption'); },
+    });
+    Object.defineProperty(throwingCv, 'projects', {
+      get() { throw new Error('Simulated projects corruption'); },
+    });
+
+    const ats = analyseATS(throwingCv);
+
+    // All structure checks failed/threw: structureScore must be 0 (never 100)
+    expect(ats.structureScore).toBe(0);
+    expect(ats.completeness.status).toBe('inconclusive');
+    expect(ats.completeness.isComplete).toBe(false);
+    expect(ats.completeness.skippedChecks).toBeGreaterThanOrEqual(3);
+  });
 });
 
 // ----------------------------------------------------------------- JD ----

@@ -76,3 +76,35 @@ export function downloadFile(path: string, filename: string): void {
   a.click();
   a.remove();
 }
+
+/** POST-based binary download helper: sends JSON payload and triggers browser download of the returned blob. */
+export async function downloadPdfBlob(path: string, body: unknown, filename: string): Promise<void> {
+  const res = await fetch(apiUrl(path, API_BASE), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let message = `Failed to generate PDF (${res.status})`;
+    let code = 'PDF_ERROR';
+    try {
+      const errJson = await res.json();
+      if (errJson?.error) {
+        code = errJson.error.code || code;
+        message = errJson.error.message || message;
+      }
+    } catch {
+      // non-JSON error
+    }
+    throw new ApiError(code, message, res.status);
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}

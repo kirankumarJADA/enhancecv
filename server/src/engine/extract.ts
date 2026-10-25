@@ -35,6 +35,8 @@ import {
 import { validateExtraction } from './extraction/validate';
 import { readPdfLayout } from './extraction/pdfText';
 import { docxHtmlToLines } from './extraction/docxText';
+import { inspectZipArchive } from './extraction/zipGuard';
+import { parseDocxInWorker } from './extraction/isolatedParser';
 
 export interface ExtractionResult {
   resume: ResumeData;
@@ -105,6 +107,14 @@ export function extractFromLines(input: ParsedLine[], meta: ExtractionMeta): Ext
   const lines = input.map((l, i) => (l.index === undefined ? { ...l, index: i } : l));
   const sections = splitSections(lines);
   const fullText = lines.map((l) => l.text).join('\n');
+
+  if (fullText.length > MAX_EXTRACTED_CHARS) {
+    throw new AppError(
+      'PARSE_FAILED',
+      `Extracted resume content exceeds the maximum limit of ${MAX_EXTRACTED_CHARS.toLocaleString()} characters. Please upload a standard resume.`,
+      422,
+    );
+  }
 
   const { contact, warnings: contactWarnings } = parseContact(sections, fullText);
 
@@ -252,7 +262,61 @@ function detectFlattenedTwoColumn(rawText: string): boolean {
   return gappy.length >= 3 && gappy.length / rawLines.length >= 0.25;
 }
 
+export const MAX_FILE_SIZE = 8 * 1024 * 1024; // 8 MB
+export const MAX_EXTRACTED_CHARS = 50_000;
+
+export function isPdf(buffer: Buffer): boolean {
+  if (buffer.length < 5) return false;
+  const header = buffer.subarray(0, Math.min(buffer.length, 1024)).toString('latin1');
+  return header.includes('%PDF-');
+}
+
+export function validateTextBuffer(buffer: Buffer): string {
+  if (buffer.length === 0) {
+    throw new AppError('PARSE_FAILED', PARSE_FAILED_MSG, 422);
+  }
+  // Check for null bytes - text resumes should never contain null bytes
+  if (buffer.includes(0x00)) {
+    throw new AppError('PARSE_FAILED', 'File appears to be binary rather than plain text.', 422);
+  }
+
+  // Validate strict UTF-8
+  let text: string;
+  try {
+    const decoder = new TextDecoder('utf-8', { fatal: true });
+    text = decoder.decode(buffer);
+  } catch {
+    throw new AppError(
+      'PARSE_FAILED',
+      'File contains invalid character encoding. Please ensure the file is saved as UTF-8.',
+      422,
+    );
+  }
+
+  // Reject excessive non-whitespace control characters while strictly allowing multilingual text
+  let controlChars = 0;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if ((code < 32 && code !== 9 && code !== 10 && code !== 13) || code === 127) {
+      controlChars++;
+    }
+  }
+
+  if (controlChars > 5 && controlChars / text.length > 0.005) {
+    throw new AppError('PARSE_FAILED', 'File appears to be binary rather than plain text.', 422);
+  }
+
+  return text;
+}
+
 export function extractResumeFromText(rawText: string): ExtractionResult {
+  if (rawText.length > MAX_EXTRACTED_CHARS) {
+    throw new AppError(
+      'PARSE_FAILED',
+      `Extracted resume content exceeds the maximum limit of ${MAX_EXTRACTED_CHARS.toLocaleString()} characters. Please upload a standard resume.`,
+      422,
+    );
+  }
   const lines = linesFromText(rawText);
   return extractFromLines(lines, {
     pageCount: 1,
@@ -267,16 +331,32 @@ const MIN_CONTENT_CHARS = 40;
 const PARSE_FAILED_MSG = 'We could not read this file. It may be empty, scanned, or corrupted.';
 
 export async function extractFile(file: Express.Multer.File): Promise<ExtractionResult> {
-  const name = file.originalname.toLowerCase();
+  if (!file || !file.buffer) {
+    throw new AppError('PARSE_FAILED', PARSE_FAILED_MSG, 422);
+  }
+
+  if (file.buffer.length > MAX_FILE_SIZE) {
+    throw new AppError('FILE_TOO_LARGE', 'File is too large. Maximum size is 8 MB.', 413);
+  }
+
+  if (file.buffer.length === 0) {
+    throw new AppError('PARSE_FAILED', PARSE_FAILED_MSG, 422);
+  }
+
+  const name = (file.originalname || '').toLowerCase();
 
   if (name.endsWith('.pdf')) {
-    // pdfjs-dist is the authoritative PDF reader: text items with coordinates
-    // reconstruct lines, columns and reading order. Scanned/image-only or
-    // encrypted PDFs surface as a friendly PARSE_FAILED.
+    // Verify PDF signature before parsing
+    if (!isPdf(file.buffer)) {
+      throw new AppError('PARSE_FAILED', 'File does not match valid PDF signature.', 422);
+    }
+
+    // pdfjs-dist via isolated worker with hard timeout enforcement and page capping
     let layout;
     try {
       layout = await readPdfLayout(file.buffer);
-    } catch {
+    } catch (err) {
+      if (err instanceof AppError) throw err;
       throw new AppError('PARSE_FAILED', PARSE_FAILED_MSG, 422);
     }
     if (textLength(layout.lines) < MIN_CONTENT_CHARS) {
@@ -292,41 +372,48 @@ export async function extractFile(file: Express.Multer.File): Promise<Extraction
   }
 
   if (name.endsWith('.docx')) {
+    // 1. Safe central directory inspection: entry count, size limits, compression ratio & Word structure
+    inspectZipArchive(file.buffer);
+
+    // 2. Mammoth execution inside isolated worker with hard timeout
+    let lines: ParsedLine[] = [];
     try {
-      const mammoth = await import('mammoth');
-      let lines: ParsedLine[] = [];
-      try {
-        const html = await mammoth.convertToHtml({ buffer: file.buffer });
-        lines = docxHtmlToLines(html.value || '');
-      } catch {
-        lines = [];
+      const { html, rawText } = await parseDocxInWorker(file.buffer);
+      if (html) {
+        lines = docxHtmlToLines(html);
       }
-      if (lines.length === 0) {
-        const raw = await mammoth.extractRawText({ buffer: file.buffer });
-        lines = linesFromText(raw.value || '');
+      if (lines.length === 0 && rawText) {
+        lines = linesFromText(rawText);
       }
-      if (textLength(lines) < MIN_CONTENT_CHARS) {
-        throw new AppError('PARSE_FAILED', PARSE_FAILED_MSG, 422);
-      }
-      return extractFromLines(lines, {
-        pageCount: 1,
-        multiColumn: false,
-        flattenedTwoColumn: false,
-        sectionOrderDetected: [],
-        warnings: [],
-      });
     } catch (err) {
       if (err instanceof AppError) throw err;
       throw new AppError('PARSE_FAILED', PARSE_FAILED_MSG, 422);
     }
+
+    if (textLength(lines) < MIN_CONTENT_CHARS) {
+      throw new AppError('PARSE_FAILED', PARSE_FAILED_MSG, 422);
+    }
+    return extractFromLines(lines, {
+      pageCount: 1,
+      multiColumn: false,
+      flattenedTwoColumn: false,
+      sectionOrderDetected: [],
+      warnings: [],
+    });
   }
 
-  if (name.endsWith('.doc') || name.endsWith('.txt') || name.endsWith('.rtf')) {
-    let text = file.buffer.toString('utf8');
-    if (name.endsWith('.doc') || name.endsWith('.rtf')) {
-      // legacy binary formats: best-effort ASCII salvage
-      text = text.replace(/[^\x20-\x7E\n]/g, ' ');
+  if (name.endsWith('.txt')) {
+    const text = validateTextBuffer(file.buffer);
+    if (text.replace(/\s/g, '').length < MIN_CONTENT_CHARS) {
+      throw new AppError('PARSE_FAILED', PARSE_FAILED_MSG, 422);
     }
+    return extractResumeFromText(text);
+  }
+
+  if (name.endsWith('.doc') || name.endsWith('.rtf')) {
+    let text = file.buffer.toString('utf8');
+    // legacy binary formats: best-effort ASCII salvage
+    text = text.replace(/[^\x20-\x7E\n]/g, ' ');
     if (text.replace(/\s/g, '').length < MIN_CONTENT_CHARS) {
       throw new AppError('PARSE_FAILED', PARSE_FAILED_MSG, 422);
     }

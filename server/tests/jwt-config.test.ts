@@ -46,6 +46,7 @@ beforeAll(async () => {
   process.env.NODE_ENV = 'production';
   process.env.DATABASE_URL = TEST_DATABASE_URL;
   process.env.JWT_SECRET = VALID_SECRET;
+  process.env.APP_URL = 'https://enhancecv.test';
 
   configModule = await import('../src/config');
   buildApp = (await import('../src/app')).buildApp;
@@ -57,6 +58,7 @@ afterAll(() => {
   else process.env.NODE_ENV = ORIGINAL_NODE_ENV;
   if (ORIGINAL_JWT_SECRET === undefined) delete process.env.JWT_SECRET;
   else process.env.JWT_SECRET = ORIGINAL_JWT_SECRET;
+  delete process.env.APP_URL;
 });
 
 /** Capture console output so we can prove no secret is ever written to a log. */
@@ -176,26 +178,24 @@ describe('the resolved secret shown to signing and verification', () => {
 });
 
 describe('production startup', () => {
-  it('rejects startup with the public fallback and logs no secret', async () => {
+  it('starts normally in stateless no-login mode even when JWT_SECRET is the public fallback', async () => {
     process.env.JWT_SECRET = configModule.DEV_FALLBACK_JWT_SECRET;
     const console_ = captureConsole();
-    let rejected: unknown;
     let app: unknown;
     try {
       app = await buildApp();
-    } catch (err) {
-      rejected = err;
     } finally {
       console_.restore();
     }
 
-    // The gate runs before any request can be served, so startup must fail.
-    expect(app).toBeUndefined();
-    expect(rejected).toBeInstanceOf(Error);
-    // Matches the startup gate specifically — not a database or other error.
-    expect((rejected as Error).message).toMatch(/^JWT configuration error: .*JWT_SECRET/);
+    // In the stateless no-login architecture, auth routes are unmounted so
+    // production startup does not fail on JWT configuration.
+    expect(app).toBeDefined();
+    expect(app).toBeTruthy();
+
+    // The pure validator itself continues to reject the fallback secret if invoked directly:
+    expect(() => configModule.assertJwtSecretIsSafe()).toThrow(/^JWT configuration error: .*JWT_SECRET/);
     // Neither the error nor any captured log line may contain the secret.
-    expect((rejected as Error).message).not.toContain(configModule.DEV_FALLBACK_JWT_SECRET);
     expect(console_.output.join('\n')).not.toContain(configModule.DEV_FALLBACK_JWT_SECRET);
   });
 

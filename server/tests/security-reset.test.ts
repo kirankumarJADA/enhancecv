@@ -40,6 +40,9 @@ beforeAll(async () => {
   process.env.NODE_ENV = 'production';
   process.env.DATABASE_URL = TEST_DATABASE_URL;
   process.env.JWT_SECRET = 'test-only-jwt-secret-0123456789abcdef'; // >= the production minimum (32 chars)
+  // Production deployments require a real https frontend URL: email links are
+  // built from it and the startup gate refuses localhost/missing values.
+  process.env.APP_URL = 'https://enhancecv.test';
   delete process.env.EMAIL_PROVIDER;
   delete process.env.EMAIL_API_KEY;
   delete process.env.ADMIN_EMAILS;
@@ -58,6 +61,7 @@ afterAll(async () => {
   else process.env.NODE_ENV = ORIGINAL_NODE_ENV;
   delete process.env.EMAIL_PROVIDER;
   delete process.env.EMAIL_API_KEY;
+  delete process.env.APP_URL;
 });
 
 // --- helpers ---------------------------------------------------------------
@@ -200,7 +204,7 @@ describe('production reset requests with no email provider', () => {
     const resetLog = capturedLog(spy);
     spy.mockRestore();
 
-    expect(resetLog).toMatch(/no email provider is configured in production/);
+    expect(resetLog).toMatch(/email delivery is not safely configured in production/);
     expect(resetLog).not.toMatch(/NOT DELIVERED/);
     expect(resetLog).not.toMatch(/reset-password/i);
     expect(resetLog).not.toMatch(/token=/i);

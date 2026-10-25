@@ -3,6 +3,7 @@
 // two-column layouts, and page-number header/footer removal.
 
 import type { ParsedLine } from './types';
+import { parsePdfInWorker } from './isolatedParser';
 
 interface RawItem {
   text: string;
@@ -183,41 +184,14 @@ export interface PdfLayoutResult {
   multiColumn: boolean;
 }
 
-export async function readPdfLayout(buffer: Buffer): Promise<PdfLayoutResult> {
-  const pdfjs = await loadPdfjs();
-  const doc = await pdfjs.getDocument({
-    data: new Uint8Array(buffer),
-    isEvalSupported: false,
-    useSystemFonts: true,
-    verbosity: 0,
-  }).promise;
+export async function readPdfLayout(buffer: Buffer, timeoutMs?: number): Promise<PdfLayoutResult> {
+  const { numPages, pages } = await parsePdfInWorker(buffer, timeoutMs);
 
   const allLines: PdfLine[] = [];
   let multiColumn = false;
-  for (let p = 1; p <= doc.numPages; p++) {
-    const page = await doc.getPage(p);
-    const viewport = page.getViewport({ scale: 1 });
-    const content = await page.getTextContent();
-    const styles = content.styles || {};
-    const items: RawItem[] = [];
-    for (const item of content.items) {
-      const text = item.str ?? '';
-      if (!text.trim() || !item.transform) continue;
-      const [, b, , d, e, f] = item.transform;
-      const fontSize = Math.hypot(b, d) || item.height || 10;
-      const fontKey = item.fontName || '';
-      const family = styles[fontKey]?.fontFamily || '';
-      items.push({
-        text,
-        x: e,
-        y: f,
-        width: item.width ?? text.length * fontSize * 0.5,
-        fontSize,
-        bold: BOLD_HINT_RE.test(fontKey) || BOLD_HINT_RE.test(family),
-      });
-    }
-    const pageLines = itemsToLines(items, p);
-    const ordered = orderColumns(pageLines, viewport.width);
+  for (const page of pages) {
+    const pageLines = itemsToLines(page.items, page.pageNumber);
+    const ordered = orderColumns(pageLines, page.width);
     if (ordered) {
       multiColumn = true;
       allLines.push(...ordered);
@@ -225,7 +199,6 @@ export async function readPdfLayout(buffer: Buffer): Promise<PdfLayoutResult> {
       allLines.push(...pageLines);
     }
   }
-  await doc.destroy?.();
 
   const lines: ParsedLine[] = allLines
     .filter((l) => !PAGE_NO_RE.test(l.text) && !/^\d{1,3}$/.test(l.text))
@@ -241,5 +214,5 @@ export async function readPdfLayout(buffer: Buffer): Promise<PdfLayoutResult> {
       index: i,
     }));
 
-  return { lines, pageCount: doc.numPages, multiColumn };
+  return { lines, pageCount: numPages, multiColumn };
 }

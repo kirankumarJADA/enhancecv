@@ -70,15 +70,37 @@ export interface AiConfig {
 }
 
 export function readAiConfigFromEnv(): AiConfig | null {
-  const apiKey = process.env.AI_API_KEY || process.env.OPENAI_API_KEY || '';
-  const providerId = (process.env.AI_PROVIDER || (apiKey ? 'openai' : '')).trim();
+  const nvidiaKey = process.env.NVIDIA_API_KEY || '';
+  const genericKey = process.env.AI_API_KEY || process.env.OPENAI_API_KEY || '';
+  const explicitProvider = (process.env.AI_PROVIDER || '').trim().toLowerCase();
+
+  let providerId = explicitProvider;
+  let apiKey = '';
+
+  if (explicitProvider === 'nvidia' || (!explicitProvider && nvidiaKey)) {
+    providerId = 'nvidia';
+    apiKey = nvidiaKey || genericKey;
+  } else if (
+    explicitProvider === 'openai' ||
+    explicitProvider === 'openai-compatible' ||
+    (!explicitProvider && genericKey)
+  ) {
+    providerId = explicitProvider || 'nvidia';
+    apiKey = genericKey;
+  }
+
   if (!providerId || providerId === 'none' || providerId === 'off' || !apiKey) return null;
+
+  const isNvidia = providerId === 'nvidia';
+  const defaultModel = isNvidia ? 'nvidia/nemotron-3.5-lightning-30b-a3b' : 'gpt-4o-mini';
+  const defaultBaseUrl = isNvidia ? 'https://integrate.api.nvidia.com/v1' : 'https://api.openai.com/v1';
+
   return {
     providerId,
     apiKey,
-    model: (process.env.AI_MODEL || 'gpt-4o-mini').trim(),
-    baseUrl: (process.env.AI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, ''),
-    timeoutMs: boundedInt(process.env.AI_TIMEOUT_MS, 20_000, 1_000, 120_000),
+    model: (process.env.AI_MODEL || defaultModel).trim(),
+    baseUrl: (process.env.AI_BASE_URL || defaultBaseUrl).replace(/\/$/, ''),
+    timeoutMs: boundedInt(process.env.AI_TIMEOUT_MS, 30_000, 1_000, 120_000),
     maxRetries: boundedInt(process.env.AI_MAX_RETRIES, 2, 0, 5),
     maxIterations: boundedInt(process.env.AI_MAX_ITERATIONS, 2, 1, 4),
   };
@@ -146,6 +168,19 @@ class OpenAiCompatibleProvider implements AiProvider {
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     const started = Date.now();
     try {
+      const payload: Record<string, unknown> = {
+        model: this.model,
+        temperature: req.temperature ?? 0.2,
+        max_tokens: req.maxTokens ?? 3000,
+        messages: [
+          { role: 'system', content: req.system },
+          { role: 'user', content: req.user },
+        ],
+      };
+      if (this.name === 'openai') {
+        payload.response_format = { type: 'json_object' };
+      }
+
       const res = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -153,16 +188,7 @@ class OpenAiCompatibleProvider implements AiProvider {
           Authorization: `Bearer ${this.apiKey}`,
         },
         signal: controller.signal,
-        body: JSON.stringify({
-          model: this.model,
-          temperature: req.temperature ?? 0.2,
-          max_tokens: req.maxTokens ?? 1600,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: req.system },
-            { role: 'user', content: req.user },
-          ],
-        }),
+        body: JSON.stringify(payload),
       });
 
       const logTag = `ai name=${this.name} model=${this.model} attempt=${attempt}`;
@@ -184,7 +210,18 @@ class OpenAiCompatibleProvider implements AiProvider {
         );
       }
 
-      const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      const rawText = await res.text();
+      if (rawText.length > 5 * 1024 * 1024) {
+        throw new AiUnavailableError('AI_MALFORMED', 'AI response exceeded maximum safe size limit.', false);
+      }
+
+      let data: { choices?: { message?: { content?: string } }[] };
+      try {
+        data = JSON.parse(rawText) as { choices?: { message?: { content?: string } }[] };
+      } catch {
+        throw new AiUnavailableError('AI_MALFORMED', 'AI returned an unparseable response body.', true);
+      }
+
       const content = data.choices?.[0]?.message?.content;
       if (typeof content !== 'string' || content.length === 0) {
         console.error(`${logTag} empty_content ms=${Date.now() - started}`);
@@ -222,7 +259,7 @@ export function getAiProvider(): AiProvider {
     initialised = true;
     const cfg = readAiConfigFromEnv();
     if (cfg) {
-      if (cfg.providerId === 'openai' || cfg.providerId === 'openai-compatible') {
+      if (cfg.providerId === 'nvidia' || cfg.providerId === 'openai' || cfg.providerId === 'openai-compatible') {
         provider = new OpenAiCompatibleProvider(cfg);
       } else {
         console.error(`ai unknown provider id "${cfg.providerId}" — running deterministically`);

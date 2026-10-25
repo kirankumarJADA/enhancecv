@@ -5,11 +5,12 @@
 //   correlation ids.
 // - Pluggable provider: with SENTRY_DSN configured, errors are forwarded to
 //   Sentry's store API over plain HTTP (no SDK dependency); without it, the
-//   app logs safely and records to the local error_events table.
+//   app logs safely to stderr.
 // - captureError never throws — monitoring must not break request handling.
+// - In the stateless, no-login architecture, error monitoring never creates
+//   database connections or attempts SQL queries under any circumstances.
 
 import crypto from 'node:crypto';
-import { getDb } from '../db/db';
 
 export interface ErrorContext {
   requestId?: string;
@@ -79,16 +80,6 @@ export function captureError(err: unknown, ctx: ErrorContext = {}): void {
   const message = err instanceof Error ? err.message : String(err);
   const safeMessage = sanitize(message);
   console.error(`[error] code=${ctx.code || 'INTERNAL'} route=${ctx.route || '-'} requestId=${ctx.requestId || '-'} message=${safeMessage}`);
-
-  // Local record for the admin dashboard (best effort).
-  void getDb()
-    .query(
-      'INSERT INTO error_events (id, code, message, request_id, user_id) VALUES ($1, $2, $3, $4, $5)',
-      [`err_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`, ctx.code || 'INTERNAL', safeMessage, ctx.requestId || null, ctx.userId || null],
-    )
-    .catch(() => {
-      // error table itself unavailable — nothing more we can safely do
-    });
 
   const dsn = process.env.SENTRY_DSN;
   if (dsn) {

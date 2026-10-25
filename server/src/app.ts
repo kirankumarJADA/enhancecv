@@ -5,37 +5,15 @@ import helmet from 'helmet';
 import path from 'node:path';
 import fs from 'node:fs';
 import './middleware/async'; // async route rejections → central errorHandler
-import { config, assertJwtSecretIsSafe } from './config';
+import { config } from './config';
 import { errorHandler, notFoundHandler } from './middleware/http';
 import { newRequestId } from './lib/monitoring';
 import { corsOriginCheck } from './lib/cors';
 import { getAiProvider } from './ai/provider';
-import authRoutes from './routes/auth';
-import masterRoutes from './routes/master';
-import jobRoutes from './routes/jobs';
-import resumeRoutes from './routes/resumes';
-import dashboardRoutes from './routes/dashboard';
-import profileRoutes from './routes/profile';
-import aiRoutes from './routes/ai';
-import billingRoutes from './routes/billing';
-import applicationsRoutes from './routes/applications';
-import templatesRoutes from './routes/templates';
-import adminRoutes from './routes/admin';
-import interviewRoutes from './routes/interview';
-import discoveryRoutes from './routes/discovery';
-import importRoutes from './routes/imports';
-import insightsRoutes from './routes/insights';
-import { getDb, initializeDatabase } from './db/db';
+import publicRoutes from './routes/public';
 
 export async function buildApp(): Promise<express.Express> {
-  // Fail fast, before any request can be served: a production deployment whose
-  // session signing key is missing, the published development fallback, or
-  // shorter than the documented minimum must not start at all.
-  assertJwtSecretIsSafe();
-
-  getAiProvider(); // initialise the AI provider singleton from env
-  getDb();
-  await initializeDatabase();
+  getAiProvider(); // initialise the AI provider singleton from env (when configured)
 
   const app = express();
   app.disable('x-powered-by');
@@ -55,8 +33,7 @@ export async function buildApp(): Promise<express.Express> {
   // CORS: the production frontend (Vercel) and the API (Render) live on
   // different origins, so browser requests need credentialed CORS. The
   // allow-list comes from FRONTEND_URL plus the local development origins —
-  // never '*'. Requests without an Origin header (curl, Stripe webhooks,
-  // server-to-server) pass through untouched.
+  // never '*'. Requests without an Origin header (curl, server-to-server) pass through untouched.
   app.use(cors({
     origin: corsOriginCheck,
     credentials: true,
@@ -65,10 +42,6 @@ export async function buildApp(): Promise<express.Express> {
     maxAge: 86400,
   }));
 
-  // Stripe webhook needs the RAW body for signature verification — mount the
-  // raw parser for that path BEFORE the global JSON parser.
-  app.use('/api/billing/webhook', express.raw({ type: 'application/json', limit: '1mb' }));
-
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
 
@@ -76,20 +49,15 @@ export async function buildApp(): Promise<express.Express> {
     res.json({ ok: true, service: 'curevo-ai', time: new Date().toISOString() });
   });
 
-  app.use('/api/auth', authRoutes);
-  app.use('/api/master', masterRoutes);
-  app.use('/api/resumes', resumeRoutes);
-  app.use('/api/dashboard', dashboardRoutes);
-  app.use('/api/profile', profileRoutes);
-  app.use('/api/ai', aiRoutes);
-  app.use('/api/billing', billingRoutes);
-  app.use('/api/applications', applicationsRoutes);
-  app.use('/api/templates', templatesRoutes);
-  app.use('/api/admin', adminRoutes);
-  app.use('/api/interview', interviewRoutes);
-  app.use('/api/jobs', discoveryRoutes, jobRoutes); // discovery first: /discover, /saved, /import-url must not fall into /:id
-  app.use('/api/import', importRoutes);
-  app.use('/api/analytics', insightsRoutes);
+  // Public stateless resume routes (NVIDIA Nemotron powered, in-memory, no database)
+  app.use('/api/public', publicRoutes);
+
+  // Obsolete database-backed routes are safely unmounted for the stateless, no-login architecture:
+  // - /api/auth, /api/master, /api/resumes, /api/dashboard, /api/profile, /api/ai
+  // - /api/billing, /api/applications, /api/templates, /api/admin, /api/interview
+  // - /api/jobs, /api/import, /api/analytics
+  // These routes safely resolve to 404 NOT FOUND via notFoundHandler without attempting
+  // PostgreSQL connection, session verification or account persistence.
 
   // Serve the built web app in production / combined mode
   if (config.webDist) {

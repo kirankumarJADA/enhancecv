@@ -72,8 +72,7 @@ export default function Landing() {
             <a href="#faq" className="hover:text-ink-900">FAQ</a>
           </nav>
           <div className="flex items-center gap-3">
-            <Link to="/login" className="btn-ghost">Log in</Link>
-            <Link to="/signup" className="btn-primary">Build My CV — Free</Link>
+            <Link to="/builder" className="btn-primary">Build My CV — Free</Link>
           </div>
         </div>
       </header>
@@ -95,7 +94,7 @@ export default function Landing() {
               Upload your CV, analyse how it matches a job description, and create a truthful job-specific CV in minutes.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Link to="/signup" className="btn-primary px-6 py-3 text-base">Build My CV — Free</Link>
+              <Link to="/builder" className="btn-primary px-6 py-3 text-base">Build My CV — Free</Link>
               <a href="#how" className="btn-secondary px-6 py-3 text-base">See How It Works</a>
             </div>
             <p className="mt-4 text-sm text-ink-500">No credit card. Your Master CV is never modified automatically.</p>
@@ -300,7 +299,7 @@ export default function Landing() {
             Create your free account, bring your Master CV, and tailor your first application in minutes.
           </p>
           <div className="mt-8 flex justify-center">
-            <Link to="/signup" className="btn-primary px-8 py-3 text-base">Build My CV — Free</Link>
+            <Link to="/builder" className="btn-primary px-8 py-3 text-base">Build My CV — Free</Link>
           </div>
         </div>
       </section>

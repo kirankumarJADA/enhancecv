@@ -17,7 +17,7 @@
 - **Environment variables:**
   - `DATABASE_URL` — Supabase connection string (secret)
   - `JWT_SECRET` — long random string (secret), **required in production**: at least 32 characters, and not the built-in development fallback. The server refuses to start otherwise. Generate with `openssl rand -hex 32`.
-  - `APP_URL` — public URL of the frontend (used in verification/reset email links)
+  - `APP_URL` — public URL of the frontend (used in verification/reset email links). **Required in production**: must be a valid `https://` URL pointing at the live frontend, not localhost — the server refuses to start otherwise, and reset emails fail closed (no token is created) if it becomes invalid at runtime. For this deployment: `APP_URL=https://enhancecv-orpin.vercel.app` on the **backend** service (the value lives with the API that builds the links, not on the frontend service).
   - `NODE_ENV=production`
   - optional AI agent: `AI_PROVIDER=openai`, `AI_API_KEY` (secret), `AI_MODEL`, `AI_TIMEOUT_MS`, `AI_MAX_RETRIES`, `AI_MAX_ITERATIONS`
   - optional billing: `STRIPE_SECRET_KEY` (secret), `STRIPE_PRICE_PRO`, `STRIPE_PRICE_PREMIUM`, `STRIPE_WEBHOOK_SECRET` (secret)

@@ -60,39 +60,39 @@ function sectionLabel(key: SectionKey | string): string {
 
 function collectBullets(resume: ResumeData): string[] {
   const bullets: string[] = [];
-  for (const e of resume.experience) bullets.push(...e.bullets.filter((b) => b.trim()));
-  for (const p of resume.projects) bullets.push(...p.bullets.filter((b) => b.trim()));
+  for (const e of (resume.experience || [])) bullets.push(...(e.bullets || []).filter((b) => b && b.trim()));
+  for (const p of (resume.projects || [])) bullets.push(...(p.bullets || []).filter((b) => b && b.trim()));
   return bullets;
 }
 
 function resumeText(resume: ResumeData): string {
-  const parts: string[] = [resume.summary];
-  for (const e of resume.experience) {
-    parts.push(e.title, e.company, e.location || '', ...e.bullets);
+  const parts: string[] = [resume.summary || ''];
+  for (const e of (resume.experience || [])) {
+    parts.push(e.title || '', e.company || '', e.location || '', ...(e.bullets || []));
   }
-  for (const p of resume.projects) {
-    parts.push(p.name, p.description || '', ...(p.tech || []), ...p.bullets);
+  for (const p of (resume.projects || [])) {
+    parts.push(p.name || '', p.description || '', ...(p.tech || []), ...(p.bullets || []));
   }
-  for (const ed of resume.education) {
-    parts.push(ed.institution, ed.degree, ed.field || '');
+  for (const ed of (resume.education || [])) {
+    parts.push(ed.institution || '', ed.degree || '', ed.field || '');
   }
-  parts.push(...resume.skills.technical, ...resume.skills.soft);
-  for (const c of resume.certifications) parts.push(c.name, c.issuer || '');
-  for (const l of resume.languages) parts.push(l.name);
-  parts.push(...resume.achievements);
+  parts.push(...(resume.skills?.technical || []), ...(resume.skills?.soft || []));
+  for (const c of (resume.certifications || [])) parts.push(c.name || '', c.issuer || '');
+  for (const l of (resume.languages || [])) parts.push(l.name || '');
+  parts.push(...(resume.achievements || []));
   return parts.filter(Boolean).join('\n');
 }
 
 function dateTokens(resume: ResumeData): string[] {
   const tokens: string[] = [];
   const push = (s?: string) => {
-    if (s && s.trim()) tokens.push(s.trim());
+    if (s && typeof s === 'string' && s.trim()) tokens.push(s.trim());
   };
-  for (const e of resume.experience) {
+  for (const e of (resume.experience || [])) {
     push(e.startDate);
     push(e.endDate);
   }
-  for (const ed of resume.education) {
+  for (const ed of (resume.education || [])) {
     push(ed.startDate);
     push(ed.endDate);
   }
@@ -494,9 +494,13 @@ function resumeListedSkills(allText: string): number {
 }
 
 export function estimatePages(resume: ResumeData): number {
-  const chars = resumeText(resume).length + (resume.personal.fullName || '').length;
-  // ~3,500 characters of plain text fit on one A4 page at 10–11pt with headings.
-  return Math.max(1, Math.round((chars / 3500) * 10) / 10);
+  try {
+    const chars = resumeText(resume).length + (resume.personal?.fullName || '').length;
+    // ~3,500 characters of plain text fit on one A4 page at 10–11pt with headings.
+    return Math.max(1, Math.round((chars / 3500) * 10) / 10);
+  } catch {
+    return 1;
+  }
 }
 
 export function analyseATS(resume: ResumeData): ATSAnalysis {
@@ -505,8 +509,18 @@ export function analyseATS(resume: ResumeData): ATSAnalysis {
       (k) => !(resume.hiddenSections || []).includes(k)
     )
   );
-  const bullets = collectBullets(resume);
-  const allText = resumeText(resume);
+  let bullets: string[] = [];
+  try {
+    bullets = collectBullets(resume);
+  } catch {
+    bullets = [];
+  }
+  let allText = '';
+  try {
+    allText = resumeText(resume);
+  } catch {
+    allText = '';
+  }
   const ctx: AnalysisContext = { resume, allText, bullets, visibleSections };
 
   const checks: AtsCheck[] = CHECKS.map((def) => {
@@ -519,14 +533,17 @@ export function analyseATS(resume: ResumeData): ATSAnalysis {
         passed: result.passed,
         message: result.message,
         recommendation: result.recommendation,
+        skipped: false,
       };
     } catch {
       return {
         id: def.id,
         category: def.category,
         weight: def.weight,
-        passed: true,
-        message: 'Check skipped.',
+        passed: false,
+        skipped: true,
+        message: 'Check could not be evaluated due to unexpected input structure.',
+        recommendation: 'Review this section for formatting anomalies.',
       };
     }
   });
@@ -538,11 +555,19 @@ export function analyseATS(resume: ResumeData): ATSAnalysis {
     skills: 0,
     readability: 0,
   };
+  let anyCategoryEmpty = false;
+
   for (const cat of Object.keys(categoryScores) as AtsCheck['category'][]) {
     const catChecks = checks.filter((c) => c.category === cat);
-    const total = catChecks.reduce((sum, c) => sum + c.weight, 0);
-    const earned = catChecks.filter((c) => c.passed).reduce((sum, c) => sum + c.weight, 0);
-    categoryScores[cat] = total === 0 ? 100 : Math.round((earned / total) * 100);
+    const activeChecks = catChecks.filter((c) => !c.skipped);
+    const total = activeChecks.reduce((sum, c) => sum + c.weight, 0);
+    const earned = activeChecks.filter((c) => c.passed).reduce((sum, c) => sum + c.weight, 0);
+    if (total === 0) {
+      anyCategoryEmpty = true;
+      categoryScores[cat] = 0;
+    } else {
+      categoryScores[cat] = Math.round((earned / total) * 100);
+    }
   }
 
   const overall = Math.round(
@@ -552,11 +577,22 @@ export function analyseATS(resume: ResumeData): ATSAnalysis {
     )
   );
 
-  const working = checks.filter((c) => c.passed).map((c) => c.message);
+  const totalChecks = checks.length;
+  const skippedChecks = checks.filter((c) => c.skipped).length;
+  const evaluatedChecks = totalChecks - skippedChecks;
+
+  let completenessStatus: 'complete' | 'partial' | 'inconclusive' = 'complete';
+  if (skippedChecks >= 3 || anyCategoryEmpty) {
+    completenessStatus = 'inconclusive';
+  } else if (skippedChecks > 0) {
+    completenessStatus = 'partial';
+  }
+
+  const working = checks.filter((c) => c.passed && !c.skipped).map((c) => c.message);
   const issues = checks
     .filter((c) => !c.passed && c.recommendation)
     .map((c) => ({
-      severity: (c.weight >= 25 ? 'critical' : c.weight >= 15 ? 'warning' : 'info') as Severity,
+      severity: (c.skipped ? 'warning' : c.weight >= 25 ? 'critical' : c.weight >= 15 ? 'warning' : 'info') as Severity,
       message: c.message,
       recommendation: c.recommendation!,
     }));
@@ -577,8 +613,15 @@ export function analyseATS(resume: ResumeData): ATSAnalysis {
       quantifiedBulletRatio: bullets.length ? bullets.filter(containsMetric).length / bullets.length : 0,
       actionVerbStartRatio: bullets.length ? bullets.filter(startsWithVerb).length / bullets.length : 0,
       averageBulletWords: bullets.length ? Math.round(bullets.reduce((s, b) => s + wordCount(b), 0) / bullets.length) : 0,
-      technicalSkillCount: resume.skills.technical.filter((s) => s.trim()).length,
+      technicalSkillCount: (resume.skills?.technical || []).filter((s) => typeof s === 'string' && s.trim()).length,
       estimatedPages: estimatePages(resume),
+    },
+    completeness: {
+      isComplete: completenessStatus === 'complete',
+      totalChecks,
+      evaluatedChecks,
+      skippedChecks,
+      status: completenessStatus,
     },
   };
 }

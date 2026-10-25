@@ -22,6 +22,7 @@ import Admin from './pages/Admin';
 import Interview from './pages/Interview';
 import Jobs from './pages/Jobs';
 import HealthCenter from './pages/HealthCenter';
+import PublicBuilder from './pages/PublicBuilder';
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -38,6 +39,7 @@ export default function App() {
 
   return (
     <Routes>
+      <Route path="/builder" element={<PublicBuilder />} />
       <Route path="/" element={user && user.onboarded ? <Navigate to="/app" replace /> : <Landing />} />
       <Route path="/login" element={user ? <Navigate to={user.onboarded ? '/app' : '/onboarding'} replace /> : <Login />} />
       <Route path="/signup" element={user ? <Navigate to={user.onboarded ? '/app' : '/onboarding'} replace /> : <Signup />} />

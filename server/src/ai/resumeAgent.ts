@@ -379,11 +379,16 @@ export async function runResumeAgent(
   job: JobAnalysis,
   jdText: string,
   matchBefore: MatchAnalysis,
-  atsBefore: ATSAnalysis
+  atsBefore: ATSAnalysis,
+  options: { requireAi?: boolean } = {}
 ): Promise<AgentResult> {
   const changeLog: ChangeLogEntry[] = [];
   const aiEnabled = isAiEnabled();
   const provider = getAiProvider();
+
+  if (options.requireAi && !aiEnabled) {
+    throw new AiUnavailableError('AI_NOT_CONFIGURED', 'AI provider is not configured. NVIDIA API key required.', false);
+  }
 
   const meta: AgentMeta = {
     provider: provider.name,
@@ -412,13 +417,16 @@ export async function runResumeAgent(
       system: SYSTEM_PROMPT,
       user: buildAgentUserPrompt({ master, job, jdText, ats: atsBefore, match: matchBefore, base: baseResult.resume }, TAILOR_TASK),
       schema: proposalSchema,
-      maxTokens: 1600,
+      maxTokens: 2500,
       temperature: 0.2,
     });
     meta.iterations++;
     applyProposal(working, proposal, master, changeLog, meta);
     meta.usedAi = meta.iterations > 0;
   } catch (err) {
+    if (options.requireAi) {
+      throw err;
+    }
     const code = err instanceof AiUnavailableError ? err.code : 'AI_UNAVAILABLE';
     console.error(`resume-agent tailoring proposal failed: code=${code}`);
     meta.errorCode = code;

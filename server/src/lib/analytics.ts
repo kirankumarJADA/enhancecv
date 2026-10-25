@@ -1,10 +1,7 @@
 // Privacy-conscious first-party product analytics.
 //
-// Events carry user id, event name, timestamp and small non-sensitive
-// metadata only. Never store passwords, keys, resume contents, job
-// descriptions or AI prompts. Tracking failures must never break a request.
-
-import { getDb } from '../db/db';
+// In the stateless, no-login architecture, product events are not persisted to SQL.
+// Tracking failures must never break a request, and no database connection is ever created.
 
 export type AnalyticsEvent =
   | 'signup'
@@ -41,14 +38,7 @@ export type AnalyticsEvent =
   | 'resume_imported'
   | 'extension_token_created';
 
-export function track(userId: string | null, event: AnalyticsEvent, metadata: Record<string, unknown> = {}): void {
-  // Fire-and-forget: analytics must never break the user-facing request.
-  void getDb()
-    .query(
-      'INSERT INTO analytics_events (id, user_id, event, metadata) VALUES ($1, $2, $3, $4)',
-      [`evt_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`, userId, event, JSON.stringify(metadata)],
-    )
-    .catch((err) => {
-      console.error(`analytics insert failed: ${err instanceof Error ? err.message : 'unknown'}`);
-    });
+export function track(_userId: string | null, _event: AnalyticsEvent, _metadata: Record<string, unknown> = {}): void {
+  // Stateless, privacy-first: in the no-login architecture, product events are not persisted to SQL.
+  // Tracking failures must never break a request, and no database connection is ever created.
 }
