@@ -326,7 +326,7 @@ export async function createResumeFromDetails(
     system: SYSTEM_PROMPT,
     user: prompt,
     schema: createProposalSchema,
-    maxTokens: 3000,
+    maxTokens: 4000,
     temperature: 0.2,
   });
 

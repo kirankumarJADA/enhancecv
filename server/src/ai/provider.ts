@@ -100,7 +100,7 @@ export function readAiConfigFromEnv(): AiConfig | null {
     apiKey,
     model: (process.env.AI_MODEL || defaultModel).trim(),
     baseUrl: (process.env.AI_BASE_URL || defaultBaseUrl).replace(/\/$/, ''),
-    timeoutMs: boundedInt(process.env.AI_TIMEOUT_MS, 30_000, 1_000, 120_000),
+    timeoutMs: boundedInt(process.env.AI_TIMEOUT_MS, 45_000, 1_000, 120_000),
     maxRetries: boundedInt(process.env.AI_MAX_RETRIES, 2, 0, 5),
     maxIterations: boundedInt(process.env.AI_MAX_ITERATIONS, 2, 1, 4),
   };
@@ -117,7 +117,7 @@ function boundedInt(raw: string | undefined, dflt: number, min: number, max: num
  * compatible gateway via AI_BASE_URL). Handles timeout, bounded retries,
  * rate limits and malformed responses. Never logs request content or keys.
  */
-class OpenAiCompatibleProvider implements AiProvider {
+export class OpenAiCompatibleProvider implements AiProvider {
   readonly name: string;
   readonly model: string;
   private apiKey: string;
@@ -137,16 +137,19 @@ class OpenAiCompatibleProvider implements AiProvider {
   async completeJson<T>(req: JsonCompletionRequest<T>): Promise<T> {
     const attempts = 1 + this.maxRetries;
     let lastError: AiUnavailableError = new AiUnavailableError('AI_UNAVAILABLE', 'AI request failed.');
+    let currentReq: JsonCompletionRequest<T> = { ...req };
 
     for (let attempt = 1; attempt <= attempts; attempt++) {
       try {
-        const content = await this.attempt(req, attempt);
-        // Malformed output is retryable once: give the model one repair chance.
+        const content = await this.attempt(currentReq, attempt);
+        // Malformed output is retryable: give the model repair chances up to maxRetries.
         try {
-          return parseStructured(content, req.schema);
+          return parseStructured(content, currentReq.schema);
         } catch (err) {
           if (err instanceof ZodError) {
             lastError = new AiUnavailableError('AI_MALFORMED', 'AI returned an invalid structure.', true);
+          } else if (err instanceof AiUnavailableError) {
+            lastError = err;
           } else {
             lastError = new AiUnavailableError('AI_MALFORMED', 'AI returned unparseable output.', true);
           }
@@ -155,6 +158,10 @@ class OpenAiCompatibleProvider implements AiProvider {
         if (err instanceof AiUnavailableError) {
           lastError = err;
           if (!err.retryable) throw err;
+          if (err.message.includes('token limit') || err.message.includes('truncated')) {
+            const currentMax = currentReq.maxTokens ?? 4000;
+            currentReq = { ...currentReq, maxTokens: Math.min(8192, currentMax + 1500) };
+          }
         } else {
           lastError = new AiUnavailableError('AI_UNAVAILABLE', 'AI request failed unexpectedly.', true);
         }
@@ -170,13 +177,17 @@ class OpenAiCompatibleProvider implements AiProvider {
     try {
       const payload: Record<string, unknown> = {
         model: this.model,
+        stream: false,
         temperature: req.temperature ?? 0.2,
-        max_tokens: req.maxTokens ?? 3000,
+        max_tokens: req.maxTokens ?? 4000,
         messages: [
           { role: 'system', content: req.system },
           { role: 'user', content: req.user },
         ],
       };
+      if (this.name === 'nvidia' || this.model.toLowerCase().includes('nemotron')) {
+        payload.chat_template_kwargs = { enable_thinking: false };
+      }
       if (this.name === 'openai') {
         payload.response_format = { type: 'json_object' };
       }
@@ -185,6 +196,7 @@ class OpenAiCompatibleProvider implements AiProvider {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Accept: 'application/json',
           Authorization: `Bearer ${this.apiKey}`,
         },
         signal: controller.signal,
@@ -215,19 +227,61 @@ class OpenAiCompatibleProvider implements AiProvider {
         throw new AiUnavailableError('AI_MALFORMED', 'AI response exceeded maximum safe size limit.', false);
       }
 
-      let data: { choices?: { message?: { content?: string } }[] };
+      interface ChatCompletionResponse {
+        id?: string;
+        choices?: {
+          index?: number;
+          message?: {
+            role?: string;
+            content?: string | null;
+            reasoning_content?: string | null;
+          };
+          text?: string | null;
+          finish_reason?: string | null;
+        }[];
+        usage?: {
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          total_tokens?: number;
+        };
+      }
+
+      let data: ChatCompletionResponse;
       try {
-        data = JSON.parse(rawText) as { choices?: { message?: { content?: string } }[] };
+        data = JSON.parse(rawText) as ChatCompletionResponse;
       } catch {
         throw new AiUnavailableError('AI_MALFORMED', 'AI returned an unparseable response body.', true);
       }
 
-      const content = data.choices?.[0]?.message?.content;
-      if (typeof content !== 'string' || content.length === 0) {
-        console.error(`${logTag} empty_content ms=${Date.now() - started}`);
+      const choice = data.choices?.[0];
+      if (!choice) {
+        console.error(`${logTag} no_choices ms=${Date.now() - started}`);
+        throw new AiUnavailableError('AI_MALFORMED', 'AI returned no completion choices.', true);
+      }
+
+      const finishReason = choice.finish_reason ?? null;
+      const rawContent = choice.message?.content ?? (typeof choice.text === 'string' ? choice.text : null);
+      const content = typeof rawContent === 'string' ? rawContent.trim() : '';
+      const hasReasoning = Boolean(choice.message?.reasoning_content);
+
+      if (!content) {
+        console.error(`${logTag} empty_content finish_reason=${finishReason || 'none'} has_reasoning=${hasReasoning} ms=${Date.now() - started}`);
+        if (finishReason === 'length') {
+          throw new AiUnavailableError('AI_MALFORMED', 'AI response was truncated due to token limit.', true);
+        }
         throw new AiUnavailableError('AI_MALFORMED', 'AI returned an empty response.', true);
       }
-      console.error(`${logTag} ok ms=${Date.now() - started}`);
+
+      if (finishReason === 'length') {
+        console.error(`${logTag} truncated finish_reason=length tokens=${data.usage?.completion_tokens ?? 'unknown'} ms=${Date.now() - started}`);
+        try {
+          parseStructured(content, req.schema);
+        } catch {
+          throw new AiUnavailableError('AI_MALFORMED', 'AI response was truncated due to token limit.', true);
+        }
+      }
+
+      console.error(`${logTag} ok finish_reason=${finishReason || 'stop'} tokens=${data.usage?.completion_tokens ?? 'unknown'} ms=${Date.now() - started}`);
       return content;
     } catch (err) {
       if (err instanceof AiUnavailableError) throw err;
@@ -328,7 +382,12 @@ export function parseStructured<T>(raw: string, schema: ZodType<T>): T {
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new AiUnavailableError('AI_MALFORMED', 'AI output was not valid JSON.', true);
+    try {
+      const sanitized = text.replace(/,(\s*[}\]])/g, '$1');
+      parsed = JSON.parse(sanitized);
+    } catch {
+      throw new AiUnavailableError('AI_MALFORMED', 'AI output was not valid JSON.', true);
+    }
   }
   return schema.parse(parsed);
 }
