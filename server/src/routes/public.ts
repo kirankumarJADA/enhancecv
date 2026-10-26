@@ -20,10 +20,15 @@ import { createResumeFromDetails, CreateResumeDetails } from '../ai/createAgent'
 import { renderResumePdf, pdfFileName } from '../engine/pdf';
 import { rateLimit } from '../middleware/rateLimit';
 import { AppError } from '../middleware/errors';
-import { AiUnavailableError } from '../ai/provider';
+import { AiUnavailableError, getAiStatus } from '../ai/provider';
 import type { ResumeData, JobAnalysis } from '../types';
 
 const router = Router();
+
+// Public status endpoint reporting provider, model and timeout (no secrets)
+router.get('/status', (_req: Request, res: Response) => {
+  res.json(getAiStatus());
+});
 
 // ---------------------------------------------------------------------------
 // Upload Configuration: Memory storage only, 8MB max, PDF/DOCX/TXT only

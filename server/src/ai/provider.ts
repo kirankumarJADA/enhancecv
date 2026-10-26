@@ -341,12 +341,15 @@ export function getAiMaxIterations(): number {
 }
 
 /** Public status for the frontend — never includes credentials. */
-export function getAiStatus(): { enabled: boolean; provider: string; model: string; maxIterations: number } {
+export function getAiStatus(): { enabled: boolean; provider: string; model: string; baseUrl: string; timeoutMs: number; maxIterations: number } {
   const p = getAiProvider();
+  const cfg = readAiConfigFromEnv();
   return {
     enabled: !(p instanceof RuleBasedProvider),
     provider: p.name,
     model: p.model,
+    baseUrl: cfg?.baseUrl || '',
+    timeoutMs: cfg?.timeoutMs || 0,
     maxIterations: getAiMaxIterations(),
   };
 }
