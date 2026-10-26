@@ -32,10 +32,12 @@ describe('NVIDIA Nemotron Provider Configuration & Robustness', () => {
   });
 
   afterEach(() => {
+    delete process.env.NVIDIA_ENABLE_THINKING;
     global.fetch = originalFetch;
   });
 
-  it('sets stream: false and chat_template_kwargs: { enable_thinking: false } for nvidia provider', async () => {
+  it('sets stream: false and chat_template_kwargs when thinking disabled for nvidia provider', async () => {
+    process.env.NVIDIA_ENABLE_THINKING = 'false';
     let capturedBody: Record<string, unknown> | null = null;
     let capturedHeaders: Record<string, string> | null = null;
 

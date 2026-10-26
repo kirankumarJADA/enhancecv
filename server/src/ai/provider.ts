@@ -186,7 +186,8 @@ export class OpenAiCompatibleProvider implements AiProvider {
           { role: 'user', content: req.user },
         ],
       };
-      if (this.name === 'nvidia' || this.model.toLowerCase().includes('nemotron')) {
+      // Note: only pass chat_template_kwargs if explicitly configured, as some NIM containers hang on unknown template kwargs
+      if (process.env.NVIDIA_ENABLE_THINKING === 'false') {
         payload.chat_template_kwargs = { enable_thinking: false };
       }
       if (this.name === 'openai') {
