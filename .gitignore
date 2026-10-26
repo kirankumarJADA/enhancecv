@@ -13,3 +13,8 @@ uploads/
 server/data/*.db
 server/data/*.db-shm
 server/data/*.db-wal
+QA_REPORT.md
+__pycache__/
+*.pyc
+*.exe
+.codex/

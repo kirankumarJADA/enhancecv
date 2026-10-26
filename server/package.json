@@ -2,7 +2,7 @@
   "name": "enhancecv-server",
   "version": "1.0.0",
   "private": true,
-  "description": "EnhanceCV API server",
+  "description": "Curevo AI API server",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

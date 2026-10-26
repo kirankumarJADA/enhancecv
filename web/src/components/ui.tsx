@@ -2,14 +2,16 @@ import type { ReactNode } from 'react';
 
 export function Logo({ className = '', light = false }: { className?: string; light?: boolean }) {
   return (
-    <span className={`inline-flex items-center gap-2 ${className}`}>
-      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white">
-        <svg viewBox="0 0 32 32" className="h-5 w-5" fill="currentColor" aria-hidden="true">
-          <path d="M9 22.5 15.5 9h1.4L23.5 22.5h-2.6l-1.6-3.4h-6.6l-1.6 3.4H9zm4.7-5.5h4.6L16 11.6l-2.3 5.4z" />
+    <span className={`inline-flex items-center gap-2.5 ${className}`}>
+      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-teal-400 ring-1 ring-slate-800">
+        <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M19 8.5A6.5 6.5 0 1 0 19 15.5" />
+          <circle cx="19" cy="8.5" r="1.5" fill="currentColor" />
+          <circle cx="19" cy="15.5" r="1.5" fill="currentColor" />
         </svg>
       </span>
-      <span className={`text-lg font-bold tracking-tight ${light ? 'text-white' : 'text-ink-900'}`}>
-        Enhance<span className="text-brand-600">CV</span>
+      <span className={`text-lg font-bold tracking-tight ${light ? 'text-white' : 'text-slate-900'}`}>
+        Curevo <span className="text-teal-600">AI</span>
       </span>
     </span>
   );
@@ -131,8 +133,10 @@ export function Modal({ open, onClose, title, children }: { open: boolean; onClo
       <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white p-6 shadow-lift">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-ink-900">{title}</h2>
-          <button className="btn-ghost" onClick={onClose} aria-label="Close dialog">
-            ✕
+          <button className="btn-ghost p-1.5" onClick={onClose} aria-label="Close dialog">
+            <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden="true">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
           </button>
         </div>
         {children}

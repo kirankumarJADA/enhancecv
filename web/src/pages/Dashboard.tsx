@@ -92,7 +92,7 @@ export default function Dashboard() {
         <div className="card p-6">
           <div className="flex items-start justify-between">
             <h2 className="text-sm font-semibold text-ink-900">Current ATS Compatibility</h2>
-            <span className="chip bg-ink-100 text-ink-600">EnhanceCV metric</span>
+            <span className="chip bg-ink-100 text-ink-600">Curevo AI metric</span>
           </div>
           {ats ? (
             <div className="mt-3 flex items-center gap-5">

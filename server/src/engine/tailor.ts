@@ -465,7 +465,7 @@ export function generateSuggestions(
           bulletIndex: i,
           current: b,
           suggested: b,
-          reason: 'This bullet has no measurable outcome. If you have a real number (users, %, time saved), edit the bullet to include it — EnhanceCV will never invent one.',
+          reason: 'This bullet has no measurable outcome. If you have a real number (users, %, time saved), edit the bullet to include it — Curevo AI will never invent one.',
         });
       }
       void ALL_POWER_VERBS;

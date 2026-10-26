@@ -36,10 +36,10 @@ export default function Signup() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-ink-50 px-4">
-      <Link to="/" aria-label="EnhanceCV home"><Logo /></Link>
+      <Link to="/" aria-label="Curevo AI home"><Logo /></Link>
       <div className="card mt-6 w-full max-w-md p-8">
         <h1 className="text-xl font-bold text-ink-900">Create your free account</h1>
-        <p className="mt-1 text-sm text-ink-500">Free forever during the MVP — no card, no premium wall.</p>
+        <p className="mt-1 text-sm text-ink-500">Or use the instant, no-signup <Link className="font-semibold text-brand-600 hover:underline" to="/builder">Curevo AI Builder</Link>.</p>
         {error && (
           <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700" role="alert">
             {error}

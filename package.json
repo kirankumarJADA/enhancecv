@@ -2,7 +2,7 @@
   "name": "enhancecv",
   "version": "1.0.0",
   "private": true,
-  "description": "EnhanceCV — Build a better CV for every job. Truthful, job-specific resume tailoring with transparent ATS analysis.",
+  "description": "Curevo AI — Your next resume starts here. Truthful, job-specific resume tailoring with transparent ATS analysis.",
   "scripts": {
     "install:all": "cd server && npm install && cd ../web && npm install",
     "dev": "concurrently -n server,web \"npm run dev --prefix server\" \"npm run dev --prefix web\"",

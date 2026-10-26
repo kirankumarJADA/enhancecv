@@ -416,6 +416,6 @@ describe('PDF export', () => {
   });
 
   it('produces a sensible filename', () => {
-    expect(pdfFileName(makeMasterCV(), 'Java Backend Engineer')).toBe('Aarav_Sharma_Java_Backend_Engineer_EnhanceCV.pdf');
+    expect(pdfFileName(makeMasterCV(), 'Java Backend Engineer')).toBe('Aarav_Sharma_Java_Backend_Engineer_Curevo_AI.pdf');
   });
 });

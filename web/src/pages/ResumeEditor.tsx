@@ -291,7 +291,7 @@ export default function ResumeEditor() {
             <div className="card p-5">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-ink-900">ATS Compatibility</h2>
-                <span className="chip bg-ink-100 text-ink-600">EnhanceCV metric</span>
+                <span className="chip bg-ink-100 text-ink-600">Curevo AI metric</span>
               </div>
               <div className="mt-3 flex items-center gap-4">
                 <ScoreRing score={ats.overallScore} size={78} />

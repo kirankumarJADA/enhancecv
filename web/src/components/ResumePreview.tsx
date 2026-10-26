@@ -15,7 +15,35 @@ const SECTION_LABELS: Record<SectionKey, string> = {
   achievements: 'Achievements',
 };
 
-function Heading({ children }: { children: React.ReactNode }) {
+function Heading({ children, template }: { children: React.ReactNode; template?: string }) {
+  if (template === 'modern') {
+    return (
+      <div className="paper-heading" style={{ color: '#1d4ed8', borderBottomColor: '#93c5fd' }}>
+        {children}
+      </div>
+    );
+  }
+  if (template === 'minimal') {
+    return (
+      <div className="paper-heading" style={{ borderBottom: '1px solid #e2e8f0', color: '#475569', letterSpacing: '0.05em' }}>
+        {children}
+      </div>
+    );
+  }
+  if (template === 'executive') {
+    return (
+      <div className="paper-heading" style={{ color: '#0f172a', borderBottom: '2px solid #0f172a', fontWeight: 800 }}>
+        {children}
+      </div>
+    );
+  }
+  if (template === 'technical') {
+    return (
+      <div className="paper-heading" style={{ color: '#0f766e', borderBottom: '1.5px solid #5eead4' }}>
+        {children}
+      </div>
+    );
+  }
   return <div className="paper-heading">{children}</div>;
 }
 
@@ -27,7 +55,15 @@ function Dates({ start, end, current }: { start?: string; end?: string; current?
   return <span className="paper-dates">{text}</span>;
 }
 
-export default function ResumePreview({ resume, scale = 1 }: { resume: ResumeData; scale?: number }) {
+export default function ResumePreview({
+  resume,
+  scale = 1,
+  template = 'classic',
+}: {
+  resume: ResumeData;
+  scale?: number;
+  template?: string;
+}) {
   const p = resume.personal;
   const visible: string[] = (resume.sectionOrder?.length ? resume.sectionOrder : (Object.keys(SECTION_LABELS) as SectionKey[])).filter(
     (k) => !(resume.hiddenSections || []).includes(k)
@@ -48,7 +84,7 @@ export default function ResumePreview({ resume, scale = 1 }: { resume: ResumeDat
           if (!custom || custom.bullets.filter(Boolean).length === 0) return null;
           return (
             <section key={key}>
-              <Heading>{custom.title}</Heading>
+              <Heading template={template}>{custom.title}</Heading>
               <ul style={{ margin: 0, paddingLeft: 16 }}>
                 {custom.bullets.filter(Boolean).map((b, i) => (
                   <li key={i} style={{ listStyle: 'disc' }}>{b}</li>
@@ -62,7 +98,7 @@ export default function ResumePreview({ resume, scale = 1 }: { resume: ResumeDat
             if (!resume.summary?.trim()) return null;
             return (
               <section key={key}>
-                <Heading>{SECTION_LABELS[key]}</Heading>
+                <Heading template={template}>{SECTION_LABELS[key]}</Heading>
                 <p style={{ whiteSpace: 'pre-wrap' }}>{resume.summary}</p>
               </section>
             );
@@ -70,7 +106,7 @@ export default function ResumePreview({ resume, scale = 1 }: { resume: ResumeDat
             if (resume.experience.length === 0) return null;
             return (
               <section key={key}>
-                <Heading>{SECTION_LABELS[key]}</Heading>
+                <Heading template={template}>{SECTION_LABELS[key]}</Heading>
                 {resume.experience.map((e) => (
                   <div key={e.id} style={{ marginBottom: 10 }}>
                     <div className="flex items-baseline justify-between gap-3">
@@ -98,7 +134,7 @@ export default function ResumePreview({ resume, scale = 1 }: { resume: ResumeDat
             if (resume.projects.length === 0) return null;
             return (
               <section key={key}>
-                <Heading>{SECTION_LABELS[key]}</Heading>
+                <Heading template={template}>{SECTION_LABELS[key]}</Heading>
                 {resume.projects.map((pr) => (
                   <div key={pr.id} style={{ marginBottom: 8 }}>
                     <div className="flex items-baseline justify-between gap-3">
@@ -125,7 +161,7 @@ export default function ResumePreview({ resume, scale = 1 }: { resume: ResumeDat
             if (tech.length === 0 && soft.length === 0) return null;
             return (
               <section key={key}>
-                <Heading>{SECTION_LABELS[key]}</Heading>
+                <Heading template={template}>{SECTION_LABELS[key]}</Heading>
                 {tech.length > 0 && (
                   <p>
                     <strong>Technical Skills:</strong> {tech.join(', ')}
@@ -143,7 +179,7 @@ export default function ResumePreview({ resume, scale = 1 }: { resume: ResumeDat
             if (resume.education.length === 0) return null;
             return (
               <section key={key}>
-                <Heading>{SECTION_LABELS[key]}</Heading>
+                <Heading template={template}>{SECTION_LABELS[key]}</Heading>
                 {resume.education.map((ed) => (
                   <div key={ed.id} style={{ marginBottom: 6 }}>
                     <div className="flex items-baseline justify-between gap-3">
@@ -165,7 +201,7 @@ export default function ResumePreview({ resume, scale = 1 }: { resume: ResumeDat
             if (resume.certifications.length === 0) return null;
             return (
               <section key={key}>
-                <Heading>{SECTION_LABELS[key]}</Heading>
+                <Heading template={template}>{SECTION_LABELS[key]}</Heading>
                 <ul style={{ margin: 0, paddingLeft: 16 }}>
                   {resume.certifications.map((c) => (
                     <li key={c.id} style={{ listStyle: 'disc' }}>
@@ -180,7 +216,7 @@ export default function ResumePreview({ resume, scale = 1 }: { resume: ResumeDat
             if (resume.languages.length === 0) return null;
             return (
               <section key={key}>
-                <Heading>{SECTION_LABELS[key]}</Heading>
+                <Heading template={template}>{SECTION_LABELS[key]}</Heading>
                 <p>{resume.languages.map((l) => (l.proficiency ? `${l.name} (${l.proficiency})` : l.name)).join(', ')}</p>
               </section>
             );
@@ -189,7 +225,7 @@ export default function ResumePreview({ resume, scale = 1 }: { resume: ResumeDat
             if (resume.achievements.length === 0) return null;
             return (
               <section key={key}>
-                <Heading>{SECTION_LABELS[key]}</Heading>
+                <Heading template={template}>{SECTION_LABELS[key]}</Heading>
                 <ul style={{ margin: 0, paddingLeft: 16 }}>
                   {resume.achievements.filter(Boolean).map((a, i) => (
                     <li key={i} style={{ listStyle: 'disc' }}>{a}</li>

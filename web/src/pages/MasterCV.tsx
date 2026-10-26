@@ -98,7 +98,7 @@ export default function MasterCVPage() {
           <div className="card p-6">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-ink-900">ATS Compatibility</h2>
-              <span className="chip bg-ink-100 text-ink-600">EnhanceCV metric</span>
+              <span className="chip bg-ink-100 text-ink-600">Curevo AI metric</span>
             </div>
             {ats ? (
               <>

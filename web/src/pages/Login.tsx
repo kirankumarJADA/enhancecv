@@ -33,10 +33,10 @@ export default function Login() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-ink-50 px-4">
-      <Link to="/" aria-label="EnhanceCV home"><Logo /></Link>
+      <Link to="/" aria-label="Curevo AI home"><Logo /></Link>
       <div className="card mt-6 w-full max-w-md p-8">
         <h1 className="text-xl font-bold text-ink-900">Welcome back</h1>
-        <p className="mt-1 text-sm text-ink-500">Sign in to continue building better CVs.</p>
+        <p className="mt-1 text-sm text-ink-500">Sign in to continue to Curevo AI.</p>
         {params.get('verified') === '1' && (
           <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm text-emerald-800" role="status">
             Email verified — thanks! You can sign in now.
@@ -71,8 +71,8 @@ export default function Login() {
           </button>
         </form>
         <p className="mt-6 text-center text-sm text-ink-500">
-          New to EnhanceCV?{' '}
-          <Link className="font-semibold text-brand-600 hover:text-brand-700" to="/signup">Create a free account</Link>
+          New to Curevo AI?{' '}
+          <Link className="font-semibold text-brand-600 hover:text-brand-700" to="/builder">Start without sign-up</Link>
         </p>
         <p className="mt-3 text-center text-xs text-ink-400">
           <Link className="hover:text-ink-600" to="/forgot-password">Forgot your password?</Link>

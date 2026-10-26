@@ -69,8 +69,8 @@ export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): Node
     margins: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN },
     info: {
       Title: `${resume.personal.fullName || 'Resume'}${opts.titleSuffix ? ` — ${opts.titleSuffix}` : ''}`,
-      Author: resume.personal.fullName || 'EnhanceCV',
-      Creator: 'EnhanceCV',
+      Author: resume.personal.fullName || 'Curevo AI',
+      Creator: 'Curevo AI',
     },
     bufferPages: true,
   });
@@ -256,7 +256,7 @@ export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): Node
 
 export function pdfFileName(resume: ResumeData, role?: string): string {
   const name = (resume.personal.fullName || 'Resume').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '');
-  const parts = [name, role ? role.replace(/[^a-zA-Z0-9]+/g, '_') : null, 'EnhanceCV'].filter(Boolean);
+  const parts = [name, role ? role.replace(/[^a-zA-Z0-9]+/g, '_') : null, 'Curevo_AI'].filter(Boolean);
   return `${parts.join('_')}.pdf`;
 }
 

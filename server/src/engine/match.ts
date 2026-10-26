@@ -1,6 +1,6 @@
 // CV ↔ JD matching engine.
 //
-// Produces an explainable "EnhanceCV Job Match" score. The two-component
+// Produces an explainable "Curevo AI Job Match" score. The two-component
 // weighting (required skills dominate, preferred skills contribute less) and
 // the requirement classification follow the MIT-licensed ResumeSkills
 // methodology ("job-description-analyzer": required% × 0.7 + preferred% × 0.3).

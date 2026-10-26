@@ -1,6 +1,6 @@
 // Deterministic ATS compatibility analysis.
 //
-// IMPORTANT (product honesty): this is EnhanceCV's transparent compatibility
+// IMPORTANT (product honesty): this is Curevo AI's transparent compatibility
 // metric computed from implemented rules below — it is NOT a prediction of how
 // any specific employer's ATS will rank the document.
 //

@@ -82,7 +82,7 @@ export default function Tailor() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = 'Tailor Your CV — EnhanceCV';
+    document.title = 'Tailor Your CV — Curevo AI';
     void api.get<AiStatus>('/ai/status').then(setAiStatus).catch(() => setAiStatus(null));
     // Hand-off from the Jobs → Import page ("paste manually" flow).
     const manual = sessionStorage.getItem('curevo_manual_jd');
@@ -140,7 +140,7 @@ export default function Tailor() {
         <div>
           <h1 className="text-2xl font-bold text-ink-900">Tailor Your CV</h1>
           <p className="mt-1 text-sm text-ink-500">
-            Paste a complete job description. EnhanceCV analyses it, matches it against your Master CV and generates a truthful tailored version.
+            Paste a complete job description. Curevo AI analyses it, matches it against your Master CV and generates a truthful tailored version.
           </p>
         </div>
         <div className="card p-6">
@@ -311,7 +311,7 @@ export default function Tailor() {
           {/* Score card */}
           <div className="card p-6 lg:sticky lg:top-24 lg:self-start">
             <div className="text-center">
-              <ScoreRing score={m.score} size={130} label="EnhanceCV Job Match" />
+              <ScoreRing score={m.score} size={130} label="Curevo AI Job Match" />
               <p className="mt-2 text-xs leading-relaxed text-ink-400">
                 An explainable match metric — not a prediction of any employer's ATS.
               </p>

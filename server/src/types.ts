@@ -1,4 +1,4 @@
-// EnhanceCV core domain types.
+// Curevo AI core domain types.
 // The resume data model is informed by the MIT-licensed atsresume project
 // (https://github.com/sauravhathi/atsresume), cleaned up and extended for
 // server-side persistence, matching and tailoring.
@@ -156,7 +156,7 @@ export interface ScoreComponent {
 }
 
 export interface MatchAnalysis {
-  score: number; // 0-100 EnhanceCV Job Match
+  score: number; // 0-100 Curevo AI Job Match
   breakdown: ScoreComponent[];
   items: MatchItem[];
   matchedSkills: string[];

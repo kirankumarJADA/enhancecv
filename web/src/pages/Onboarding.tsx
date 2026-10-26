@@ -52,7 +52,7 @@ export default function Onboarding() {
     try {
       await api.put('/master', { resume, title: 'Master CV' });
       await refresh();
-      toast.show('Master CV saved — welcome to EnhanceCV!', 'success');
+      toast.show('Master CV saved — welcome to Curevo AI!', 'success');
       navigate('/app');
     } catch (err) {
       toast.show(err instanceof ApiError ? err.message : 'Could not save your Master CV.', 'error');
@@ -93,7 +93,7 @@ export default function Onboarding() {
       <Shell>
         <div className="mx-auto max-w-2xl">
           <h1 className="text-center text-2xl font-bold text-ink-900">Do you already have a CV?</h1>
-          <p className="mt-2 text-center text-ink-500">Your Master CV is the source of truth for everything EnhanceCV does.</p>
+          <p className="mt-2 text-center text-ink-500">Your Master CV is the source of truth for everything Curevo AI does.</p>
           <div className="mt-10 grid gap-5 sm:grid-cols-2">
             <button
               className="card group p-8 text-left transition hover:border-brand-300 hover:shadow-lift"

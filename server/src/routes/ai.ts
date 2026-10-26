@@ -247,7 +247,7 @@ router.get('/cover-letters/:id/download', requireAuth, async (req, res) => {
   if (row.user_id !== req.user!.uid) throw new AppError('FORBIDDEN', 'You do not have access to this item.', 403);
   const letter = z.object({ greeting: z.string(), paragraphs: z.array(z.string()), closing: z.string() }).parse(JSON.parse(row.content));
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="Cover_Letter_EnhanceCV.pdf"`);
+  res.setHeader('Content-Disposition', `attachment; filename="Cover_Letter_Curevo_AI.pdf"`);
   renderCoverLetterPdf(letter, row.owner_name).pipe(res);
 });
 
