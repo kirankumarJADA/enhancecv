@@ -180,14 +180,13 @@ export class OpenAiCompatibleProvider implements AiProvider {
         stream: false,
         temperature: req.temperature ?? 0.2,
         top_p: 0.95,
-        max_tokens: req.maxTokens ?? 2500,
+        max_tokens: req.maxTokens ?? 4000,
         messages: [
           { role: 'system', content: req.system },
           { role: 'user', content: req.user },
         ],
       };
-      // Note: only pass chat_template_kwargs if explicitly configured, as some NIM containers hang on unknown template kwargs
-      if (process.env.NVIDIA_ENABLE_THINKING === 'false') {
+      if (this.name === 'nvidia' || this.model.toLowerCase().includes('nemotron')) {
         payload.chat_template_kwargs = { enable_thinking: false };
       }
       if (this.name === 'openai') {
