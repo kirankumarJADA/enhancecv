@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { downloadPdfBlob, ApiError } from '../src/api';
 import { apiUrl } from '../src/apiBase';
-import { getTruthBadgeInfo } from '../src/pages/PublicBuilder';
+import { getTruthBadgeInfo, createUploadFormData } from '../src/pages/PublicBuilder';
 
 describe('Curevo AI Public Resume Builder', () => {
   beforeEach(() => {
@@ -159,6 +159,14 @@ describe('Curevo AI Public Resume Builder', () => {
       const res = validateSelectedFile('large_cv.pdf', oversized);
       expect(res.valid).toBe(false);
       expect(res.error).toContain('8 MB');
+    });
+
+    it('appends the CV file using the exact "file" multipart field expected by Multer upload.single("file")', () => {
+      const mockBlob = new Blob(['sample pdf binary content'], { type: 'application/pdf' });
+      const mockFile = new File([mockBlob], 'candidate_cv.pdf', { type: 'application/pdf' });
+      const formData = createUploadFormData(mockFile);
+      expect(formData.get('file')).toBe(mockFile);
+      expect(formData.get('resume')).toBeNull();
     });
   });
 

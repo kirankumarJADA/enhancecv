@@ -48,6 +48,12 @@ export interface TruthBadgeInfo {
   title: string;
 }
 
+export function createUploadFormData(file: File): FormData {
+  const formData = new FormData();
+  formData.append('file', file);
+  return formData;
+}
+
 export function getTruthBadgeInfo(truth: TruthReport | null | undefined): TruthBadgeInfo | null {
   if (!truth) return null;
 
@@ -212,8 +218,7 @@ export default function PublicBuilder() {
     setStatusMessage('Uploading and extracting structured facts from your resume...');
 
     try {
-      const formData = new FormData();
-      formData.append('resume', file);
+      const formData = createUploadFormData(file);
 
       // 1. Parse CV
       const parseRes = await api.upload<{ resume: ResumeData; ats: ATSAnalysis }>('/public/parse', formData);

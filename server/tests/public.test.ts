@@ -186,6 +186,28 @@ describe('Phase 2 — Public Stateless API & NVIDIA Nemotron Backend', () => {
       expect(res.body.error?.code).toBe('UNSUPPORTED_FILE_TYPE');
     });
 
+    it('rejects mismatched multipart field names (e.g. "resume") with 400 UPLOAD_ERROR and "Unexpected field"', async () => {
+      const res = await request(app)
+        .post('/api/public/parse')
+        .attach('resume', Buffer.from(SAMPLE_RAW_TEXT_RESUME, 'utf8'), 'resume.txt');
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBeDefined();
+      expect(res.body.error.code).toBe('UPLOAD_ERROR');
+      expect(res.body.error.message).toContain('Unexpected field');
+    });
+
+    it('rejects files exceeding the 8MB size limit with 413 FILE_TOO_LARGE', async () => {
+      // 8MB + 1 byte
+      const oversizedBuffer = Buffer.alloc(8 * 1024 * 1024 + 10, 'a');
+      const res = await request(app)
+        .post('/api/public/parse')
+        .attach('file', oversizedBuffer, 'oversized.txt');
+
+      expect(res.status).toBe(413);
+      expect(res.body.error?.code).toBe('FILE_TOO_LARGE');
+    });
+
     it('rejects request with no file attached with 400', async () => {
       const res = await request(app).post('/api/public/parse');
       expect(res.status).toBe(400);
