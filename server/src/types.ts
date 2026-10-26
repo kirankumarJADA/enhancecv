@@ -203,6 +203,66 @@ export interface ATSAnalysis {
     skippedChecks: number;
     status: 'complete' | 'partial' | 'inconclusive';
   };
+  /** Comprehensive Advanced ATS Audit across 9 evaluation dimensions */
+  audit?: AdvancedAtsAudit;
+}
+
+export type AuditDimensionKey =
+  | 'parsing'
+  | 'quantification'
+  | 'repetition'
+  | 'spelling'
+  | 'consistency'
+  | 'sections'
+  | 'essentials'
+  | 'recruiter'
+  | 'inclusivity';
+
+export interface AuditFinding {
+  id: string;
+  dimension: AuditDimensionKey;
+  severity: 'critical' | 'warning' | 'info' | 'positive';
+  title: string;
+  message: string;
+  recommendation?: string;
+  evidence?: string;
+  suggestion?: string;
+  location?: string;
+}
+
+export interface DimensionAuditResult {
+  key: AuditDimensionKey;
+  label: string;
+  score: number;
+  weight: number;
+  status: 'exceptional' | 'good' | 'needs_improvement' | 'critical';
+  summary: string;
+  findings: AuditFinding[];
+  metrics?: Record<string, string | number | boolean>;
+}
+
+export interface AdvancedAtsAudit {
+  overallScore: number;
+  rating: 'exceptional' | 'competitive' | 'moderate' | 'needs_work';
+  summary: string;
+  dimensions: Record<AuditDimensionKey, DimensionAuditResult>;
+  allFindings: AuditFinding[];
+  quickWins: AuditFinding[];
+  strengths: AuditFinding[];
+  stats: {
+    totalFindings: number;
+    criticalCount: number;
+    warningCount: number;
+    infoCount: number;
+    positiveCount: number;
+    quantifiedBullets: number;
+    totalBullets: number;
+    quantifiedPercentage: number;
+    actionVerbBullets: number;
+    actionVerbPercentage: number;
+    avgBulletWordCount: number;
+    readingTimeSeconds: number;
+  };
 }
 
 export interface TruthCheck {

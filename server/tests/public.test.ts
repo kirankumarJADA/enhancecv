@@ -219,7 +219,7 @@ describe('Phase 2 — Public Stateless API & NVIDIA Nemotron Backend', () => {
   // 3. POST /api/public/ats
   // -------------------------------------------------------------
   describe('3. POST /api/public/ats (Deterministic ATS Analysis)', () => {
-    it('evaluates valid resume and returns comprehensive ATS score breakdown', async () => {
+    it('evaluates valid resume and returns comprehensive ATS score breakdown and audit', async () => {
       const res = await request(app)
         .post('/api/public/ats')
         .send({ resume: SAMPLE_RESUME });
@@ -232,6 +232,8 @@ describe('Phase 2 — Public Stateless API & NVIDIA Nemotron Backend', () => {
       expect(res.body.ats.formattingScore).toBeGreaterThan(0);
       expect(res.body.ats.contentScore).toBeGreaterThan(0);
       expect(res.body.ats.skillsScore).toBeGreaterThan(0);
+      expect(res.body.audit).toBeDefined();
+      expect(res.body.audit.dimensions.parsing).toBeDefined();
     });
 
     it('rejects missing or invalid resume structure with 400 VALIDATION_ERROR', async () => {
@@ -241,6 +243,42 @@ describe('Phase 2 — Public Stateless API & NVIDIA Nemotron Backend', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe('VALIDATION_ERROR');
+    });
+  });
+
+  // -------------------------------------------------------------
+  // 3b. POST /api/public/audit
+  // -------------------------------------------------------------
+  describe('3b. POST /api/public/audit (Advanced ATS Audit Across 9 Dimensions)', () => {
+    it('returns full 9-dimension audit breakdown with ratings and findings', async () => {
+      const res = await request(app)
+        .post('/api/public/audit')
+        .send({ resume: SAMPLE_RESUME });
+
+      expect(res.status).toBe(200);
+      expect(res.body.audit).toBeDefined();
+      expect(res.body.audit.overallScore).toBeGreaterThanOrEqual(0);
+      expect(res.body.audit.overallScore).toBeLessThanOrEqual(100);
+      expect(res.body.audit.dimensions.parsing).toBeDefined();
+      expect(res.body.audit.dimensions.quantification).toBeDefined();
+      expect(res.body.audit.dimensions.repetition).toBeDefined();
+      expect(res.body.audit.dimensions.spelling).toBeDefined();
+      expect(res.body.audit.dimensions.consistency).toBeDefined();
+      expect(res.body.audit.dimensions.sections).toBeDefined();
+      expect(res.body.audit.dimensions.essentials).toBeDefined();
+      expect(res.body.audit.dimensions.recruiter).toBeDefined();
+      expect(res.body.audit.dimensions.inclusivity).toBeDefined();
+      expect(Array.isArray(res.body.audit.quickWins)).toBe(true);
+      expect(Array.isArray(res.body.audit.strengths)).toBe(true);
+      expect(res.body.ats).toBeDefined();
+    });
+
+    it('rejects invalid resume with 400', async () => {
+      const res = await request(app)
+        .post('/api/public/audit')
+        .send({ resume: null });
+
+      expect(res.status).toBe(400);
     });
   });
 

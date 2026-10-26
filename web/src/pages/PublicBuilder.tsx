@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api, downloadPdfBlob } from '../api';
 import { Logo, ScoreRing, ScoreBar, Spinner } from '../components/ui';
 import ResumePreview from '../components/ResumePreview';
+import AdvancedAtsAuditView from '../components/AdvancedAtsAuditView';
 import type { ResumeData, ATSAnalysis, TruthReport, ChangeLogEntry } from '../types';
 
 type Mode = 'improve' | 'create';
@@ -1205,7 +1206,7 @@ export default function PublicBuilder() {
                 <div className="flex items-center gap-5">
                   {ats && (
                     <ScoreRing
-                      score={ats.overallScore}
+                      score={ats.audit ? ats.audit.overallScore : ats.overallScore}
                       size={100}
                       label="ATS Score"
                     />
@@ -1220,6 +1221,11 @@ export default function PublicBuilder() {
                           className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${truthBadge.className}`}
                         >
                           <span>{truthBadge.icon}</span> {truthBadge.text}
+                        </span>
+                      )}
+                      {ats?.audit && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 border border-slate-800 text-white px-2.5 py-0.5 text-xs font-semibold">
+                          9 ATS Dimensions Audited
                         </span>
                       )}
                       {ats?.completeness && (
@@ -1292,7 +1298,7 @@ export default function PublicBuilder() {
                       : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  ATS Breakdown {ats && `(${ats.overallScore}/100)`}
+                  Advanced ATS Audit {ats && `(${ats.audit ? ats.audit.overallScore : ats.overallScore}/100)`}
                 </button>
                 <button
                   type="button"
@@ -1329,45 +1335,49 @@ export default function PublicBuilder() {
                 </div>
               )}
 
-              {/* Tab 2: ATS Breakdown */}
+              {/* Tab 2: ATS Breakdown / Advanced ATS Audit */}
               {activeTab === 'ats' && ats && (
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="card p-6 bg-white border-slate-200 space-y-4">
-                    <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2">
-                      ATS Category Breakdown
-                    </h3>
-                    <div className="space-y-3">
-                      <ScoreBar label="Formatting & Headers" score={ats.formattingScore} />
-                      <ScoreBar label="Content & Metrics" score={ats.contentScore} />
-                      <ScoreBar label="Section Structure" score={ats.structureScore} />
-                      <ScoreBar label="Technical Skills" score={ats.skillsScore} />
-                      <ScoreBar label="Readability & Tone" score={ats.readabilityScore} />
+                ats.audit ? (
+                  <AdvancedAtsAuditView audit={ats.audit} legacyAts={ats} />
+                ) : (
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="card p-6 bg-white border-slate-200 space-y-4">
+                      <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2">
+                        ATS Category Breakdown
+                      </h3>
+                      <div className="space-y-3">
+                        <ScoreBar label="Formatting & Headers" score={ats.formattingScore} />
+                        <ScoreBar label="Content & Metrics" score={ats.contentScore} />
+                        <ScoreBar label="Section Structure" score={ats.structureScore} />
+                        <ScoreBar label="Technical Skills" score={ats.skillsScore} />
+                        <ScoreBar label="Readability & Tone" score={ats.readabilityScore} />
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="card p-6 bg-white border-slate-200 space-y-4">
-                    <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2">
-                      ATS Completeness &amp; Checklist
-                    </h3>
-                    {ats.completeness && (
-                      <p className="text-xs text-slate-500">
-                        {ats.completeness.evaluatedChecks} of {ats.completeness.totalChecks} checks evaluated ({ats.completeness.status}).
-                      </p>
-                    )}
-                    <div className="space-y-2 text-xs">
-                      {ats.recommendations && ats.recommendations.length > 0 ? (
-                        ats.recommendations.map((rec, i) => (
-                          <div key={i} className="flex items-start gap-2 p-2.5 rounded-lg bg-slate-50 border border-slate-200">
-                            <span className="text-brand-600 font-bold">•</span>
-                            <span className="text-slate-700">{rec}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-emerald-700 font-medium">All major ATS compatibility checks passed cleanly!</p>
+                    <div className="card p-6 bg-white border-slate-200 space-y-4">
+                      <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2">
+                        ATS Completeness &amp; Checklist
+                      </h3>
+                      {ats.completeness && (
+                        <p className="text-xs text-slate-500">
+                          {ats.completeness.evaluatedChecks} of {ats.completeness.totalChecks} checks evaluated ({ats.completeness.status}).
+                        </p>
                       )}
+                      <div className="space-y-2 text-xs">
+                        {ats.recommendations && ats.recommendations.length > 0 ? (
+                          ats.recommendations.map((rec, i) => (
+                            <div key={i} className="flex items-start gap-2 p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                              <span className="text-brand-600 font-bold">•</span>
+                              <span className="text-slate-700">{rec}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-emerald-700 font-medium">All major ATS compatibility checks passed cleanly!</p>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
+                )
               )}
 
               {/* Tab 3: Truth Guard Audit */}

@@ -21,6 +21,9 @@ import {
 import { ALL_POWER_VERBS, WEAK_OPENERS } from '../lib/verbs';
 import { containsMetric, wordCount, GENERIC_SUMMARY_MARKERS } from '../lib/text';
 import { findSkillsInText } from '../lib/skills';
+import { runAdvancedAtsAudit, AuditContext } from './audit';
+
+export { runAdvancedAtsAudit, AuditContext };
 
 const CATEGORY_WEIGHTS: Record<AtsCheck['category'], number> = {
   formatting: 20,
@@ -503,7 +506,7 @@ export function estimatePages(resume: ResumeData): number {
   }
 }
 
-export function analyseATS(resume: ResumeData): ATSAnalysis {
+export function analyseATS(resume: ResumeData, auditContext?: AuditContext): ATSAnalysis {
   const visibleSections = new Set<SectionKey>(
     (resume.sectionOrder && resume.sectionOrder.length > 0 ? resume.sectionOrder : ALL_SECTIONS).filter(
       (k) => !(resume.hiddenSections || []).includes(k)
@@ -597,6 +600,13 @@ export function analyseATS(resume: ResumeData): ATSAnalysis {
       recommendation: c.recommendation!,
     }));
 
+  let audit;
+  try {
+    audit = runAdvancedAtsAudit(resume, auditContext);
+  } catch {
+    audit = undefined;
+  }
+
   return {
     overallScore: Math.min(100, Math.max(0, overall)),
     formattingScore: categoryScores.formatting,
@@ -623,5 +633,6 @@ export function analyseATS(resume: ResumeData): ATSAnalysis {
       skippedChecks,
       status: completenessStatus,
     },
+    audit,
   };
 }

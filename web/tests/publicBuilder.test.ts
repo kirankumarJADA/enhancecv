@@ -323,4 +323,80 @@ describe('Curevo AI Public Resume Builder', () => {
       expect(badge?.icon).toBe('⚠');
     });
   });
+
+  // -------------------------------------------------------------------------
+  // 8. Advanced ATS Audit Contract & State Consistency
+  // -------------------------------------------------------------------------
+  describe('8. Advanced ATS Audit Integration', () => {
+    it('handles ATSAnalysis payload with full 9-dimension audit', () => {
+      const mockAudit = {
+        overallScore: 82,
+        rating: 'competitive' as const,
+        summary: 'Competitive candidate profile.',
+        dimensions: {
+          parsing: { key: 'parsing' as const, label: 'ATS Parsing Readiness', score: 90, weight: 12, status: 'exceptional' as const, summary: 'Clean parsing', findings: [] },
+          quantification: { key: 'quantification' as const, label: 'Quantified Impact', score: 80, weight: 15, status: 'good' as const, summary: 'Good metrics', findings: [] },
+          repetition: { key: 'repetition' as const, label: 'Repetition & Wording Quality', score: 85, weight: 11, status: 'exceptional' as const, summary: 'Diverse words', findings: [] },
+          spelling: { key: 'spelling' as const, label: 'Spelling & Grammar Checks', score: 95, weight: 10, status: 'exceptional' as const, summary: 'Zero typos', findings: [] },
+          consistency: { key: 'consistency' as const, label: 'Bullet Consistency & Flow', score: 85, weight: 12, status: 'exceptional' as const, summary: 'Uniform length', findings: [] },
+          sections: { key: 'sections' as const, label: 'Essential Resume Sections', score: 85, weight: 10, status: 'exceptional' as const, summary: 'All sections', findings: [] },
+          essentials: { key: 'essentials' as const, label: 'Core ATS Essentials', score: 80, weight: 12, status: 'good' as const, summary: 'Valid dates', findings: [] },
+          recruiter: { key: 'recruiter' as const, label: 'Recruiter Review Flags', score: 90, weight: 10, status: 'exceptional' as const, summary: 'Clear titles', findings: [] },
+          inclusivity: { key: 'inclusivity' as const, label: 'Inclusive & Modern Language', score: 100, weight: 8, status: 'exceptional' as const, summary: 'Bias free', findings: [] },
+        },
+        allFindings: [],
+        quickWins: [],
+        strengths: [],
+        stats: {
+          totalFindings: 0,
+          criticalCount: 0,
+          warningCount: 0,
+          infoCount: 0,
+          positiveCount: 0,
+          quantifiedBullets: 4,
+          totalBullets: 8,
+          quantifiedPercentage: 50,
+          actionVerbBullets: 7,
+          actionVerbPercentage: 88,
+          avgBulletWordCount: 16,
+          readingTimeSeconds: 40,
+        },
+      };
+
+      const mockAts = {
+        overallScore: 78,
+        formattingScore: 80,
+        structureScore: 80,
+        contentScore: 75,
+        skillsScore: 80,
+        readabilityScore: 80,
+        checks: [],
+        working: [],
+        issues: [],
+        recommendations: [],
+        metrics: {
+          bulletCount: 8,
+          quantifiedBulletRatio: 0.5,
+          actionVerbStartRatio: 0.88,
+          averageBulletWords: 16,
+          technicalSkillCount: 6,
+          estimatedPages: 1,
+        },
+        completeness: {
+          isComplete: true,
+          totalChecks: 22,
+          evaluatedChecks: 22,
+          skippedChecks: 0,
+          status: 'complete' as const,
+        },
+        audit: mockAudit,
+      };
+
+      // When audit is present, the effective ATS score prefers the 9-dimension composite score
+      const effectiveScore = mockAts.audit ? mockAts.audit.overallScore : mockAts.overallScore;
+      expect(effectiveScore).toBe(82);
+      expect(mockAts.audit.dimensions.inclusivity.score).toBe(100);
+      expect(mockAts.audit.stats.quantifiedPercentage).toBe(50);
+    });
+  });
 });

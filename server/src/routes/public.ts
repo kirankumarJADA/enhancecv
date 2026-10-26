@@ -194,11 +194,16 @@ router.post(
         throw new AppError('UNSUPPORTED_FILE_TYPE', 'No file uploaded. Please upload a PDF, DOCX or TXT file.', 400);
       }
       const extraction = await extractFile(req.file);
-      const ats = analyseATS(extraction.resume);
+      const ats = analyseATS(extraction.resume, {
+        resume: extraction.resume,
+        parserNotes: extraction.notes,
+        extractionConfidence: extraction.confidence,
+      });
 
       res.json({
         resume: extraction.resume,
         ats,
+        audit: ats.audit,
         confidence: extraction.confidence,
         notes: extraction.notes,
       });
@@ -219,7 +224,25 @@ router.post(
     try {
       const resume = validateResume(req.body.resume);
       const ats = analyseATS(resume);
-      res.json({ ats });
+      res.json({ ats, audit: ats.audit });
+    } catch (err) {
+      handlePublicError(err, res);
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// 2b. POST /api/public/audit
+// Dedicated endpoint for the Advanced ATS Audit across 9 dimensions
+// ---------------------------------------------------------------------------
+router.post(
+  '/audit',
+  rateLimit({ windowMs: 15 * 60_000, max: 60 }),
+  (req: Request, res: Response) => {
+    try {
+      const resume = validateResume(req.body.resume);
+      const ats = analyseATS(resume);
+      res.json({ audit: ats.audit, ats });
     } catch (err) {
       handlePublicError(err, res);
     }
