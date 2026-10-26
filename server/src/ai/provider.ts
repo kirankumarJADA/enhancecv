@@ -100,8 +100,8 @@ export function readAiConfigFromEnv(): AiConfig | null {
     apiKey,
     model: (process.env.AI_MODEL || defaultModel).trim(),
     baseUrl: (process.env.AI_BASE_URL || defaultBaseUrl).replace(/\/$/, ''),
-    timeoutMs: boundedInt(process.env.AI_TIMEOUT_MS, 45_000, 1_000, 120_000),
-    maxRetries: boundedInt(process.env.AI_MAX_RETRIES, 2, 0, 5),
+    timeoutMs: boundedInt(process.env.AI_TIMEOUT_MS, 65_000, 1_000, 120_000),
+    maxRetries: boundedInt(process.env.AI_MAX_RETRIES, 1, 0, 5),
     maxIterations: boundedInt(process.env.AI_MAX_ITERATIONS, 2, 1, 4),
   };
 }
@@ -179,7 +179,8 @@ export class OpenAiCompatibleProvider implements AiProvider {
         model: this.model,
         stream: false,
         temperature: req.temperature ?? 0.2,
-        max_tokens: req.maxTokens ?? 4000,
+        top_p: 0.95,
+        max_tokens: req.maxTokens ?? 2500,
         messages: [
           { role: 'system', content: req.system },
           { role: 'user', content: req.user },

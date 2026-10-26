@@ -417,7 +417,7 @@ export async function runResumeAgent(
       system: SYSTEM_PROMPT,
       user: buildAgentUserPrompt({ master, job, jdText, ats: atsBefore, match: matchBefore, base: baseResult.resume }, TAILOR_TASK),
       schema: proposalSchema,
-      maxTokens: 4000,
+      maxTokens: 2500,
       temperature: 0.2,
     });
     meta.iterations++;
