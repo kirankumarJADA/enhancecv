@@ -10,7 +10,9 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:qa": "vitest run --config vitest.qa.config.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -536,6 +536,32 @@ function auditRepetitionAndWording(resume: ResumeData): DimensionAuditResult {
   const bullets = getAllBulletsWithMeta(resume);
   let score = 100;
 
+  if (bullets.length === 0) {
+    return {
+      key: 'repetition',
+      label: DIMENSION_LABELS.repetition,
+      score: 25,
+      weight: DIMENSION_WEIGHTS.repetition,
+      status: 'critical',
+      summary: 'No bullet points found to evaluate phrasing or vocabulary diversity.',
+      findings: [
+        {
+          id: 'rep-no-content',
+          dimension: 'repetition',
+          severity: 'warning',
+          title: 'No Work Experience Bullets',
+          message: 'Resume contains no bullet points to evaluate for repetition, action verbs, or vocabulary diversity.',
+          recommendation: 'Add accomplishment bullets highlighting your professional contributions and technical competencies.',
+        },
+      ],
+      metrics: {
+        repeatedOpenerCount: 0,
+        duplicateBulletCount: 0,
+        clicheCount: 0,
+      },
+    };
+  }
+
   // 1. Repeated opening verbs
   const openerCounts = new Map<string, Array<{ text: string; location: string }>>();
   bullets.forEach((b) => {
@@ -656,6 +682,32 @@ function auditSpellingAndGrammar(resume: ResumeData): DimensionAuditResult {
   ];
   let score = 100;
   let typosFound = 0;
+
+  if (textBlocks.length === 0) {
+    return {
+      key: 'spelling',
+      label: DIMENSION_LABELS.spelling,
+      score: 25,
+      weight: DIMENSION_WEIGHTS.spelling,
+      status: 'critical',
+      summary: 'No textual descriptions available to evaluate for spelling or grammar.',
+      findings: [
+        {
+          id: 'spell-no-text',
+          dimension: 'spelling',
+          severity: 'warning',
+          title: 'No Textual Content to Audit',
+          message: 'Resume contains no summary statement or experience bullets to verify spelling accuracy.',
+          recommendation: 'Add professional summary and experience descriptions.',
+        },
+      ],
+      metrics: {
+        typosCount: 0,
+        punctuationCount: 0,
+        whitespaceCount: 0,
+      },
+    };
+  }
 
   // 1. Common resume typos
   textBlocks.forEach((b) => {
@@ -781,11 +833,20 @@ function auditBulletConsistency(resume: ResumeData): DimensionAuditResult {
     return {
       key: 'consistency',
       label: DIMENSION_LABELS.consistency,
-      score: 40,
+      score: 25,
       weight: DIMENSION_WEIGHTS.consistency,
-      status: 'needs_improvement',
-      summary: 'No bullet points available to assess consistency.',
-      findings: [],
+      status: 'critical',
+      summary: 'No bullet points available to assess formatting consistency or sentence length.',
+      findings: [
+        {
+          id: 'cons-no-bullets',
+          dimension: 'consistency',
+          severity: 'warning',
+          title: 'No Bullet Points to Evaluate',
+          message: 'Add accomplishment bullets to evaluate sentence structure, punctuation, and length consistency.',
+          recommendation: 'Format career achievements as concise, punchy bullet points starting with strong action verbs.',
+        },
+      ],
     };
   }
 
@@ -1187,6 +1248,27 @@ function auditRecruiterFlags(resume: ResumeData): DimensionAuditResult {
   const findings: AuditFinding[] = [];
   let score = 100;
 
+  if ((resume.experience || []).length === 0 && (resume.projects || []).length === 0) {
+    return {
+      key: 'recruiter',
+      label: DIMENSION_LABELS.recruiter,
+      score: 30,
+      weight: DIMENSION_WEIGHTS.recruiter,
+      status: 'critical',
+      summary: 'No work experience or project portfolio available for recruiter review.',
+      findings: [
+        {
+          id: 'rec-no-history',
+          dimension: 'recruiter',
+          severity: 'critical',
+          title: 'Missing Employment Track Record',
+          message: 'Recruiters require documented career experience or technical projects to assess role fit.',
+          recommendation: 'Add professional experience or project achievements demonstrating your capabilities.',
+        },
+      ],
+    };
+  }
+
   // 1. Inverted date order check (end date before start date)
   (resume.experience || []).forEach((e, idx) => {
     const startY = parseYear(e.startDate);
@@ -1286,6 +1368,26 @@ function auditInclusiveLanguage(resume: ResumeData): DimensionAuditResult {
 
   let score = 100;
   let flaggedCount = 0;
+
+  if (fullText.trim().length === 0) {
+    return {
+      key: 'inclusivity',
+      label: DIMENSION_LABELS.inclusivity,
+      score: 30,
+      weight: DIMENSION_WEIGHTS.inclusivity,
+      status: 'critical',
+      summary: 'No textual descriptions available to evaluate for inclusive phrasing.',
+      findings: [
+        {
+          id: 'inc-no-text',
+          dimension: 'inclusivity',
+          severity: 'info',
+          title: 'No Text to Evaluate',
+          message: 'Add professional summary and experience descriptions to ensure modern, bias-free language.',
+        },
+      ],
+    };
+  }
 
   INCLUSIVE_LANGUAGE_RULES.forEach((rule) => {
     if (rule.pattern.test(fullText)) {

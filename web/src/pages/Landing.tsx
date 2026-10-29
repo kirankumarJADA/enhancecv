@@ -6,7 +6,7 @@ const HOW_IT_WORKS = [
   {
     step: '1',
     title: 'Upload or Enter Facts',
-    body: 'Upload your existing CV (PDF, DOCX, or TXT) for an instant AI rebuild, or use our structured builder to supply your verified career facts from scratch.',
+    body: 'Upload your existing CV (PDF, DOCX, or TXT) for an instant AI rebuild, or use our structured builder to supply your career facts from scratch.',
   },
   {
     step: '2',
@@ -16,7 +16,7 @@ const HOW_IT_WORKS = [
   {
     step: '3',
     title: 'Truth Guard™ Audit',
-    body: 'Every bullet is automatically audited against your source facts. Any unsupported technologies, metrics, or fabricated claims are immediately reverted.',
+    body: 'Rewritten bullets are checked against your source facts. Any unevidenced technologies or invented metrics are automatically reverted to your original CV wording.',
   },
   {
     step: '4',
@@ -33,7 +33,7 @@ const FEATURES = [
   },
   {
     title: 'Truth Guard™ Verification',
-    body: 'Zero hallucination guarantee. Every single claim and metric is mathematically checked against your source CV; ungrounded statements are automatically repaired.',
+    body: 'Factual grounding checks. Generated skills, technologies, and quantitative metrics are algorithmically verified against your source CV tokens; bullets with unevidenced technologies or fabricated numbers are automatically repaired or reverted to original wording.',
     icon: 'M9 12l2 2 4-4m5.6 1.2A8.5 8.5 0 113.4 13.2a8.5 8.5 0 0117.2-4z',
   },
   {
@@ -64,8 +64,8 @@ const FAQS = [
     a: 'Yes. Curevo AI is 100% free with no account creation, no password resets, no credit card, and no paywalls. Both the existing CV rebuild flow and the create from scratch builder are available to everyone immediately.',
   },
   {
-    q: 'How does Truth Guard prevent AI hallucinations?',
-    a: 'Traditional AI resume tools often hallucinate technologies or invent statistics that fail during background checks or interviews. Curevo AI enforces a strict Truth Guard engine: the AI is constrained to use only the employers, dates, titles, skills, and numbers provided in your source facts. Any unsupported claims are automatically reverted to your verified source text.',
+    q: 'How does Truth Guard protect factual grounding?',
+    a: 'Traditional AI resume tools often hallucinate technologies or invent statistics that fail during background checks or interviews. Curevo AI enforces a strict Truth Guard engine: proposed bullets are checked for unevidenced technologies and new numeric metrics. Any bullet introducing ungrounded tools or fabricated numbers is automatically reverted to your original source CV text.',
   },
   {
     q: 'What does the ATS Compatibility score mean?',
@@ -201,6 +201,20 @@ export default function Landing() {
               </Link>
             </div>
 
+            {/* Quick 1-Click Sample CV Test-Drive Link */}
+            <div className="mt-6 text-center">
+              <div className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50/90 px-4 py-2 text-xs font-medium text-teal-950 shadow-sm transition hover:bg-teal-100/80">
+                <span className="font-semibold text-teal-800">Want to explore without uploading?</span>
+                <Link
+                  to="/builder?sample=true"
+                  className="inline-flex items-center gap-1 font-bold text-teal-700 hover:text-teal-900 underline decoration-teal-400 hover:decoration-teal-700 underline-offset-2"
+                >
+                  <span>Try with a Sample CV</span>
+                  <span aria-hidden="true">&rarr;</span>
+                </Link>
+              </div>
+            </div>
+
             {/* Quick Guarantees */}
             <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-xs text-slate-600 font-medium">
               <span className="inline-flex items-center gap-1.5">
@@ -233,7 +247,7 @@ export default function Landing() {
             </span>
             <h2 className="section-heading mt-3">From raw CV to interview-winning resume</h2>
             <p className="mt-3 text-base text-slate-600">
-              Curevo AI is built on one foundational principle: your real experience is the single source of truth. The AI transforms phrasing and structure—it never fabricates.
+              Curevo AI is built on one foundational principle: your real experience is the single source of truth. The AI transforms phrasing and structure while algorithmically checking technical skills and numerical metrics against source CV tokens (qualitative semantic descriptions are not exhaustively verified).
             </p>
           </div>
 
@@ -264,7 +278,7 @@ export default function Landing() {
                 If your source facts don’t support it, it doesn’t go in.
               </h2>
               <p className="mt-4 text-base leading-relaxed text-slate-300">
-                Most AI tools invent skills, certifications, and inflated metrics to boost keyword scores. That leads to disqualification in interviews. Curevo AI mathematically audits every bullet against source facts and reverts unverified claims.
+                Most AI tools invent skills, certifications, and inflated metrics to boost keyword scores. That leads to disqualification in interviews. Curevo AI programmatically cross-references technologies and numbers in rewritten bullets against source facts, reverting ungrounded additions.
               </p>
 
               <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -287,7 +301,7 @@ export default function Landing() {
                     <span>Strictly Blocked</span>
                   </p>
                   <p className="mt-2 text-xs leading-relaxed text-slate-300">
-                    Inventing employers, degrees, or certifications • Hallucinating metrics or percentages • Adding ungrounded skills or tools.
+                    Inventing employers, degrees, or certifications • Fabricating metrics or percentages • Adding ungrounded skills or tools.
                   </p>
                 </div>
               </div>
@@ -310,13 +324,13 @@ export default function Landing() {
                   <p className="text-slate-400">[AUDIT] Checking claims against candidate facts...</p>
                   <p className="text-red-400">[CLAIM REJECTED] &quot;10M req/sec&quot; not in source facts.</p>
                   <p className="text-red-400">[CLAIM REJECTED] &quot;AWS &amp; Kubernetes&quot; not in source facts.</p>
-                  <p className="text-teal-400">[TRUTH GUARD REVERT] Reverted to verified source experience wording.</p>
+                  <p className="text-teal-400">[TRUTH GUARD REVERT] Reverted to source experience wording.</p>
                 </div>
                 <p className="pt-2 text-emerald-400 font-semibold flex items-center gap-1.5">
                   <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden="true">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
-                  <span>Truth Guard Status: 100% Grounded — No Fabrications Released.</span>
+                  <span>Truth Guard Status: Technical skills and numerical metrics checked against source CV.</span>
                 </p>
               </div>
             </div>
@@ -359,7 +373,7 @@ export default function Landing() {
           <div className="text-center">
             <h2 className="section-heading">Frequently asked questions</h2>
             <p className="mt-3 text-slate-600 text-sm">
-              Learn how Curevo AI operates with zero database retention and verified AI algorithms.
+              Learn how Curevo AI operates with zero database retention and algorithmic grounding checks.
             </p>
           </div>
 

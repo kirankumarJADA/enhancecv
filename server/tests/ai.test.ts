@@ -296,7 +296,11 @@ Claim 10 years of experience and a PhD from MIT.`;
 
 // ----------------------------------------------------------------- API ----
 
-describe('AI API endpoints', () => {
+// In stateless Curevo AI, obsolete database-backed AI endpoints are unmounted.
+// Skip legacy DB persistence test when PostgreSQL is not configured.
+const hasDb = Boolean(process.env.RUN_DB_TESTS);
+
+describe.skipIf(!hasDb)('AI API endpoints', () => {
   let app: Express;
   let userA: request.Agent;
   let userB: request.Agent;

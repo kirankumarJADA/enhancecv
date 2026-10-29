@@ -8,7 +8,7 @@ Build a better CV for every job. Curevo AI pairs a **deterministic, truth-first 
 Master CV + Job description
 → deterministic JD / ATS / CV↔JD analysis (authoritative scores)
 → AI reasoning + tailoring (when configured)
-→ Truth Guard (every claim validated against the Master CV)
+→ Truth Guard (technology and metric claims validated against Master CV facts)
 → ATS + match re-verification
 → AI critique (bounded)
 → change explanations with evidence
@@ -21,7 +21,7 @@ Master CV + Job description
 - **Master CV** — upload (PDF/DOCX) or guided questionnaire; always user-editable, never auto-modified
 - **ATS analysis** — transparent 0–100 compatibility score derived from implemented rules (formatting, structure, content, skills, readability)
 - **JD analysis & matching** — required/preferred skills, responsibilities, keywords, explainable Job Match score with per-requirement evidence
-- **AI Resume Agent** — structured tailoring proposals + bounded critique loop; Truth Guard rejects fabricated technologies/metrics (prompt-injection resistant by construction)
+- **AI Resume Agent** — structured tailoring proposals + bounded critique loop; Truth Guard algorithmically checks and repairs unsupported technologies and numeric claims against source CV facts (qualitative semantic descriptions are not exhaustively verified)
 - **Resume versions** — rename, duplicate, edit, delete; 3-pane live editor with undo/redo and AI suggestions
 - **Templates** — 6 ATS-safe single-column templates with deterministic recommendations; template-aware PDF export
 - **Cover letters & LinkedIn optimisation** — AI-generated, truth-guarded, sentence-level sanitisation; honest 503 when AI is not configured

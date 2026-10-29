@@ -227,6 +227,7 @@ describe('Advanced ATS Audit Engine', () => {
   describe('Dimension 6: Essential Resume Sections', () => {
     it('adapts to early career candidates with projects and education', () => {
       const studentResume: ResumeData = {
+        ...makeMasterCV(),
         personal: {
           fullName: 'Priya Patel',
           email: 'priya@example.com',
@@ -392,6 +393,77 @@ describe('Advanced ATS Audit Engine', () => {
       expect(ats.audit?.dimensions.recruiter).toBeDefined();
       expect(ats.audit?.quickWins).toBeDefined();
       expect(ats.audit?.strengths).toBeDefined();
+    });
+  });
+
+  describe('DEF-01: Empty & Skeleton CV Scoring Robustness (Regression Suite)', () => {
+    it('penalizes empty bullets in Dimension 3 (repetition) with score 25 and status critical', () => {
+      const resume = { personal: { fullName: 'Test User' }, experience: [] } as any;
+      const audit = runAdvancedAtsAudit(resume);
+      expect(audit.dimensions.repetition.score).toBe(25);
+      expect(audit.dimensions.repetition.status).toBe('critical');
+      expect(audit.dimensions.repetition.findings.some(f => f.id === 'rep-no-content')).toBe(true);
+    });
+
+    it('penalizes empty text in Dimension 4 (spelling) with score 25 and status critical', () => {
+      const resume = { personal: { fullName: 'Test User' }, experience: [] } as any;
+      const audit = runAdvancedAtsAudit(resume);
+      expect(audit.dimensions.spelling.score).toBe(25);
+      expect(audit.dimensions.spelling.status).toBe('critical');
+      expect(audit.dimensions.spelling.findings.some(f => f.id === 'spell-no-text')).toBe(true);
+    });
+
+    it('penalizes empty bullets in Dimension 5 (consistency) with score 25 and status critical', () => {
+      const resume = { personal: { fullName: 'Test User' }, experience: [] } as any;
+      const audit = runAdvancedAtsAudit(resume);
+      expect(audit.dimensions.consistency.score).toBe(25);
+      expect(audit.dimensions.consistency.status).toBe('critical');
+    });
+
+    it('penalizes missing career and projects in Dimension 8 (recruiter) with score 30', () => {
+      const resume = { personal: { fullName: 'Test User' }, experience: [], projects: [] } as any;
+      const audit = runAdvancedAtsAudit(resume);
+      expect(audit.dimensions.recruiter.score).toBe(30);
+      expect(audit.dimensions.recruiter.status).toBe('critical');
+    });
+
+    it('penalizes empty text in Dimension 9 (inclusivity) with score 30 and status critical', () => {
+      const resume = { personal: { fullName: 'Test User' }, summary: '', experience: [], skills: { technical: [], soft: [] } } as any;
+      const audit = runAdvancedAtsAudit(resume);
+      expect(audit.dimensions.inclusivity.score).toBe(30);
+      expect(audit.dimensions.inclusivity.status).toBe('critical');
+    });
+
+    it('guarantees skeleton CV receives needs_work rating with score <= 45', () => {
+      const skeleton = { personal: { fullName: 'Minimal Candidate' } } as any;
+      const audit = runAdvancedAtsAudit(skeleton);
+      expect(audit.overallScore).toBeLessThanOrEqual(45);
+      expect(audit.rating).toBe('needs_work');
+    });
+
+    it('guarantees whitespace-only CV receives needs_work rating with score <= 55', () => {
+      const whitespaceResume = {
+        personal: { fullName: 'Space Cadet', email: '   ', phone: '   ' },
+        summary: '    ',
+        experience: [{ id: 'e1', company: '  ', title: '  ', bullets: ['   ', '  '] }],
+      } as any;
+      const audit = runAdvancedAtsAudit(whitespaceResume);
+      expect(audit.overallScore).toBeLessThanOrEqual(55);
+      expect(audit.rating).toBe('needs_work');
+    });
+
+    it('does not unfairly penalize minimal genuine student CVs with valid education and project', () => {
+      const studentResume = {
+        personal: { fullName: 'Jane Student', email: 'jane@uni.ac.uk', phone: '+44 7700 900456', location: 'London' },
+        summary: 'Computer Science student passionate about web development.',
+        education: [{ id: 'ed1', institution: 'UCL', degree: 'BSc', field: 'Computer Science', startDate: '2023', endDate: '2026' }],
+        projects: [{ id: 'p1', name: 'Task Tracker', bullets: ['Built React web app for tracking daily assignments using TypeScript.'] }],
+        skills: { technical: ['React', 'TypeScript', 'Git'], soft: ['Teamwork'] },
+        experience: []
+      } as any;
+      const audit = runAdvancedAtsAudit(studentResume);
+      expect(audit.overallScore).toBeGreaterThanOrEqual(70);
+      expect(['competitive', 'exceptional']).toContain(audit.rating);
     });
   });
 });

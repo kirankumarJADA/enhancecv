@@ -21,7 +21,7 @@ import {
   TruthCheck,
   TruthReport,
 } from '../types';
-import { findSkillsInText, skillTermRegex } from '../lib/skills';
+import { findSkillsInText, skillTermRegex, countSkillOccurrences, getSkillDef } from '../lib/skills';
 import { containsMetric, sentenceCase, wordCount } from '../lib/text';
 import { ALL_POWER_VERBS, WEAK_OPENERS } from '../lib/verbs';
 import { AiProvider } from '../ai/provider';
@@ -129,7 +129,12 @@ function improveBulletText(bullet: string, masterSkills: Set<string>): { text: s
     else if (/\b(team|client|stakeholder)\b/i.test(text)) verb = 'Collaborated';
     else if (/\b(deploy|release|ci|cd|pipeline)\b/i.test(text)) verb = 'Delivered';
     else verb = 'Worked'; // last resort stays truthful but specific below
-    const candidate = verb === 'Worked' ? null : `${verb} ${rest.charAt(0).toLowerCase()}${rest.slice(1)}`;
+    const candidate =
+      verb === 'Worked'
+        ? null
+        : verb === 'Collaborated' && !/^on\b/i.test(rest)
+          ? `Collaborated on ${rest.charAt(0).toLowerCase()}${rest.slice(1)}`
+          : `${verb} ${rest.charAt(0).toLowerCase()}${rest.slice(1)}`;
     if (candidate) {
       text = sentenceCase(candidate);
       changed = true;
@@ -168,11 +173,45 @@ export async function tailorResume(
   const masterNums = masterNumbers(master);
 
   const relevantSkills = [...match.matchedSkills, ...match.partialSkills]; // skills the CV actually supports
+  // Rank relevant skills by true JD importance: title mentions (weight 10) + JD occurrences (weight 1)
+  const lowerTitle = (job.title || '').toLowerCase();
+  const lowerJd = [...job.responsibilities, ...job.keywords, job.title, job.company].join(' ').toLowerCase();
+  const skillJobFrequency = new Map<string, number>();
+  for (const s of relevantSkills) {
+    let score = 0;
+    if (lowerTitle.includes(s.toLowerCase())) score += 10;
+    score += countSkillOccurrences(lowerJd, s);
+    skillJobFrequency.set(s, score);
+  }
+  relevantSkills.sort((a, b) => (skillJobFrequency.get(b) || 0) - (skillJobFrequency.get(a) || 0));
   const relevantSet = new Set(relevantSkills.map((s) => s.toLowerCase()));
 
+  // ---------- 0. Personal Headline Grounding ----------
+  // The candidate's headline must remain strictly grounded in facts from their Master CV.
+  // Never inflate seniority or change professional identity to game title-overlap scores.
+  const targetTitle = job.title !== 'Unknown Title' ? job.title : undefined;
+  if (!resume.personal.headline?.trim()) {
+    // Genuinely supported improvement: populate missing headline from most recent evidenced position
+    const evidencedTitle = master.experience[0]?.title?.trim();
+    if (evidencedTitle) {
+      resume.personal.headline = evidencedTitle;
+      changeLog.push({
+        type: 'summary',
+        section: 'Personal Details — Headline',
+        before: '',
+        after: evidencedTitle,
+        reason: `Populated missing headline from candidate's most recent evidenced role ("${evidencedTitle}").`,
+        label: 'headline_grounded',
+        evidence: `Master CV → Experience[0].title: "${evidencedTitle}"`,
+        provenance: 'source_cv',
+      });
+    }
+  }
+
   // ---------- 1. Summary ----------
+  // Use candidate's factual title (never falsely claiming unearned seniority).
+  const factualTitle = resume.personal.headline?.trim() || master.experience[0]?.title?.trim() || 'Software Engineer';
   const years = yearsOfExperience(master);
-  const targetTitle = job.title !== 'Unknown Title' ? job.title : master.personal.headline || 'Software Engineer';
   const topSkills = relevantSkills.filter((s) => masterSkillSet.has(s)).slice(0, 5);
   const quantified = master.experience.flatMap((e) => e.bullets).filter(containsMetric).slice(0, 2);
   const edu = master.education[0];
@@ -181,8 +220,8 @@ export async function tailorResume(
   const summaryParts: string[] = [];
   summaryParts.push(
     years !== null
-      ? `${targetTitle} with ${years}+ ${years === 1 ? 'year' : 'years'} of hands-on experience${roleSpecialism ? ` in ${roleSpecialism}` : ''}.`
-      : `${targetTitle}${roleSpecialism ? ` specialising in ${roleSpecialism}` : ''}.`
+      ? `${factualTitle} with ${years}+ ${years === 1 ? 'year' : 'years'} of hands-on experience${roleSpecialism ? ` in ${roleSpecialism}` : ''}.`
+      : `${factualTitle}${roleSpecialism ? ` specialising in ${roleSpecialism}` : ''}.`
   );
   if (quantified.length > 0) {
     const fact = quantified[0].replace(/\.$/, '').trim();
@@ -210,6 +249,7 @@ export async function tailorResume(
       reason: 'Reframed around the target role using only facts already in your Master CV (role, experience span, evidenced skills, quantified achievement, education).',
       label: 'summary',
       evidence: 'Master CV → summary, experience dates, evidenced skills',
+      provenance: 'source_cv',
     });
   }
 
@@ -239,15 +279,24 @@ export async function tailorResume(
       // JD phrasing alignment: if bullet already evidences a JD skill by alias, adopt the JD's exact term
       for (const skill of relevantSkills) {
         const def = findSkillsInText(text).find((f) => f.canonical === skill);
-        if (def && !skillTermRegex(skill.toLowerCase()).test(text) && text.toLowerCase().includes(def.canonical.toLowerCase())) {
-          // same canonical skill, different alias — safe to align terminology
-          const updated = text.replace(new RegExp(def.canonical.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), skill);
-          if (updated !== text) {
-            text = updated;
-            reason = reason || `Aligned terminology with the job description ("${def.canonical}" → "${skill}") — same skill, JD's phrasing.`;
-            changed = true;
+        if (def && !skillTermRegex(skill.toLowerCase()).test(text)) {
+          const skillDef = getSkillDef(skill);
+          if (skillDef) {
+            const matchingAlias = [...skillDef.aliases]
+              .sort((a, b) => b.length - a.length)
+              .find((alias) => alias.length >= 2 && skillTermRegex(alias).test(text));
+            if (matchingAlias) {
+              if (matchingAlias.toLowerCase() === 'restful' && skill === 'REST APIs') continue;
+              if (['sla', 'slo'].includes(matchingAlias.toLowerCase()) && skill === 'SRE') continue;
+              const updated = text.replace(skillTermRegex(matchingAlias), skill);
+              if (updated !== text && isBulletTruthful(updated, master, masterSkillSet, masterNums).ok) {
+                text = updated;
+                reason = reason || `Aligned terminology with the job description ("${matchingAlias}" → "${skill}") — same skill, JD's phrasing.`;
+                changed = true;
+                break;
+              }
+            }
           }
-          break;
         }
       }
       if (changed) {
@@ -259,6 +308,7 @@ export async function tailorResume(
           reason: reason || 'Strengthened phrasing without adding new facts.',
           label: 'bullet_rewrite',
           evidence: `Master CV → Experience → ${exp.company} (same facts, stronger phrasing)`,
+          provenance: 'source_cv',
         });
       }
       return text;
@@ -270,20 +320,51 @@ export async function tailorResume(
     const originalProj = master.projects.find((p) => p.id === proj.id);
     proj.bullets = proj.bullets.map((b, idx) => {
       const original = originalProj?.bullets[idx] ?? b;
+      let text = b;
+      let reason: string | undefined;
+      let changed = false;
+
       const local = improveBulletText(b, masterSkillSet);
       if (local.changed) {
+        text = local.text;
+        reason = local.reason;
+        changed = true;
+      }
+      for (const skill of relevantSkills) {
+        const def = findSkillsInText(text).find((f) => f.canonical === skill);
+        if (def && !skillTermRegex(skill.toLowerCase()).test(text)) {
+          const skillDef = getSkillDef(skill);
+          if (skillDef) {
+            const matchingAlias = [...skillDef.aliases]
+              .sort((a, b) => b.length - a.length)
+              .find((alias) => alias.length >= 2 && skillTermRegex(alias).test(text));
+            if (matchingAlias) {
+              if (matchingAlias.toLowerCase() === 'restful' && skill === 'REST APIs') continue;
+              if (['sla', 'slo'].includes(matchingAlias.toLowerCase()) && skill === 'SRE') continue;
+              const updated = text.replace(skillTermRegex(matchingAlias), skill);
+              if (updated !== text && isBulletTruthful(updated, master, masterSkillSet, masterNums).ok) {
+                text = updated;
+                reason = reason || `Aligned terminology with the job description ("${matchingAlias}" → "${skill}") — same skill, JD's phrasing.`;
+                changed = true;
+                break;
+              }
+            }
+          }
+        }
+      }
+      if (changed) {
         changeLog.push({
           type: 'bullet',
           section: `Projects — ${proj.name}`,
           before: original,
-          after: local.text,
-          reason: local.reason || 'Strengthened phrasing without adding new facts.',
+          after: text,
+          reason: reason || local.reason || 'Strengthened phrasing without adding new facts.',
           label: 'bullet_rewrite',
           evidence: `Master CV → Projects → ${proj.name} (same facts, stronger phrasing)`,
+          provenance: 'source_cv',
         });
-        return local.text;
       }
-      return b;
+      return text;
     });
   }
 
@@ -307,6 +388,7 @@ export async function tailorResume(
       reason: 'Reordered so the skills this job actually asks for appear first. No skills were added or removed.',
       label: 'skills_ordering',
       evidence: 'Master CV → Technical Skills (reordering only — identical skill set)',
+      provenance: 'source_cv',
     });
   }
 
@@ -329,6 +411,7 @@ export async function tailorResume(
         reason: 'Moved the bullets most relevant to this job to the top. Content unchanged.',
         label: 'ordering',
         evidence: 'Master CV → same bullets, relevance-ranked against the job requirements',
+        provenance: 'source_cv',
       });
     }
   }
@@ -336,7 +419,7 @@ export async function tailorResume(
   // ---------- 6. Truth validation ----------
   const truth = validateTruth(resume, master, masterSkillSet, masterNums);
 
-  return { resume, changeLog, truth };
+  return { resume, targetRole: targetTitle, changeLog, truth };
 }
 
 /**

@@ -1,5 +1,7 @@
 // Shared frontend types (mirror of server domain model)
 
+export type PageSize = 'A4' | 'LETTER';
+
 export type SectionKey =
   | 'summary'
   | 'experience'
@@ -108,11 +110,16 @@ export interface JobAnalysis {
 
 export type MatchStatus = 'matched' | 'partial' | 'missing' | 'unknown';
 
+export type EvidenceProvenance = 'source_cv' | 'candidate_attested' | 'ai_derived' | 'unsupported';
+
 export interface MatchItem {
   requirement: string;
   type: 'required' | 'preferred' | 'soft' | 'education' | 'certification' | 'responsibility';
   status: MatchStatus;
   evidence: string;
+  section?: string;
+  actionableAdvice?: string;
+  provenance?: EvidenceProvenance;
 }
 
 export interface ScoreComponent {
@@ -123,6 +130,34 @@ export interface ScoreComponent {
   detail: string;
 }
 
+export type AdvisoryCategory =
+  | 'bullet_impact'
+  | 'keyword_gap'
+  | 'missing_requirement'
+  | 'quantification'
+  | 'formatting_structure';
+
+export interface AtsAdvisoryRecommendation {
+  id: string;
+  category: AdvisoryCategory;
+  title: string;
+  section: string;
+  issue: string;
+  whyItMatters: string;
+  actionableStep: string;
+  candidateQuestion?: string; // Discovery question for missing metrics/facts (from ResumeSkills resume-quantifier)
+  metricPlaceholder?: string; // e.g. "[X%]" or "[N users]" if candidate has unmeasured results
+  requiresCandidateInput: boolean;
+}
+
+export interface AtsAdvisory {
+  summary: string;
+  keyStrengths: string[];
+  criticalGaps: string[];
+  recommendations: AtsAdvisoryRecommendation[];
+  candidateQuestions: string[];
+}
+
 export interface MatchAnalysis {
   score: number;
   breakdown: ScoreComponent[];
@@ -131,6 +166,7 @@ export interface MatchAnalysis {
   partialSkills: string[];
   missingSkills: string[];
   keywordCoverage: { percent: number; matched: string[]; missing: string[] };
+  advisory?: AtsAdvisory;
 }
 
 export interface AtsCheck {
@@ -238,6 +274,7 @@ export interface ChangeLogEntry {
   reason: string;
   label?: string;
   evidence?: string;
+  provenance?: 'source_cv' | 'candidate_attested' | 'ai_derived';
 }
 
 export interface TruthReport {
@@ -267,6 +304,7 @@ export interface AgentMeta {
   errorCode?: string;
   aiConfigured: boolean;
   critique?: { summary: string; notes: string[] };
+  advisory?: AtsAdvisory;
 }
 
 export interface AiStatus {
@@ -352,6 +390,28 @@ export interface CoverLetter {
   greeting: string;
   paragraphs: string[];
   closing: string;
+}
+
+export type CoverLetterTone = 'professional' | 'confident' | 'enthusiastic' | 'direct';
+
+export interface CoverLetterRequest {
+  resume: ResumeData;
+  jobDescription?: string;
+  targetRole?: string;
+  company?: string;
+  tone?: CoverLetterTone;
+}
+
+export interface CoverLetterResponse {
+  letter: CoverLetter;
+  targetRole?: string;
+  company?: string;
+  rejectedCount: number;
+  warnings?: string[];
+  provider: string;
+  model: string;
+  isFallback: boolean;
+  truthNotes?: string[];
 }
 
 export interface CoverLetterSummary {

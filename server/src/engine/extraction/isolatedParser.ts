@@ -3,7 +3,32 @@
 // failure, or cancellation, preventing unbounded CPU consumption and event-loop stalls.
 
 import { Worker } from 'node:worker_threads';
+import { pathToFileURL } from 'url';
 import { AppError } from '../../middleware/errors';
+
+let cachedPdfjsUrl: string | null = null;
+function getPdfjsUrl(): string {
+  if (!cachedPdfjsUrl) {
+    try {
+      cachedPdfjsUrl = pathToFileURL(require.resolve('pdfjs-dist/legacy/build/pdf.mjs')).href;
+    } catch {
+      cachedPdfjsUrl = 'pdfjs-dist/legacy/build/pdf.mjs';
+    }
+  }
+  return cachedPdfjsUrl;
+}
+
+let cachedMammothPath: string | null = null;
+function getMammothPath(): string {
+  if (!cachedMammothPath) {
+    try {
+      cachedMammothPath = require.resolve('mammoth');
+    } catch {
+      cachedMammothPath = 'mammoth';
+    }
+  }
+  return cachedMammothPath;
+}
 
 export interface RawPdfItem {
   text: string;
@@ -37,8 +62,8 @@ export const DEFAULT_PARSER_TIMEOUT_MS = 15_000;
 const DOCX_WORKER_SCRIPT = `
 const { parentPort } = require('node:worker_threads');
 
-async function parseDocx(bufData) {
-  const mammoth = require('mammoth');
+async function parseDocx(bufData, mammothPath) {
+  const mammoth = require(mammothPath || 'mammoth');
   const buffer = Buffer.from(bufData);
   let html = '';
   let rawText = '';
@@ -60,7 +85,7 @@ async function parseDocx(bufData) {
 
 parentPort.on('message', async (msg) => {
   try {
-    const result = await parseDocx(msg.buffer);
+    const result = await parseDocx(msg.buffer, msg.mammothPath);
     parentPort.postMessage({ ok: true, result });
   } catch (err) {
     parentPort.postMessage({ ok: false, error: err && err.message ? err.message : String(err) });
@@ -74,17 +99,18 @@ const { parentPort } = require('node:worker_threads');
 
 const BOLD_HINT_RE = /bold|black|heavy|semibol/i;
 
-async function loadPdfjs() {
+async function loadPdfjs(entryUrl) {
+  const target = entryUrl || 'pdfjs-dist/legacy/build/pdf.mjs';
   try {
-    return (await import('pdfjs-dist/legacy/build/pdf.mjs'));
+    return (await import(target));
   } catch {
     const fn = new Function('s', 'return import(s);');
-    return (await fn('pdfjs-dist/legacy/build/pdf.mjs'));
+    return (await fn(target));
   }
 }
 
-async function parsePdf(bufData, maxPages) {
-  const pdfjs = await loadPdfjs();
+async function parsePdf(bufData, maxPages, entryUrl) {
+  const pdfjs = await loadPdfjs(entryUrl);
   const buffer = Buffer.from(bufData);
   const doc = await pdfjs.getDocument({
     data: new Uint8Array(buffer),
@@ -137,7 +163,7 @@ async function parsePdf(bufData, maxPages) {
 
 parentPort.on('message', async (msg) => {
   try {
-    const result = await parsePdf(msg.buffer, msg.maxPages || 20);
+    const result = await parsePdf(msg.buffer, msg.maxPages || 20, msg.entryUrl);
     parentPort.postMessage({ ok: true, result });
   } catch (err) {
     parentPort.postMessage({ ok: false, error: err && err.message ? err.message : String(err) });
@@ -230,7 +256,7 @@ export async function parseDocxInWorker(
   buffer: Buffer,
   timeoutMs: number = DEFAULT_PARSER_TIMEOUT_MS,
 ): Promise<DocxWorkerResult> {
-  return runWorkerTask<DocxWorkerResult>(DOCX_WORKER_SCRIPT, { buffer }, timeoutMs);
+  return runWorkerTask<DocxWorkerResult>(DOCX_WORKER_SCRIPT, { buffer, mammothPath: getMammothPath() }, timeoutMs);
 }
 
 /**
@@ -241,5 +267,5 @@ export async function parsePdfInWorker(
   timeoutMs: number = DEFAULT_PARSER_TIMEOUT_MS,
   maxPages: number = MAX_PDF_PAGES,
 ): Promise<PdfWorkerResult> {
-  return runWorkerTask<PdfWorkerResult>(PDF_WORKER_SCRIPT, { buffer, maxPages }, timeoutMs);
+  return runWorkerTask<PdfWorkerResult>(PDF_WORKER_SCRIPT, { buffer, maxPages, entryUrl: getPdfjsUrl() }, timeoutMs);
 }

@@ -6,8 +6,10 @@
 //   - POST /api/public/ats     (Deterministic ATS analysis)
 //   - POST /api/public/match   (Deterministic Job Match analysis)
 //   - POST /api/public/improve (NVIDIA Nemotron resume rebuild + Truth Guard + ATS)
-//   - POST /api/public/create  (NVIDIA Nemotron resume creation from user facts)
-//   - POST /api/public/pdf     (Stream PDF download across all 6 ATS-safe templates)
+//   - POST /api/public/create       (NVIDIA Nemotron resume creation from user facts)
+//   - POST /api/public/pdf          (Stream PDF download across all 6 ATS-safe templates)
+//   - POST /api/public/cover-letter (Truth-Guarded AI & ResumeSkills Cover Letter)
+//   - POST /api/public/cover-letter/pdf (Stream ATS-safe Cover Letter PDF)
 
 import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
@@ -17,11 +19,12 @@ import { analyseJobDescription } from '../engine/jd';
 import { computeJobMatch } from '../engine/match';
 import { runResumeAgent } from '../ai/resumeAgent';
 import { createResumeFromDetails, CreateResumeDetails } from '../ai/createAgent';
-import { renderResumePdf, pdfFileName } from '../engine/pdf';
+import { generateCoverLetter, CoverLetter } from '../ai/coverLetterAgent';
+import { renderResumePdf, pdfFileName, renderCoverLetterPdf, coverLetterFileName } from '../engine/pdf';
 import { rateLimit } from '../middleware/rateLimit';
 import { AppError } from '../middleware/errors';
 import { AiUnavailableError, getAiStatus } from '../ai/provider';
-import type { ResumeData, JobAnalysis } from '../types';
+import type { ResumeData, JobAnalysis, PageSize } from '../types';
 
 const router = Router();
 
@@ -175,6 +178,32 @@ function validateResume(data: unknown): ResumeData {
   return resume;
 }
 
+function validateCoverLetter(data: unknown): CoverLetter {
+  if (!data || typeof data !== 'object') {
+    throw new AppError('VALIDATION_ERROR', 'A valid cover letter object is required.', 400);
+  }
+  const l = data as Record<string, unknown>;
+  if (!l.greeting || typeof l.greeting !== 'string') {
+    throw new AppError('VALIDATION_ERROR', 'Cover letter must contain a greeting string.', 400);
+  }
+  if (!Array.isArray(l.paragraphs) || l.paragraphs.length === 0) {
+    throw new AppError('VALIDATION_ERROR', 'Cover letter must contain an array of paragraphs.', 400);
+  }
+  for (const p of l.paragraphs) {
+    if (typeof p !== 'string' || p.trim().length === 0) {
+      throw new AppError('VALIDATION_ERROR', 'Each paragraph in the cover letter must be a non-empty string.', 400);
+    }
+  }
+  if (!l.closing || typeof l.closing !== 'string') {
+    throw new AppError('VALIDATION_ERROR', 'Cover letter must contain a closing string.', 400);
+  }
+  return {
+    greeting: l.greeting.trim(),
+    paragraphs: l.paragraphs.map((p) => (p as string).trim()),
+    closing: l.closing.trim(),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // 1. POST /api/public/parse
 // Uploads file into memory -> hardened parser -> initial ATS scoring
@@ -291,13 +320,17 @@ router.post(
     try {
       const resume = validateResume(req.body.resume);
       const jobText = typeof req.body.jobText === 'string' ? req.body.jobText.trim() : '';
+      const explicitRole = typeof req.body.targetRole === 'string' ? req.body.targetRole.trim() : '';
 
       let job: JobAnalysis;
       if (jobText) {
         job = analyseJobDescription(jobText);
+        if (explicitRole) {
+          job.title = explicitRole;
+        }
       } else {
         job = {
-          title: resume.personal.headline || 'General applications',
+          title: explicitRole || resume.personal.headline || 'General applications',
           company: '',
           seniority: 'Not specified',
           yearsRequired: null,
@@ -319,6 +352,7 @@ router.post(
 
       res.json({
         resume: result.resume,
+        targetRole: result.targetRole || (job.title !== 'General applications' ? job.title : undefined),
         changeLog: result.changeLog,
         truth: result.truth,
         atsBefore,
@@ -394,8 +428,165 @@ router.post(
         );
       }
 
-      const stream = renderResumePdf(resume, { template });
+      let marginDensity: 'compact' | 'normal' | 'spacious' | undefined = undefined;
+      if (req.body.marginDensity) {
+        const md = req.body.marginDensity.toString().toLowerCase();
+        if (md === 'compact' || md === 'normal' || md === 'spacious') {
+          marginDensity = md;
+        } else {
+          throw new AppError('INVALID_MARGIN_DENSITY', 'Supported margin densities: compact, normal, spacious', 400);
+        }
+      }
+
+      let pageSize: PageSize = 'A4';
+      if (req.body.pageSize !== undefined && req.body.pageSize !== null) {
+        if (typeof req.body.pageSize !== 'string') {
+          throw new AppError('VALIDATION_ERROR', 'Invalid pageSize. Supported values are A4 and LETTER.', 400);
+        }
+        const ps = req.body.pageSize.trim().toUpperCase();
+        if (ps === 'A4' || ps === 'LETTER') {
+          pageSize = ps as PageSize;
+        } else {
+          throw new AppError('VALIDATION_ERROR', 'Invalid pageSize. Supported values are A4 and LETTER.', 400);
+        }
+      }
+
+      const stream = renderResumePdf(resume, { template, marginDensity, pageSize });
       const filename = pdfFileName(resume, req.body.role);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+
+      stream.pipe(res);
+    } catch (err) {
+      handlePublicError(err, res);
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// 7. POST /api/public/cover-letter
+// Generates a tailored, Truth-Guarded cover letter from candidate resume facts
+// using the ResumeSkills framework
+// ---------------------------------------------------------------------------
+router.post(
+  '/cover-letter',
+  rateLimit({ windowMs: 15 * 60_000, max: 20 }),
+  aiConcurrencyGuard,
+  async (req: Request, res: Response) => {
+    try {
+      const resume = validateResume(req.body.resume);
+
+      // Verify sufficient candidate background facts
+      const hasExp =
+        Array.isArray(resume.experience) &&
+        resume.experience.length > 0 &&
+        resume.experience.some((e) => (Array.isArray(e.bullets) && e.bullets.length > 0) || Boolean(e.title));
+      const hasSummary = Boolean(resume.summary && resume.summary.trim().length > 10);
+      const hasSkills = Boolean(resume.skills && Array.isArray(resume.skills.technical) && resume.skills.technical.length > 0);
+
+      if (!hasExp && !hasSummary && !hasSkills) {
+        throw new AppError(
+          'INSUFFICIENT_INPUT',
+          'Resume has insufficient background facts to generate a tailored cover letter. Please add work experience, a summary, or technical skills.',
+          400
+        );
+      }
+
+      const jdText =
+        typeof req.body.jobDescription === 'string' && req.body.jobDescription.trim().length > 0
+          ? req.body.jobDescription.slice(0, 10_000)
+          : null;
+
+      let job: JobAnalysis | null = null;
+      let match: { matched: string[]; missing: string[] } | undefined = undefined;
+
+      if (jdText) {
+        job = analyseJobDescription(jdText);
+        const matchRes = computeJobMatch(resume, job);
+        match = {
+          matched: matchRes.matchedSkills,
+          missing: matchRes.missingSkills,
+        };
+      }
+
+      const targetRole =
+        typeof req.body.targetRole === 'string' && req.body.targetRole.trim()
+          ? req.body.targetRole.trim().slice(0, 120)
+          : job?.title || '';
+
+      const company =
+        typeof req.body.company === 'string' && req.body.company.trim()
+          ? req.body.company.trim().slice(0, 120)
+          : job?.company || '';
+
+      const tone =
+        typeof req.body.tone === 'string' && req.body.tone.trim()
+          ? req.body.tone.trim().slice(0, 40)
+          : 'professional';
+
+      const result = await generateCoverLetter({
+        master: resume,
+        resume,
+        job,
+        jdText,
+        targetRole,
+        company,
+        tone,
+        match,
+        fallbackOnAiFailure: true,
+      });
+
+      res.json({
+        letter: result.letter,
+        targetRole: targetRole || undefined,
+        company: company || undefined,
+        rejectedCount: result.rejectedCount,
+        warnings: result.warnings || [],
+        provider: result.provider,
+        model: result.model,
+        isFallback: Boolean(result.isFallback),
+      });
+    } catch (err) {
+      handlePublicError(err, res);
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// 8. POST /api/public/cover-letter/pdf
+// Renders and streams ATS-safe Cover Letter PDF with selectable text
+// Supports A4 and US Letter page sizes
+// ---------------------------------------------------------------------------
+router.post(
+  '/cover-letter/pdf',
+  rateLimit({ windowMs: 15 * 60_000, max: 30 }),
+  (req: Request, res: Response) => {
+    try {
+      const letter = validateCoverLetter(req.body.letter);
+      const candidateName = typeof req.body.candidateName === 'string' && req.body.candidateName.trim()
+        ? req.body.candidateName.trim()
+        : 'Candidate';
+      const role = typeof req.body.role === 'string' && req.body.role.trim() ? req.body.role.trim() : undefined;
+      const company = typeof req.body.company === 'string' && req.body.company.trim() ? req.body.company.trim() : undefined;
+
+      let pageSize: PageSize = 'A4';
+      if (req.body.pageSize !== undefined && req.body.pageSize !== null) {
+        if (typeof req.body.pageSize !== 'string') {
+          throw new AppError('VALIDATION_ERROR', 'Invalid pageSize. Supported values are A4 and LETTER.', 400);
+        }
+        const ps = req.body.pageSize.trim().toUpperCase();
+        if (ps === 'A4' || ps === 'LETTER') {
+          pageSize = ps as PageSize;
+        } else {
+          throw new AppError('VALIDATION_ERROR', 'Invalid pageSize. Supported values are A4 and LETTER.', 400);
+        }
+      }
+
+      const stream = renderCoverLetterPdf(letter, candidateName, pageSize);
+      const filename = coverLetterFileName(candidateName, role, company);
 
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

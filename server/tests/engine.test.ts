@@ -406,7 +406,8 @@ describe('PDF export', () => {
     expect(buffer.subarray(0, 5).toString()).toBe('%PDF-');
 
     const pdfParse = (await import('pdf-parse')).default;
-    const parsed = await pdfParse(buffer);
+    const cleanUint8 = new Uint8Array(buffer);
+    const parsed = await pdfParse(cleanUint8 as unknown as Buffer);
     expect(parsed.text).toContain('Aarav Sharma');
     expect(parsed.text).toContain('aarav.sharma@example.com');
     expect(parsed.text).toContain('PROFESSIONAL EXPERIENCE');

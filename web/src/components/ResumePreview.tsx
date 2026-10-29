@@ -2,7 +2,7 @@
 // (single column, standard headings, simple bullets) so what you edit is
 // what you download.
 
-import type { ResumeData, SectionKey } from '../types';
+import type { ResumeData, SectionKey, PageSize } from '../types';
 
 const SECTION_LABELS: Record<SectionKey, string> = {
   summary: 'Professional Summary',
@@ -44,6 +44,13 @@ function Heading({ children, template }: { children: React.ReactNode; template?:
       </div>
     );
   }
+  if (template === 'professional') {
+    return (
+      <div className="paper-heading" style={{ color: '#0f2b46', borderBottom: '1.5px solid #cbd5e1' }}>
+        {children}
+      </div>
+    );
+  }
   return <div className="paper-heading">{children}</div>;
 }
 
@@ -59,10 +66,14 @@ export default function ResumePreview({
   resume,
   scale = 1,
   template = 'classic',
+  marginDensity = 'normal',
+  pageSize = 'A4',
 }: {
   resume: ResumeData;
   scale?: number;
   template?: string;
+  marginDensity?: 'compact' | 'normal' | 'spacious';
+  pageSize?: PageSize;
 }) {
   const p = resume.personal;
   const visible: string[] = (resume.sectionOrder?.length ? resume.sectionOrder : (Object.keys(SECTION_LABELS) as SectionKey[])).filter(
@@ -72,8 +83,22 @@ export default function ResumePreview({
   const contactBits = [p.headline, p.email, p.phone, p.location].filter(Boolean) as string[];
   const linkBits = [p.linkedin, p.github, p.portfolio].filter(Boolean) as string[];
 
+  const isA4 = (pageSize || 'A4').toUpperCase() === 'A4';
+  const paddingStyle =
+    marginDensity === 'compact'
+      ? { padding: '32px 36px', minHeight: isA4 ? '980px' : '920px' }
+      : marginDensity === 'spacious'
+      ? { padding: '64px 68px' }
+      : { padding: '48px 52px' };
+
   return (
-    <div className="paper" style={scale !== 1 ? { zoom: scale } : undefined}>
+    <div
+      className={`paper template-${template} page-size-${(pageSize || 'A4').toLowerCase()}`}
+      style={{
+        ...(scale !== 1 ? { zoom: scale } : {}),
+        ...paddingStyle,
+      }}
+    >
       <h1>{p.fullName || 'Your Name'}</h1>
       <div className="muted" style={{ fontSize: 12 }}>{contactBits.join('  |  ')}</div>
       {linkBits.length > 0 && <div style={{ fontSize: 11.5, color: '#2b6cb0' }}>{linkBits.join('  |  ')}</div>}

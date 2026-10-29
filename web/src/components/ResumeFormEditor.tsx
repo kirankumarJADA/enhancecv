@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import type { ResumeData, ExperienceItem, ProjectItem, EducationItem, CertificationItem, LanguageItem, CustomSection } from '../types';
+import { analyzeBullet, replaceOpenerWithVerb } from '../lib/writingCoach';
 
 type Patch = (fn: (draft: ResumeData) => void) => void;
 
@@ -46,30 +47,195 @@ function move<T>(arr: T[], from: number, to: number): T[] {
   return copy;
 }
 
-function BulletList({ bullets, onChange, label }: { bullets: string[]; onChange: (b: string[]) => void; label: string }) {
+function BulletCoachRow({
+  bullet,
+  index,
+  allBullets,
+  targetSkills,
+  missingSkills,
+  onApplyVerb,
+}: {
+  bullet: string;
+  index: number;
+  allBullets: string[];
+  targetSkills?: string[];
+  missingSkills?: string[];
+  onApplyVerb: (newText: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const trimmed = bullet.trim();
+  if (!trimmed) return null;
+
+  const feedbacks = analyzeBullet(bullet, {
+    bulletIndex: index,
+    allBullets,
+    targetSkills,
+    missingSkills,
+  });
+
+  if (feedbacks.length === 0) return null;
+
+  const weakOpenerFeedback = feedbacks.find((f) => f.type === 'weak_opener');
+
+  return (
+    <div
+      className="mt-2 rounded-lg bg-slate-50 border border-slate-200 p-2.5 text-xs text-slate-700 space-y-1.5 transition-all"
+      role="region"
+      aria-label={`ATS writing guidance for bullet ${index + 1}`}
+    >
+      <div className="flex items-center justify-between flex-wrap gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            ATS Coach:
+          </span>
+          {feedbacks.map((f) => {
+            const badgeClass =
+              f.severity === 'strength'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                : f.severity === 'warning'
+                ? 'bg-amber-50 text-amber-800 border-amber-300'
+                : 'bg-blue-50 text-blue-800 border-blue-300';
+            const labelTag =
+              f.severity === 'strength'
+                ? '[Strength]'
+                : f.severity === 'warning'
+                ? '[Action Needed]'
+                : '[Tip]';
+            return (
+              <span
+                key={f.id}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border ${badgeClass}`}
+              >
+                <span className="font-bold">{labelTag}</span>
+                <span>{f.label}</span>
+              </span>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="text-[11px] text-brand-600 hover:text-brand-800 font-semibold underline cursor-pointer"
+          aria-expanded={expanded}
+        >
+          {expanded ? 'Hide details ▲' : 'View advice ▼'}
+        </button>
+      </div>
+
+      {/* Immediate 1-click verb replacement if weak opener is present */}
+      {weakOpenerFeedback?.suggestedVerbs && weakOpenerFeedback.suggestedVerbs.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap pt-1">
+          <span className="text-[11px] font-semibold text-amber-900">
+            Replace passive opener:
+          </span>
+          {weakOpenerFeedback.suggestedVerbs.slice(0, 4).map((verb) => (
+            <button
+              key={verb}
+              type="button"
+              className="px-2 py-0.5 rounded bg-white text-slate-800 hover:bg-amber-100 text-[11px] font-medium border border-amber-300 shadow-xs cursor-pointer transition"
+              onClick={() => onApplyVerb(replaceOpenerWithVerb(bullet, verb))}
+              aria-label={`Replace opening phrase with ${verb}`}
+            >
+              Use &ldquo;{verb}&rdquo;
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Expanded Advice & Discovery Prompts */}
+      {expanded && (
+        <div className="pt-2 border-t border-slate-200 space-y-2 text-[11px]">
+          {feedbacks.map((f) => (
+            <div key={`detail-${f.id}`} className="space-y-1">
+              <p className="text-slate-900 font-semibold">
+                {f.label}: <span className="font-normal text-slate-700">{f.message}</span>
+              </p>
+              {f.candidateQuestion && (
+                <div className="p-2 rounded bg-blue-50/80 border border-blue-200 text-blue-900">
+                  <span className="font-bold">Discovery Question:</span> {f.candidateQuestion}
+                </div>
+              )}
+              {f.actionableSuggestion && (
+                <div className="pl-2 border-l-2 border-brand-400 text-slate-600">
+                  <span className="font-semibold text-slate-800">Action:</span> {f.actionableSuggestion}
+                </div>
+              )}
+            </div>
+          ))}
+          <p className="text-[10px] text-slate-400 italic pt-1">
+            Guidance is advisory. Never invent metrics or skills not grounded in your actual work.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BulletList({
+  bullets,
+  onChange,
+  label,
+  targetSkills,
+  missingSkills,
+}: {
+  bullets: string[];
+  onChange: (b: string[]) => void;
+  label: string;
+  targetSkills?: string[];
+  missingSkills?: string[];
+}) {
   return (
     <div>
       <span className="label">{label}</span>
-      <div className="space-y-2">
+      <div className="space-y-3">
         {bullets.map((b, i) => (
-          <div key={i} className="flex items-start gap-2">
-            <textarea
-              className="input min-h-[56px] flex-1"
-              value={b}
-              rows={2}
-              aria-label={`${label} ${i + 1}`}
-              onChange={(e) => onChange(bullets.map((x, j) => (j === i ? e.target.value : x)))}
-            />
-            <div className="flex flex-col gap-1">
-              <button type="button" className="btn-ghost px-2 py-0.5 text-xs" aria-label="Move bullet up" disabled={i === 0}
-                onClick={() => onChange(move(bullets, i, i - 1))}>↑</button>
-              <button type="button" className="btn-ghost px-2 py-0.5 text-xs text-red-600 hover:bg-red-50" aria-label="Remove bullet"
-                onClick={() => onChange(bullets.filter((_, j) => j !== i))}>✕</button>
+          <div key={i} className="rounded-lg border border-slate-200/70 bg-white p-2.5 shadow-xs">
+            <div className="flex items-start gap-2">
+              <textarea
+                className="input min-h-[56px] flex-1"
+                value={b}
+                rows={2}
+                aria-label={`${label} ${i + 1}`}
+                onChange={(e) => onChange(bullets.map((x, j) => (j === i ? e.target.value : x)))}
+              />
+              <div className="flex flex-col gap-1">
+                <button
+                  type="button"
+                  className="btn-ghost px-2 py-0.5 text-xs"
+                  aria-label="Move bullet up"
+                  disabled={i === 0}
+                  onClick={() => onChange(move(bullets, i, i - 1))}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost px-2 py-0.5 text-xs text-red-600 hover:bg-red-50"
+                  aria-label="Remove bullet"
+                  onClick={() => onChange(bullets.filter((_, j) => j !== i))}
+                >
+                  ✕
+                </button>
+              </div>
             </div>
+
+            {/* Real-time ATS Writing Coach feedback */}
+            <BulletCoachRow
+              bullet={b}
+              index={i}
+              allBullets={bullets}
+              targetSkills={targetSkills}
+              missingSkills={missingSkills}
+              onApplyVerb={(newText) => onChange(bullets.map((x, j) => (j === i ? newText : x)))}
+            />
           </div>
         ))}
       </div>
-      <button type="button" className="btn-secondary mt-2 px-3 py-1.5 text-xs" onClick={() => onChange([...bullets, ''])}>
+      <button
+        type="button"
+        className="btn-secondary mt-2 px-3 py-1.5 text-xs"
+        onClick={() => onChange([...bullets, ''])}
+      >
         + Add bullet
       </button>
     </div>
@@ -134,7 +300,17 @@ function PersonalSection({ resume, patch }: { resume: ResumeData; patch: Patch }
   );
 }
 
-function ExperienceSection({ resume, patch }: { resume: ResumeData; patch: Patch }) {
+function ExperienceSection({
+  resume,
+  patch,
+  targetSkills,
+  missingSkills,
+}: {
+  resume: ResumeData;
+  patch: Patch;
+  targetSkills?: string[];
+  missingSkills?: string[];
+}) {
   const items = resume.experience;
   const update = (i: number, key: keyof ExperienceItem, value: unknown) =>
     patch((d) => {
@@ -170,7 +346,13 @@ function ExperienceSection({ resume, patch }: { resume: ResumeData; patch: Patch
             </div>
           </div>
           <div className="mt-3">
-            <BulletList label="Achievement bullets" bullets={e.bullets} onChange={(b) => update(i, 'bullets', b)} />
+            <BulletList
+              label="Achievement bullets"
+              bullets={e.bullets}
+              onChange={(b) => update(i, 'bullets', b)}
+              targetSkills={targetSkills}
+              missingSkills={missingSkills}
+            />
           </div>
         </div>
       ))}
@@ -189,7 +371,17 @@ function ExperienceSection({ resume, patch }: { resume: ResumeData; patch: Patch
   );
 }
 
-function ProjectsSection({ resume, patch }: { resume: ResumeData; patch: Patch }) {
+function ProjectsSection({
+  resume,
+  patch,
+  targetSkills,
+  missingSkills,
+}: {
+  resume: ResumeData;
+  patch: Patch;
+  targetSkills?: string[];
+  missingSkills?: string[];
+}) {
   const items = resume.projects;
   const update = (i: number, key: keyof ProjectItem, value: unknown) =>
     patch((d) => {
@@ -215,7 +407,13 @@ function ProjectsSection({ resume, patch }: { resume: ResumeData; patch: Patch }
           </div>
           <div className="mt-3"><label className="label">Short description</label><input className="input" value={p.description || ''} onChange={(ev) => update(i, 'description', ev.target.value)} /></div>
           <div className="mt-3">
-            <BulletList label="Project bullets" bullets={p.bullets} onChange={(b) => update(i, 'bullets', b)} />
+            <BulletList
+              label="Project bullets"
+              bullets={p.bullets}
+              onChange={(b) => update(i, 'bullets', b)}
+              targetSkills={targetSkills}
+              missingSkills={missingSkills}
+            />
           </div>
         </div>
       ))}
@@ -323,9 +521,25 @@ function LanguagesSection({ resume, patch }: { resume: ResumeData; patch: Patch 
   );
 }
 
-function AchievementsSection({ resume, patch }: { resume: ResumeData; patch: Patch }) {
+function AchievementsSection({
+  resume,
+  patch,
+  targetSkills,
+  missingSkills,
+}: {
+  resume: ResumeData;
+  patch: Patch;
+  targetSkills?: string[];
+  missingSkills?: string[];
+}) {
   return (
-    <BulletList label="Achievements" bullets={resume.achievements.length ? resume.achievements : ['']} onChange={(a) => patch((d) => { d.achievements = a.filter((x) => x.trim()); })} />
+    <BulletList
+      label="Achievements"
+      bullets={resume.achievements.length ? resume.achievements : ['']}
+      onChange={(a) => patch((d) => { d.achievements = a.filter((x) => x.trim()); })}
+      targetSkills={targetSkills}
+      missingSkills={missingSkills}
+    />
   );
 }
 
@@ -350,9 +564,18 @@ export interface ResumeFormEditorProps {
   onChange: (updater: (draft: ResumeData) => void) => void;
   openAll?: boolean;
   showPersonal?: boolean;
+  targetSkills?: string[];
+  missingSkills?: string[];
 }
 
-export default function ResumeFormEditor({ resume, onChange, showPersonal = true }: ResumeFormEditorProps) {
+export default function ResumeFormEditor({
+  resume,
+  onChange,
+  showPersonal = true,
+  openAll = false,
+  targetSkills,
+  missingSkills,
+}: ResumeFormEditorProps) {
   return (
     <div className="space-y-3">
       {showPersonal && (
@@ -360,32 +583,34 @@ export default function ResumeFormEditor({ resume, onChange, showPersonal = true
           <PersonalSection resume={resume} patch={onChange} />
         </Accordion>
       )}
-      <Accordion title="Summary"><SummarySection resume={resume} patch={onChange} /></Accordion>
-      <Accordion title="Experience" subtitle={`${resume.experience.length} role(s)`}>
-        <ExperienceSection resume={resume} patch={onChange} />
+      <Accordion title="Summary" defaultOpen={openAll}><SummarySection resume={resume} patch={onChange} /></Accordion>
+      <Accordion title="Experience" subtitle={`${resume.experience.length} role(s)`} defaultOpen={openAll}>
+        <ExperienceSection resume={resume} patch={onChange} targetSkills={targetSkills} missingSkills={missingSkills} />
       </Accordion>
-      <Accordion title="Projects" subtitle={`${resume.projects.length} project(s)`}>
-        <ProjectsSection resume={resume} patch={onChange} />
+      <Accordion title="Projects" subtitle={`${resume.projects.length} project(s)`} defaultOpen={openAll}>
+        <ProjectsSection resume={resume} patch={onChange} targetSkills={targetSkills} missingSkills={missingSkills} />
       </Accordion>
-      <Accordion title="Education" subtitle={`${resume.education.length} entr${resume.education.length === 1 ? 'y' : 'ies'}`}>
+      <Accordion title="Education" subtitle={`${resume.education.length} entr${resume.education.length === 1 ? 'y' : 'ies'}`} defaultOpen={openAll}>
         <EducationSection resume={resume} patch={onChange} />
       </Accordion>
-      <Accordion title="Skills">
+      <Accordion title="Skills" defaultOpen={openAll}>
         <SkillsSection resume={resume} patch={onChange} />
       </Accordion>
-      <Accordion title="Certifications">
+      <Accordion title="Certifications" defaultOpen={openAll}>
         <CertificationsSection resume={resume} patch={onChange} />
       </Accordion>
-      <Accordion title="Languages">
+      <Accordion title="Languages" defaultOpen={openAll}>
         <LanguagesSection resume={resume} patch={onChange} />
       </Accordion>
-      <Accordion title="Achievements">
-        <AchievementsSection resume={resume} patch={onChange} />
+      <Accordion title="Achievements" defaultOpen={openAll}>
+        <AchievementsSection resume={resume} patch={onChange} targetSkills={targetSkills} missingSkills={missingSkills} />
       </Accordion>
       {(resume.customSections || []).map((cs, i) => (
         <Accordion key={cs.id} title={cs.title || 'Custom section'} subtitle="custom section">
           <CustomSectionEditor
             section={cs}
+            targetSkills={targetSkills}
+            missingSkills={missingSkills}
             onChange={(next) => onChange((d) => { d.customSections[i] = next; })}
             onRemove={() => onChange((d) => {
               d.customSections = d.customSections.filter((_, j) => j !== i);
@@ -406,7 +631,19 @@ export default function ResumeFormEditor({ resume, onChange, showPersonal = true
   );
 }
 
-function CustomSectionEditor({ section, onChange, onRemove }: { section: CustomSection; onChange: (s: CustomSection) => void; onRemove: () => void }) {
+function CustomSectionEditor({
+  section,
+  onChange,
+  onRemove,
+  targetSkills,
+  missingSkills,
+}: {
+  section: CustomSection;
+  onChange: (s: CustomSection) => void;
+  onRemove: () => void;
+  targetSkills?: string[];
+  missingSkills?: string[];
+}) {
   return (
     <div className="space-y-3">
       <div className="flex items-end gap-2">
@@ -416,7 +653,13 @@ function CustomSectionEditor({ section, onChange, onRemove }: { section: CustomS
         </div>
         <button type="button" className="btn-ghost mb-0.5 text-red-600 hover:bg-red-50" onClick={onRemove}>✕ Remove</button>
       </div>
-      <BulletList label="Entries" bullets={section.bullets} onChange={(b) => onChange({ ...section, bullets: b })} />
+      <BulletList
+        label="Entries"
+        bullets={section.bullets}
+        onChange={(b) => onChange({ ...section, bullets: b })}
+        targetSkills={targetSkills}
+        missingSkills={missingSkills}
+      />
     </div>
   );
 }

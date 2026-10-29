@@ -15,6 +15,7 @@ import { buildApp } from '../src/app';
 import { __setAiProviderForTests, AiProvider, AiUnavailableError } from '../src/ai/provider';
 import { __resetRateLimitsForTests } from '../src/middleware/rateLimit';
 import { __resetConcurrencyForTests } from '../src/routes/public';
+import pdfParse from 'pdf-parse';
 import type { Express } from 'express';
 import type { ResumeData } from '../src/types';
 
@@ -273,6 +274,91 @@ describe('Phase 2 — Public Stateless API & NVIDIA Nemotron Backend', () => {
       expect(res.body.ats).toBeDefined();
     });
 
+    it('evaluates complete synthetic engineering candidate CV with 9-dimension audit and actionable recommendations', async () => {
+      const syntheticEngineeringCv: ResumeData = {
+        personal: {
+          fullName: 'Aarav Sharma',
+          email: 'aarav.sharma@example.com',
+          phone: '+44 7700 900123',
+          location: 'Manchester, UK',
+          headline: 'Senior Cloud Solutions Architect',
+        },
+        summary: 'Experienced cloud architect specializing in distributed systems, high-availability architectures, and automated infrastructure.',
+        experience: [
+          {
+            id: 'exp-1',
+            company: 'CloudScale Technologies Ltd',
+            title: 'Principal Cloud Architect',
+            location: 'Manchester, UK',
+            startDate: 'Jan 2022',
+            endDate: 'Present',
+            current: true,
+            bullets: [
+              'Architected multi-region Kubernetes clusters on AWS achieving 99.999% uptime for 2.4 million active users.',
+              'Reduced annual cloud infrastructure expenditure by £420,000 through automated Spot instance orchestration.',
+              'Mentored 12 platform engineers in Infrastructure as Code (Terraform) and GitOps deployment standards.',
+            ],
+          },
+          {
+            id: 'exp-2',
+            company: 'Finlio Systems Ltd',
+            title: 'Senior DevOps Engineer',
+            location: 'Leeds, UK',
+            startDate: 'Jun 2019',
+            endDate: 'Dec 2021',
+            current: false,
+            bullets: [
+              'Engineered high-throughput payment REST APIs in Java and Spring Boot processing over 150,000 daily transactions.',
+              'Optimised PostgreSQL schema indexing and connection pooling, cutting p99 API query latency by 35%.',
+            ],
+          },
+        ],
+        projects: [
+          {
+            id: 'proj-1',
+            name: 'LedgerSync Observability Mesh',
+            tech: ['Go', 'Kubernetes', 'Prometheus'],
+            bullets: ['Processed over 60 million telemetry spans daily with sub-millisecond overhead.'],
+          },
+        ],
+        education: [
+          {
+            id: 'edu-1',
+            institution: 'University of Leeds',
+            degree: 'BSc (Hons)',
+            field: 'Computer Science',
+            startDate: '2015',
+            endDate: '2019',
+          },
+        ],
+        skills: {
+          technical: ['AWS', 'Kubernetes', 'Terraform', 'Docker', 'Java', 'Spring Boot', 'PostgreSQL'],
+          soft: ['Technical Leadership', 'Collaboration', 'Mentorship'],
+        },
+        certifications: [
+          { id: 'cert-1', name: 'AWS Certified Solutions Architect — Professional', issuer: 'AWS', year: '2023' },
+        ],
+        languages: [{ id: 'lang-1', name: 'English', proficiency: 'Native' }],
+        achievements: ['Keynote speaker at Cloud Native London 2023.'],
+        customSections: [],
+        sectionOrder: ['summary', 'experience', 'projects', 'skills', 'education', 'certifications', 'languages', 'achievements'],
+        hiddenSections: [],
+      };
+
+      const res = await request(app)
+        .post('/api/public/audit')
+        .send({ resume: syntheticEngineeringCv });
+
+      expect(res.status).toBe(200);
+      expect(res.body.audit).toBeDefined();
+      expect(res.body.audit.overallScore).toBeGreaterThanOrEqual(90);
+      expect(res.body.audit.rating).toBe('exceptional');
+      expect(res.body.audit.dimensions.quantification.score).toBeGreaterThanOrEqual(80);
+      expect(res.body.audit.dimensions.parsing.score).toBe(100);
+      expect(res.body.audit.stats.quantifiedPercentage).toBeGreaterThan(50);
+      expect(res.body.ats.recommendations).toBeDefined();
+    });
+
     it('rejects invalid resume with 400', async () => {
       const res = await request(app)
         .post('/api/public/audit')
@@ -350,6 +436,138 @@ describe('Phase 2 — Public Stateless API & NVIDIA Nemotron Backend', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error?.code).toBe('INVALID_TEMPLATE');
+    });
+
+    // DEF-02 Regression Tests: Margin Density Controls
+    it('DEF-02: accepts compact, normal, and spacious marginDensity settings', async () => {
+      for (const marginDensity of ['compact', 'normal', 'spacious']) {
+        const res = await request(app)
+          .post('/api/public/pdf')
+          .send({ resume: SAMPLE_RESUME, template: 'modern', marginDensity })
+          .responseType('blob');
+
+        expect(res.status).toBe(200);
+        expect(res.headers['content-type']).toBe('application/pdf');
+        const buf = Buffer.from(res.body);
+        expect(buf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+      }
+    });
+
+    it('DEF-02: rejects invalid marginDensity with 400 INVALID_MARGIN_DENSITY', async () => {
+      const res = await request(app)
+        .post('/api/public/pdf')
+        .send({ resume: SAMPLE_RESUME, marginDensity: 'ultra_condensed' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error?.code).toBe('INVALID_MARGIN_DENSITY');
+      expect(res.body.error?.message).toContain('Supported margin densities');
+    });
+
+    // Page Size Regression Tests: A4 and US Letter Support
+    it('accepts A4 and LETTER page sizes and outputs correct PDF headers and dimensions', async () => {
+      // Test A4
+      const resA4 = await request(app)
+        .post('/api/public/pdf')
+        .send({ resume: SAMPLE_RESUME, template: 'classic', pageSize: 'A4' })
+        .responseType('blob');
+
+      expect(resA4.status).toBe(200);
+      expect(resA4.headers['content-type']).toBe('application/pdf');
+      const bufA4 = Buffer.from(resA4.body);
+      expect(bufA4.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+      const a4Str = bufA4.toString('latin1');
+      const a4Match = a4Str.match(/\/MediaBox\s*\[\s*([\d\.]+)\s+([\d\.]+)\s+([\d\.]+)\s+([\d\.]+)\s*\]/);
+      expect(a4Match).toBeTruthy();
+      expect(Number(a4Match![3])).toBeCloseTo(595.28, 1);
+      expect(Number(a4Match![4])).toBeCloseTo(841.89, 1);
+
+      // Test LETTER
+      const resLetter = await request(app)
+        .post('/api/public/pdf')
+        .send({ resume: SAMPLE_RESUME, template: 'classic', pageSize: 'LETTER' })
+        .responseType('blob');
+
+      expect(resLetter.status).toBe(200);
+      expect(resLetter.headers['content-type']).toBe('application/pdf');
+      const bufLetter = Buffer.from(resLetter.body);
+      expect(bufLetter.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+      const letterStr = bufLetter.toString('latin1');
+      const letterMatch = letterStr.match(/\/MediaBox\s*\[\s*([\d\.]+)\s+([\d\.]+)\s+([\d\.]+)\s+([\d\.]+)\s*\]/);
+      expect(letterMatch).toBeTruthy();
+      expect(Number(letterMatch![3])).toBeCloseTo(612, 1);
+      expect(Number(letterMatch![4])).toBeCloseTo(792, 1);
+    });
+
+    it('defaults to A4 when pageSize is omitted', async () => {
+      const res = await request(app)
+        .post('/api/public/pdf')
+        .send({ resume: SAMPLE_RESUME })
+        .responseType('blob');
+
+      expect(res.status).toBe(200);
+      const buf = Buffer.from(res.body);
+      const str = buf.toString('latin1');
+      const match = str.match(/\/MediaBox\s*\[\s*([\d\.]+)\s+([\d\.]+)\s+([\d\.]+)\s+([\d\.]+)\s*\]/);
+      expect(match).toBeTruthy();
+      expect(Number(match![3])).toBeCloseTo(595.28, 1);
+      expect(Number(match![4])).toBeCloseTo(841.89, 1);
+    });
+
+    it('normalizes lowercase or whitespace pageSize values safely', async () => {
+      const res = await request(app)
+        .post('/api/public/pdf')
+        .send({ resume: SAMPLE_RESUME, pageSize: '  letter  ' })
+        .responseType('blob');
+
+      expect(res.status).toBe(200);
+      const buf = Buffer.from(res.body);
+      const str = buf.toString('latin1');
+      const match = str.match(/\/MediaBox\s*\[\s*([\d\.]+)\s+([\d\.]+)\s+([\d\.]+)\s+([\d\.]+)\s*\]/);
+      expect(match).toBeTruthy();
+      expect(Number(match![3])).toBeCloseTo(612, 1);
+      expect(Number(match![4])).toBeCloseTo(792, 1);
+    });
+
+    it('rejects invalid pageSize with 400 VALIDATION_ERROR', async () => {
+      const invalidValues = ['legal', 'tabloid', 'a3', 123, true, ''];
+      for (const invalid of invalidValues) {
+        const res = await request(app)
+          .post('/api/public/pdf')
+          .send({ resume: SAMPLE_RESUME, pageSize: invalid });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error?.code).toBe('VALIDATION_ERROR');
+        expect(res.body.error?.message).toContain('Invalid pageSize. Supported values are A4 and LETTER.');
+      }
+    });
+
+    // DEF-03 Regression Tests: Unicode & Currency Sanitization
+    it('DEF-03: sanitizes rupee symbol (₹ -> Rs.) and smart quotes without corrupting text', async () => {
+      const unicodeResume: ResumeData = {
+        ...SAMPLE_RESUME,
+        personal: {
+          ...SAMPLE_RESUME.personal,
+          fullName: 'Dr. Élodie Müller-François',
+        },
+        summary: 'Earned “Top Performer” award with ₹25,00,000 cost savings — 100% verified ✓.',
+      };
+
+      const res = await request(app)
+        .post('/api/public/pdf')
+        .send({ resume: unicodeResume, template: 'classic' })
+        .responseType('blob');
+
+      expect(res.status).toBe(200);
+      const buf = Buffer.from(res.body);
+      const parsed = await pdfParse(buf);
+
+      // Verify that accented Latin characters render cleanly
+      expect(parsed.text).toContain('Dr. Élodie Müller-François');
+      // Verify rupee symbol was intentionally transformed to standard readable 'Rs. '
+      expect(parsed.text).toContain('Rs. 25,00,000');
+      expect(parsed.text).not.toContain('₹');
+      // Verify smart quotes transformed to straight quotes
+      expect(parsed.text).toContain('"Top Performer"');
     });
   });
 

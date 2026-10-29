@@ -369,6 +369,8 @@ export function __setAiProviderForTests(p: AiProvider | null): void {
   }
 }
 
+export const setAiProviderForTests = __setAiProviderForTests;
+
 // --- structured output helpers ---------------------------------------------
 
 /** Strip optional code fences and parse JSON, then validate with the schema. */

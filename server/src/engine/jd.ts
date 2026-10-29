@@ -73,10 +73,10 @@ function detectSections(text: string): SectionSpan[] {
       trimmed.split(/\s+/).length <= 10;
     if (isHeadingLike) {
       if (offset > start) spans.push({ name: current, start, end: offset });
-      current = REQUIRED_SECTION_RE.test(trimmed)
-        ? 'required'
-        : PREFERRED_SECTION_RE.test(trimmed)
-          ? 'preferred'
+      current = PREFERRED_SECTION_RE.test(trimmed)
+        ? 'preferred'
+        : REQUIRED_SECTION_RE.test(trimmed)
+          ? 'required'
           : RESPONSIBILITIES_SECTION_RE.test(trimmed)
             ? 'responsibilities'
             : 'other';
@@ -96,16 +96,21 @@ function sectionAt(spans: SectionSpan[], index: number): SectionSpan['name'] {
 }
 
 function detectTitle(text: string, lines: string[]): string {
-  // Explicit label first
-  const labelMatch = text.match(/(?:job\s*title|position|role)\s*[:\-]\s*(.+)/i);
-  if (labelMatch) return cleanTitle(labelMatch[1]);
-  // First short, title-like line
+  // First short, title-like line (e.g. heading line 1 of JD)
   for (const raw of lines.slice(0, 6)) {
     const line = raw.trim().replace(/^[#*\-•\s]+/, '').replace(/[,|].*$/, '').trim();
-    if (line.length >= 3 && line.length <= 70 && TITLE_HINTS.test(line) && !/\b(we|our|you|company|about|apply|job)\b/i.test(line)) {
+    if (
+      line.length >= 3 &&
+      line.length <= 70 &&
+      TITLE_HINTS.test(line) &&
+      !/\b(we|our|you|company|about|apply|job|welcome|looking|overview|description)\b/i.test(line)
+    ) {
       return cleanTitle(line);
     }
   }
+  // Explicit label (e.g. "Job Title: ...", "Position: ...", but NOT section headers like "About the Role:")
+  const labelMatch = text.match(/(?:^|\n)\s*(?:job\s*title|position|target\s*role)\s*[:\-]\s*([^\n]+)/i);
+  if (labelMatch) return cleanTitle(labelMatch[1]);
   // Fallback: most frequent known skill-adjacent role word
   const m = text.match(/\b(senior|junior|lead|principal|staff)?\s?(java|python|frontend|front-end|backend|back-end|full[- ]?stack|cloud|devops|data|software|mobile|react|node)(\.js)?\s*(developer|engineer|architect)/i);
   if (m) return cleanTitle(m[0]);
@@ -151,8 +156,8 @@ export function analyseJobDescription(rawText: string): JobAnalysis {
   // Company detection
   let company = '';
   const companyMatch =
-    text.match(/company\s*[:\-]\s*([A-Z][\w&.'\- ]{1,40})/) ||
-    text.match(/(?:join|at)\s+([A-Z][\w&.'\-]+(?:\s+[A-Z][\w&.'\-]+){0,2})\s*,?\s*(?:we|you|is|are|a|an)/);
+    text.match(/company\s*[:\-]\s*([A-Z][\w&.'\- ]{1,40})/i) ||
+    text.match(/(?:join|at)\s+([A-Z][\w&.'\-]+(?:\s+[A-Z][\w&.'\-]+){0,2})\s*,?\s*(?:we|you|is|are|a|an)/i);
   if (companyMatch) company = companyMatch[1].trim().slice(0, 60);
 
   // Skill classification into required vs preferred using section position

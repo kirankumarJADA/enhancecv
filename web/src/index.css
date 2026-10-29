@@ -61,6 +61,14 @@
   font-size: 13px;
   line-height: 1.5;
 }
+.paper.page-size-a4 {
+  max-width: 794px;
+  min-height: 1123px;
+}
+.paper.page-size-letter {
+  max-width: 816px;
+  min-height: 1056px;
+}
 .paper h1 {
   font-size: 26px;
   font-weight: 700;
