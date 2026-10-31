@@ -91,12 +91,22 @@ export default function Landing() {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
           <Logo />
           <nav className="hidden items-center gap-8 text-sm font-medium text-slate-600 md:flex" aria-label="Main Navigation">
+            <Link to="/builder?mode=ats" className="text-teal-700 font-semibold transition hover:text-teal-900">Check ATS Score</Link>
             <a href="#how" className="transition hover:text-slate-900">How It Works</a>
             <a href="#truth" className="transition hover:text-slate-900">Truth Guard™</a>
             <a href="#features" className="transition hover:text-slate-900">Features</a>
             <a href="#faq" className="transition hover:text-slate-900">FAQ</a>
           </nav>
           <div className="flex items-center gap-3">
+            <Link
+              to="/builder?mode=ats"
+              className="hidden sm:inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-teal-600" aria-hidden="true">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.7-9.3a1 1 0 00-1.4-1.4L9 10.6 7.7 9.3a1 1 0 00-1.4 1.4l2 2a1 1 0 001.4 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span>Check ATS Score</span>
+            </Link>
             <Link
               to="/builder"
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
@@ -136,32 +146,63 @@ export default function Landing() {
               Powered by NVIDIA Nemotron AI with deterministic ATS scoring and strict Truth Guard™ verification.
             </p>
 
-            {/* Dual Main Actions Prominently Displayed */}
-            <div className="mt-10 grid gap-4 sm:grid-cols-2 max-w-2xl mx-auto text-left">
-              {/* Option 1: Improve Existing CV */}
+            {/* Main Action Cards Prominently Displayed */}
+            <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto text-left">
+              {/* Option 1: Check ATS Score */}
               <Link
-                to="/builder?mode=improve"
+                to="/builder?mode=ats"
                 className="group relative flex flex-col justify-between rounded-xl border-2 border-teal-600 bg-white p-6 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-teal-600 text-white shadow-sm transition group-hover:bg-teal-700">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6" aria-hidden="true">
-                      <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M9 17v-6m4 6V7m4 10v-3M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </div>
                   <span className="inline-flex items-center text-xs font-bold text-teal-800 bg-teal-50 border border-teal-200 px-2.5 py-0.5 rounded-full">
-                    Recommended
+                    Instant Audit
                   </span>
                 </div>
                 <div className="mt-4">
                   <h2 className="text-xl font-bold text-slate-950 group-hover:text-teal-700">
+                    Check ATS Score
+                  </h2>
+                  <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">
+                    Upload your CV and get an ATS compatibility score with a detailed 9-dimension breakdown.
+                  </p>
+                </div>
+                <div className="mt-5 flex items-center font-semibold text-sm text-teal-700 group-hover:text-teal-800">
+                  <span>Check ATS Score Now</span>
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="ml-1.5 h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true">
+                    <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </Link>
+
+              {/* Option 2: Improve Existing CV */}
+              <Link
+                to="/builder?mode=improve"
+                className="group relative flex flex-col justify-between rounded-xl border border-slate-300 bg-white p-6 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-slate-400 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-900 text-white shadow-sm transition group-hover:bg-slate-800">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6" aria-hidden="true">
+                      <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <span className="inline-flex items-center text-xs font-bold text-slate-800 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-full">
+                    AI Rebuild
+                  </span>
+                </div>
+                <div className="mt-4">
+                  <h2 className="text-xl font-bold text-slate-950 group-hover:text-slate-700">
                     Improve my existing CV
                   </h2>
                   <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">
                     Upload your current PDF, DOCX or TXT. AI automatically extracts facts, restructures bullets with Google XYZ formatting, and elevates your ATS score.
                   </p>
                 </div>
-                <div className="mt-5 flex items-center font-semibold text-sm text-teal-700 group-hover:text-teal-800">
+                <div className="mt-5 flex items-center font-semibold text-sm text-slate-900 group-hover:text-slate-700">
                   <span>Upload &amp; Rebuild Now</span>
                   <svg viewBox="0 0 20 20" fill="currentColor" className="ml-1.5 h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true">
                     <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -169,7 +210,7 @@ export default function Landing() {
                 </div>
               </Link>
 
-              {/* Option 2: Create from Scratch */}
+              {/* Option 3: Create from Scratch */}
               <Link
                 to="/builder?mode=create"
                 className="group relative flex flex-col justify-between rounded-xl border border-slate-300 bg-white p-6 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-slate-400 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
@@ -418,13 +459,19 @@ export default function Landing() {
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-4">
             <Link
-              to="/builder?mode=improve"
+              to="/builder?mode=ats"
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-teal-600 px-7 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-500 focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
             >
-              <span>Improve My Existing CV</span>
+              <span>Check ATS Score</span>
               <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden="true">
                 <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
               </svg>
+            </Link>
+            <Link
+              to="/builder?mode=improve"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-7 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+            >
+              Improve My Existing CV
             </Link>
             <Link
               to="/builder?mode=create"
@@ -444,6 +491,7 @@ export default function Landing() {
             Curevo AI — Your next resume starts here. © {new Date().getFullYear()} Curevo AI. All rights reserved.
           </p>
           <div className="flex items-center gap-6 text-xs text-slate-600 font-medium">
+            <Link to="/builder?mode=ats" className="hover:text-slate-950 transition font-semibold text-teal-800">Check ATS Score</Link>
             <Link to="/builder" className="hover:text-slate-950 transition">Resume Builder</Link>
             <a href="#how" className="hover:text-slate-950 transition">How It Works</a>
             <a href="#truth" className="hover:text-slate-950 transition">Truth Guard™</a>

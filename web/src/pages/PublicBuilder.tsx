@@ -10,6 +10,7 @@ import { SAMPLE_JD_PRESETS } from '../data/sampleJdPresets';
 import type {
   ResumeData,
   ATSAnalysis,
+  AdvancedAtsAudit,
   TruthReport,
   ChangeLogEntry,
   MatchAnalysis,
@@ -20,7 +21,7 @@ import type {
   CoverLetterResponse,
 } from '../types';
 
-type Mode = 'improve' | 'create';
+type Mode = 'improve' | 'create' | 'ats';
 type Step = 'idle' | 'processing' | 'ready';
 type ResultTab = 'preview' | 'edit' | 'ats' | 'match' | 'cover' | 'truth' | 'changelog';
 
@@ -183,7 +184,8 @@ const TEMPLATES = [
 
 export default function PublicBuilder() {
   const [searchParams] = useSearchParams();
-  const [mode, setMode] = useState<Mode>(searchParams.get('mode') === 'create' ? 'create' : 'improve');
+  const initialModeParam = searchParams.get('mode');
+  const [mode, setMode] = useState<Mode>(initialModeParam === 'create' ? 'create' : initialModeParam === 'ats' ? 'ats' : 'improve');
   const [step, setStep] = useState<Step>('idle');
   const [activeTab, setActiveTab] = useState<ResultTab>('preview');
   const [statusMessage, setStatusMessage] = useState<string>('');
@@ -254,7 +256,7 @@ export default function PublicBuilder() {
 
   // 1-Click Sample CV Loader: Immediately loads complete synthetic engineering profile
   // and audits ATS score without requiring file upload or account creation.
-  const handleLoadSampleCv = async () => {
+  const handleLoadSampleCv = async (targetMode?: 'ats' | unknown) => {
     setErrorMessage(null);
     setErrorDetails(null);
     setSelectedFileName(null);
@@ -275,7 +277,7 @@ export default function PublicBuilder() {
     // Use verified baseline immediately for instantaneous, zero-latency visual rendering
     setAts(SAMPLE_ATS_FALLBACK);
     setStep('ready');
-    setActiveTab('preview');
+    setActiveTab(targetMode === 'ats' || mode === 'ats' ? 'ats' : 'preview');
 
     // Run deterministic ATS audit on the server to keep engine contracts synchronized
     try {
@@ -714,9 +716,12 @@ export default function PublicBuilder() {
     const urlMode = searchParams.get('mode');
     const isSampleParam = searchParams.get('sample') === 'true' || urlMode === 'sample';
     if (isSampleParam) {
-      void handleLoadSampleCv();
-    } else if (urlMode === 'create' || urlMode === 'improve') {
+      void handleLoadSampleCv(urlMode === 'ats' ? 'ats' : undefined);
+    } else if (urlMode === 'create' || urlMode === 'improve' || urlMode === 'ats') {
       setMode(urlMode);
+      if (urlMode === 'ats') {
+        setActiveTab('ats');
+      }
     }
   }, [searchParams]);
 
@@ -845,6 +850,52 @@ export default function PublicBuilder() {
     setStep('processing');
     setProcessingStage(1);
     setStatusMessage('Uploading and extracting structured facts from your resume...');
+
+    if (mode === 'ats') {
+      try {
+        const formData = createUploadFormData(file);
+        setStatusMessage('Analyzing resume formatting, structure, and 9 ATS dimensions...');
+        const parseRes = await api.upload<{
+          resume: ResumeData;
+          ats: ATSAnalysis;
+          audit?: AdvancedAtsAudit;
+        }>('/public/parse', formData);
+
+        let atsData = parseRes.ats;
+        if (!atsData.audit && parseRes.audit) {
+          atsData = { ...atsData, audit: parseRes.audit };
+        }
+        if (!atsData.audit) {
+          try {
+            const auditRes = await api.post<{ ats: ATSAnalysis; audit: AdvancedAtsAudit }>('/public/audit', {
+              resume: parseRes.resume,
+            });
+            if (auditRes.ats) {
+              atsData = auditRes.ats;
+            } else if (auditRes.audit) {
+              atsData = { ...atsData, audit: auditRes.audit };
+            }
+          } catch (auditErr) {
+            console.warn('Could not fetch advanced audit, using parsed ATS:', auditErr);
+          }
+        }
+
+        const normalizedResume = normalizeResume(parseRes.resume);
+        setResume(normalizedResume);
+        setAts(atsData);
+        setTruth({ passedAll: true, checks: [], autoFixed: [] });
+        setChangeLog([]);
+        setActiveTab('ats');
+        setStep('ready');
+      } catch (parseErr: unknown) {
+        const apiErr = parseErr as { message?: string };
+        setErrorMessage(
+          apiErr.message || 'Failed to parse resume document. Please verify the file is text-based and uncorrupted.'
+        );
+        setStep('idle');
+      }
+      return;
+    }
 
     try {
       const formData = createUploadFormData(file);
@@ -1153,7 +1204,21 @@ export default function PublicBuilder() {
               </p>
 
               {/* Mode Toggle Tabs */}
-              <div className="mt-6 inline-flex rounded-xl bg-slate-100 p-1.5 border border-slate-200 shadow-inner">
+              <div className="mt-6 inline-flex flex-wrap justify-center rounded-xl bg-slate-100 p-1.5 border border-slate-200 shadow-inner gap-1">
+                <button
+                  type="button"
+                  onClick={() => { setMode('ats'); setErrorMessage(null); }}
+                  className={`inline-flex items-center gap-2 rounded-lg px-4 sm:px-5 py-2.5 text-sm font-bold transition duration-150 ${
+                    mode === 'ats'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-teal-600">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.7-9.3a1 1 0 00-1.4-1.4L9 10.6 7.7 9.3a1 1 0 00-1.4 1.4l2 2a1 1 0 001.4 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  Check ATS Score
+                </button>
                 <button
                   type="button"
                   onClick={() => { setMode('improve'); setErrorMessage(null); }}
@@ -1250,6 +1315,109 @@ export default function PublicBuilder() {
                 <div className="flex items-center gap-2 text-slate-400">
                   <span className="h-1.5 w-1.5 rounded-full bg-slate-400 mx-1" aria-hidden="true" />
                   <span>4. Deterministic ATS scoring &amp; PDF formatting</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Dedicated ATS Checking Workflow View */}
+          {step === 'idle' && mode === 'ats' && (
+            <div className="max-w-2xl mx-auto space-y-6">
+              <div className="card p-6 sm:p-8 border-slate-200 shadow-sm bg-white">
+                <div className="text-center">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6">
+                      <path d="M9 12l2 2 4-4m5.6 1.2A8.5 8.5 0 113.4 13.2a8.5 8.5 0 0117.2-4z" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <h2 className="text-2xl font-bold text-slate-900">Check ATS Score</h2>
+                  <p className="text-sm text-slate-600 mt-1 max-w-md mx-auto">
+                    Upload your CV and get an ATS compatibility score with a detailed 9-dimension breakdown.
+                  </p>
+                </div>
+
+                {/* Drag and Drop Zone */}
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`mt-6 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-8 text-center transition cursor-pointer ${
+                    isDragging
+                      ? 'border-teal-500 bg-teal-50/50'
+                      : 'border-slate-300 hover:border-teal-400 bg-slate-50/50'
+                  }`}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.docx,.txt"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void handleFileSelect(file);
+                    }}
+                  />
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-teal-600 mb-3 shadow-sm">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-7 w-7">
+                      <path d="M9 17v-6m4 6V7m4 10v-3M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <p className="text-base font-bold text-slate-900">
+                    Click to select file or drag &amp; drop here
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Supports <span className="font-semibold text-slate-700">PDF, DOCX, TXT</span> documents up to <span className="font-semibold text-slate-700">8 MB</span>
+                  </p>
+                  {selectedFileName && (
+                    <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-teal-50 border border-teal-200 px-3 py-1 text-xs font-semibold text-teal-800">
+                      <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-teal-600" aria-hidden="true">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                      </svg>
+                      <span>Selected: {selectedFileName}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* 1-Click Sample CV Action */}
+                <div className="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-teal-200 bg-teal-50/70 p-4 text-center sm:text-left transition hover:bg-teal-50">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-white shadow-sm font-bold text-base" aria-hidden="true">
+                      ⚡
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">Don&apos;t have a CV file ready?</p>
+                      <p className="text-xs text-slate-600 mt-0.5">
+                        Instantly evaluate our complete sample engineering profile across all 9 ATS dimensions.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleLoadSampleCv('ats');
+                    }}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl border border-teal-600 bg-white px-4 py-2 text-xs font-bold text-teal-800 shadow-sm transition hover:bg-teal-600 hover:text-white active:scale-95 shrink-0"
+                  >
+                    <span>Check Sample CV Score</span>
+                    <span aria-hidden="true">&rarr;</span>
+                  </button>
+                </div>
+
+                {/* What Gets Audited Breakdown preview banner */}
+                <div className="mt-6 border-t border-slate-100 pt-5 text-xs text-slate-500">
+                  <p className="font-bold text-slate-700 mb-2">9 ATS Dimensions Evaluated:</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] text-slate-600">
+                    <span className="flex items-center gap-1"><span>📄</span> Parsing &amp; Readability</span>
+                    <span className="flex items-center gap-1"><span>📊</span> Metric Quantification</span>
+                    <span className="flex items-center gap-1"><span>🔄</span> Phrasing &amp; Repetition</span>
+                    <span className="flex items-center gap-1"><span>✍️</span> Spelling &amp; Grammar</span>
+                    <span className="flex items-center gap-1"><span>📏</span> Visual Consistency</span>
+                    <span className="flex items-center gap-1"><span>📑</span> Standard Sections</span>
+                    <span className="flex items-center gap-1"><span>🎯</span> Essential Info</span>
+                    <span className="flex items-center gap-1"><span>👀</span> Recruiter Scan</span>
+                    <span className="flex items-center gap-1"><span>🤝</span> Inclusivity &amp; Safety</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2253,7 +2421,24 @@ export default function PublicBuilder() {
 
               {/* Tab 3: ATS Breakdown / Advanced ATS Audit */}
               {activeTab === 'ats' && ats && (
-                ats.audit ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between pb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-500">Audited CV:</span>
+                      <span className="text-xs font-bold text-slate-800">{resume?.personal?.fullName || selectedFileName || 'Uploaded Resume'}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleStartOverPrompt}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-2xs transition hover:bg-slate-50 active:scale-95"
+                    >
+                      <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-slate-500" aria-hidden="true">
+                        <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                      </svg>
+                      <span>Check Another CV</span>
+                    </button>
+                  </div>
+                  {ats.audit ? (
                   <AdvancedAtsAuditView audit={ats.audit} legacyAts={ats} />
                 ) : (
                   <div className="grid gap-6 md:grid-cols-2">
@@ -2293,7 +2478,8 @@ export default function PublicBuilder() {
                       </div>
                     </div>
                   </div>
-                )
+                )}
+              </div>
               )}
 
               {/* Tab: Job Match Analysis & Actionable Gaps */}

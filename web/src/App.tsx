@@ -5,9 +5,11 @@ import PublicBuilder from './pages/PublicBuilder';
 export default function App() {
   return (
     <Routes>
-      {/* Primary Public, Login-Free CV Workflow */}
+      {/* Primary Public, Login-Free CV & ATS Workflows */}
       <Route path="/" element={<Landing />} />
       <Route path="/builder" element={<PublicBuilder />} />
+      <Route path="/ats" element={<Navigate to="/builder?mode=ats" replace />} />
+      <Route path="/check-ats" element={<Navigate to="/builder?mode=ats" replace />} />
 
       {/* Redirect obsolete auth and stateful routes cleanly to the public builder */}
       <Route path="/login" element={<Navigate to="/builder" replace />} />
