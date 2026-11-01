@@ -552,6 +552,8 @@ export default function PublicBuilder() {
         msg = 'NVIDIA Nemotron AI is not configured on the backend server. Manual editing remains active.';
       } else if (apiErr.code === 'AI_TIMEOUT' || apiErr.status === 504) {
         msg = 'The NVIDIA AI service timed out while tailoring your resume. Please try again with a shorter job summary.';
+      } else if (apiErr.code === 'AI_MALFORMED' || apiErr.status === 502) {
+        msg = 'The AI service encountered an issue formatting the tailored response. You can try again or continue with manual editing.';
       } else if (apiErr.code === 'CONCURRENCY_LIMIT' || apiErr.status === 429) {
         msg = 'The AI service is currently busy. Please wait a moment and try again.';
       }
@@ -949,6 +951,8 @@ export default function PublicBuilder() {
           userMsg = 'NVIDIA Nemotron AI is not configured on the backend server. You can still preview your parsed CV, view ATS scores, and download your PDF.';
         } else if (apiErr.code === 'AI_TIMEOUT' || apiErr.status === 504) {
           userMsg = 'The NVIDIA AI service timed out while rebuilding your resume. Please try again.';
+        } else if (apiErr.code === 'AI_MALFORMED' || apiErr.status === 502) {
+          userMsg = 'The AI service encountered an issue formatting the response. You can still preview your parsed CV, view ATS scores, and download your PDF.';
         } else if (apiErr.code === 'CONCURRENCY_LIMIT' || apiErr.status === 429) {
           userMsg = 'The AI service is currently busy. Please wait a moment and try again.';
         }

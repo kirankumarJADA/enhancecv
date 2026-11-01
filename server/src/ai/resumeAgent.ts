@@ -39,27 +39,27 @@ import {
 // ---------------------------------------------------------------------------
 
 export const proposalSchema = z.object({
-  summary: z.string().max(1500).optional(),
+  summary: z.string().max(2000).optional(),
   bullets: z
     .array(
       z.object({
         itemId: z.string().min(1).max(64),
         index: z.number().int().min(0),
-        text: z.string().min(1).max(600),
+        text: z.string().min(1).max(800),
       })
     )
-    .max(40)
+    .max(60)
     .optional(),
   removeBullets: z
     .array(z.object({ itemId: z.string().min(1).max(64), index: z.number().int().min(0) }))
-    .max(20)
+    .max(30)
     .optional(),
-  skillsOrder: z.array(z.string().max(80)).max(60).optional(),
+  skillsOrder: z.array(z.string().max(100)).max(80).optional(),
   advisory: z
     .object({
-      summary: z.string().max(600).optional(),
-      keyStrengths: z.array(z.string().max(300)).max(5).optional(),
-      criticalGaps: z.array(z.string().max(300)).max(5).optional(),
+      summary: z.string().max(1000).optional(),
+      keyStrengths: z.array(z.string().max(400)).optional(),
+      criticalGaps: z.array(z.string().max(400)).optional(),
       recommendations: z
         .array(
           z.object({
@@ -71,19 +71,19 @@ export const proposalSchema = z.object({
               'quantification',
               'formatting_structure',
             ]),
-            title: z.string().max(120),
-            section: z.string().max(80),
-            issue: z.string().max(400),
-            whyItMatters: z.string().max(400),
-            actionableStep: z.string().max(400),
-            candidateQuestion: z.string().max(300).optional(),
-            metricPlaceholder: z.string().max(100).optional(),
+            title: z.string().max(150),
+            section: z.string().max(100),
+            issue: z.string().max(500),
+            whyItMatters: z.string().max(500),
+            actionableStep: z.string().max(500),
+            candidateQuestion: z.string().max(400).optional(),
+            metricPlaceholder: z.string().max(120).optional(),
             requiresCandidateInput: z.boolean(),
           })
         )
-        .max(8)
+        .max(12)
         .optional(),
-      candidateQuestions: z.array(z.string().max(300)).max(6).optional(),
+      candidateQuestions: z.array(z.string().max(400)).optional(),
     })
     .optional(),
 });
@@ -91,21 +91,21 @@ export const proposalSchema = z.object({
 export type TailoringProposal = z.infer<typeof proposalSchema>;
 
 export const critiqueSchema = z.object({
-  summary: z.string().max(600),
-  notes: z.array(z.string().max(400)).max(8),
+  summary: z.string().min(1).max(1000),
+  notes: z.array(z.string().max(500)).max(8),
   suggestions: z
     .array(
       z.object({
-        section: z.string().max(120),
+        section: z.string().max(150),
         itemId: z.string().max(64).optional(),
         index: z.number().int().min(0).optional(),
-        current: z.string().max(600),
-        suggested: z.string().max(600),
-        reason: z.string().max(400),
+        current: z.string().max(800),
+        suggested: z.string().max(800),
+        reason: z.string().max(500),
       })
     )
     .max(8),
-  candidateQuestions: z.array(z.string().max(300)).max(5).optional(),
+  candidateQuestions: z.array(z.string().max(400)).optional(),
 });
 
 export type CritiqueReport = z.infer<typeof critiqueSchema>;
@@ -544,7 +544,7 @@ export async function runResumeAgent(
       system: SYSTEM_PROMPT,
       user: buildAgentUserPrompt({ master, job, jdText, ats: atsBefore, match: matchBefore, base: baseResult.resume }, TAILOR_TASK),
       schema: proposalSchema,
-      maxTokens: 1200,
+      maxTokens: 2500,
       temperature: 0.2,
     });
     meta.iterations++;
@@ -600,7 +600,7 @@ export async function runResumeAgent(
             `${CRITIQUE_TASK}\n\n=== TAILORED RESUME (current) ===\n${resumeSnapshot(working)}`
           ),
           schema: critiqueSchema,
-          maxTokens: 1000,
+          maxTokens: 1500,
           temperature: 0.2,
         });
         meta.iterations++;

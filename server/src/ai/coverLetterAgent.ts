@@ -19,9 +19,9 @@ import { isBulletTruthful } from '../engine/tailor';
 import { JobAnalysis, ResumeData } from '../types';
 
 export const coverLetterSchema = z.object({
-  greeting: z.string().max(120),
-  paragraphs: z.array(z.string().min(20).max(1200)).min(2).max(5),
-  closing: z.string().max(200),
+  greeting: z.string().min(1).max(200),
+  paragraphs: z.array(z.string().min(20).max(2000)).min(2).max(5),
+  closing: z.string().min(1).max(300),
 });
 
 export type CoverLetter = z.infer<typeof coverLetterSchema>;
@@ -266,7 +266,7 @@ export async function generateCoverLetter(input: {
       system: SYSTEM_PROMPT,
       user: evidence.join('\n'),
       schema: coverLetterSchema,
-      maxTokens: 1200,
+      maxTokens: 1800,
       temperature: 0.4,
     });
 

@@ -98,21 +98,21 @@ export interface CreateResumeResult {
 }
 
 const createProposalSchema = z.object({
-  summary: z.string().min(20).max(1500),
-  headline: z.string().max(200).optional(),
+  summary: z.string().min(1).max(2000),
+  headline: z.string().max(300).optional(),
   experience: z.array(
     z.object({
       itemId: z.string().min(1).max(64),
-      bullets: z.array(z.string().min(5).max(600)).min(1).max(8),
+      bullets: z.array(z.string().min(1).max(800)).min(1).max(12),
     })
   ).optional(),
   projects: z.array(
     z.object({
       itemId: z.string().min(1).max(64),
-      bullets: z.array(z.string().min(5).max(600)).min(1).max(8),
+      bullets: z.array(z.string().min(1).max(800)).min(1).max(12),
     })
   ).optional(),
-  skillsOrder: z.array(z.string().max(80)).max(60).optional(),
+  skillsOrder: z.array(z.string().max(100)).max(80).optional(),
 });
 
 type CreateProposal = z.infer<typeof createProposalSchema>;

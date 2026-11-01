@@ -147,11 +147,20 @@ export class OpenAiCompatibleProvider implements AiProvider {
           return parseStructured(content, currentReq.schema);
         } catch (err) {
           if (err instanceof ZodError) {
+            const summary = err.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+            console.error(`ai name=${this.name} model=${this.model} attempt=${attempt} schema_validation_failed: ${summary}`);
             lastError = new AiUnavailableError('AI_MALFORMED', 'AI returned an invalid structure.', true);
           } else if (err instanceof AiUnavailableError) {
             lastError = err;
           } else {
             lastError = new AiUnavailableError('AI_MALFORMED', 'AI returned unparseable output.', true);
+          }
+
+          if (attempt < attempts) {
+            currentReq = {
+              ...currentReq,
+              system: `${currentReq.system}\n\nIMPORTANT: Return ONLY a valid, raw JSON object matching the requested schema with all required fields. Do not omit required fields or wrap in non-JSON prose.`,
+            };
           }
         }
       } catch (err) {
@@ -373,27 +382,226 @@ export const setAiProviderForTests = __setAiProviderForTests;
 
 // --- structured output helpers ---------------------------------------------
 
-/** Strip optional code fences and parse JSON, then validate with the schema. */
-export function parseStructured<T>(raw: string, schema: ZodType<T>): T {
-  let text = raw.trim();
-  const fence = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
-  if (fence) text = fence[1].trim();
-  // Tolerate prose before/after the outermost JSON object.
-  const firstBrace = text.indexOf('{');
-  const lastBrace = text.lastIndexOf('}');
-  if (firstBrace > 0 || (lastBrace >= 0 && lastBrace < text.length - 1)) {
-    if (firstBrace >= 0 && lastBrace > firstBrace) text = text.slice(firstBrace, lastBrace + 1);
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    try {
-      const sanitized = text.replace(/,(\s*[}\]])/g, '$1');
-      parsed = JSON.parse(sanitized);
-    } catch {
-      throw new AiUnavailableError('AI_MALFORMED', 'AI output was not valid JSON.', true);
+/**
+ * Recursively normalizes AI responses:
+ * - Converts null values to undefined so optional fields pass validation.
+ * - Coerces stringified numbers and booleans into their proper types.
+ * - Normalizes category synonyms to valid application enum values.
+ * - Auto-generates missing non-critical IDs.
+ */
+export function normalizeAiPayload(data: unknown): unknown {
+  if (!data || typeof data !== 'object') return data;
+  if (Array.isArray(data)) return data.map(normalizeAiPayload);
+
+  const obj: Record<string, unknown> = { ...(data as Record<string, unknown>) };
+
+  // 1. Strip top-level nulls
+  for (const k of Object.keys(obj)) {
+    if (obj[k] === null) {
+      delete obj[k];
     }
   }
-  return schema.parse(parsed);
+
+  // 2. Normalize bullets
+  if (Array.isArray(obj.bullets)) {
+    obj.bullets = obj.bullets
+      .map((b, idx) => {
+        if (!b || typeof b !== 'object') return null;
+        const bObj = { ...(b as Record<string, unknown>) };
+        const rawId = bObj.itemId !== undefined && bObj.itemId !== null ? String(bObj.itemId).trim() : '';
+        const rawIndex = bObj.index !== undefined && bObj.index !== null ? bObj.index : idx;
+        const index = typeof rawIndex === 'string' ? parseInt(rawIndex, 10) : rawIndex;
+        const text = typeof bObj.text === 'string' ? bObj.text.slice(0, 800) : String(bObj.text || '');
+        return { ...bObj, itemId: rawId, index, text };
+      })
+      .filter((b) => b && (b.itemId as string).length > 0 && typeof b.index === 'number' && !isNaN(b.index) && (b.text as string).length > 0);
+  }
+
+  // 3. Normalize removeBullets
+  if (Array.isArray(obj.removeBullets)) {
+    obj.removeBullets = obj.removeBullets
+      .map((b, idx) => {
+        if (!b || typeof b !== 'object') return null;
+        const bObj = { ...(b as Record<string, unknown>) };
+        const rawId = bObj.itemId !== undefined && bObj.itemId !== null ? String(bObj.itemId).trim() : '';
+        const rawIndex = bObj.index !== undefined && bObj.index !== null ? bObj.index : idx;
+        const index = typeof rawIndex === 'string' ? parseInt(rawIndex, 10) : rawIndex;
+        return { ...bObj, itemId: rawId, index };
+      })
+      .filter((b) => b && (b.itemId as string).length > 0 && typeof b.index === 'number' && !isNaN(b.index));
+  }
+
+  // 4. Normalize suggestions (critique)
+  if (Array.isArray(obj.suggestions)) {
+    obj.suggestions = obj.suggestions
+      .map((s, sIdx) => {
+        if (!s || typeof s !== 'object') return null;
+        const sObj = { ...(s as Record<string, unknown>) };
+        for (const k of Object.keys(sObj)) {
+          if (sObj[k] === null) delete sObj[k];
+        }
+        if (sObj.itemId !== undefined && sObj.itemId !== null) {
+          sObj.itemId = String(sObj.itemId).trim();
+        }
+        if (typeof sObj.index === 'string') {
+          const parsedIdx = parseInt(sObj.index, 10);
+          sObj.index = !isNaN(parsedIdx) ? parsedIdx : sIdx;
+        }
+        if (typeof sObj.current === 'string') sObj.current = sObj.current.slice(0, 800);
+        if (typeof sObj.suggested === 'string') sObj.suggested = sObj.suggested.slice(0, 800);
+        if (typeof sObj.reason === 'string') sObj.reason = sObj.reason.slice(0, 500);
+        return sObj;
+      })
+      .filter(Boolean);
+  }
+
+  // 5. Normalize advisory
+  if (obj.advisory && typeof obj.advisory === 'object') {
+    const adv: Record<string, unknown> = { ...(obj.advisory as Record<string, unknown>) };
+    for (const k of Object.keys(adv)) {
+      if (adv[k] === null) delete adv[k];
+    }
+    if (Array.isArray(adv.recommendations)) {
+      adv.recommendations = adv.recommendations.map((rec, rIdx) => {
+        if (!rec || typeof rec !== 'object') return rec;
+        const r: Record<string, unknown> = { ...(rec as Record<string, unknown>) };
+        for (const k of Object.keys(r)) {
+          if (r[k] === null) delete r[k];
+        }
+        r.id = r.id !== undefined && r.id !== null ? String(r.id).trim() : `rec_${rIdx + 1}`;
+        if (!r.title) r.title = 'Recommendation';
+        if (!r.section) r.section = 'Experience';
+        if (!r.issue) r.issue = 'Improvement opportunity';
+        if (!r.whyItMatters) r.whyItMatters = 'Aligns with target role';
+        if (!r.actionableStep) r.actionableStep = 'Update resume with details';
+
+        // Map category synonyms
+        const rawCat = String(r.category || '').toLowerCase().replace(/[\s-]+/g, '_');
+        if (rawCat.includes('impact') || rawCat.includes('bullet')) r.category = 'bullet_impact';
+        else if (rawCat.includes('keyword') || rawCat.includes('skill')) r.category = 'keyword_gap';
+        else if (rawCat.includes('missing') || rawCat.includes('require')) r.category = 'missing_requirement';
+        else if (rawCat.includes('quant') || rawCat.includes('metric') || rawCat.includes('number')) r.category = 'quantification';
+        else if (rawCat.includes('format') || rawCat.includes('struct') || rawCat.includes('layout')) r.category = 'formatting_structure';
+        else r.category = 'bullet_impact';
+
+        // Coerce boolean requiresCandidateInput
+        if (typeof r.requiresCandidateInput === 'string') {
+          r.requiresCandidateInput = r.requiresCandidateInput.toLowerCase() === 'true' || r.requiresCandidateInput === '1';
+        } else if (typeof r.requiresCandidateInput === 'number') {
+          r.requiresCandidateInput = r.requiresCandidateInput === 1;
+        } else if (typeof r.requiresCandidateInput !== 'boolean') {
+          r.requiresCandidateInput = false;
+        }
+        return r;
+      });
+    }
+    obj.advisory = adv;
+  }
+
+  return obj;
+}
+
+/** Robust JSON extraction and parsing helper. */
+export function parseStructured<T>(raw: string, schema: ZodType<T>): T {
+  const text = (raw || '').trim();
+  if (!text) {
+    throw new AiUnavailableError('AI_MALFORMED', 'AI returned an empty response.', true);
+  }
+
+  function tryParse(str: string): unknown {
+    const trimmed = str.trim();
+    if (!trimmed) return null;
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      try {
+        const sanitized = trimmed
+          .replace(/\/\/[^\n\r"]*(?=[\n\r])/g, '')
+          .replace(/,(\s*[}\]])/g, '$1');
+        return JSON.parse(sanitized);
+      } catch {
+        return null;
+      }
+    }
+  }
+
+  // 1. Direct parse check (raw text is already valid JSON)
+  let parsed = tryParse(text);
+
+  // 2. Scan all markdown code fences (```json ... ``` or ``` ... ```)
+  if (parsed === null || typeof parsed !== 'object') {
+    const fenceRegex = /```(?:json)?\s*([\s\S]*?)```/gi;
+    let match: RegExpExecArray | null;
+    while ((match = fenceRegex.exec(text)) !== null) {
+      const candidate = match[1].trim();
+      const p = tryParse(candidate);
+      if (p !== null && typeof p === 'object') {
+        parsed = p;
+        break;
+      }
+    }
+  }
+
+  // 3. Balanced scanner: find candidate JSON objects or arrays inside surrounding prose
+  if (parsed === null || typeof parsed !== 'object') {
+    for (let i = 0; i < text.length; i++) {
+      const startChar = text[i];
+      if (startChar !== '{' && startChar !== '[') continue;
+
+      const endChar = startChar === '{' ? '}' : ']';
+      let depth = 0;
+      let inString = false;
+      let escape = false;
+
+      for (let j = i; j < text.length; j++) {
+        const ch = text[j];
+        if (escape) {
+          escape = false;
+          continue;
+        }
+        if (ch === '\\' && inString) {
+          escape = true;
+          continue;
+        }
+        if (ch === '"') {
+          inString = !inString;
+          continue;
+        }
+        if (!inString) {
+          if (ch === startChar) {
+            depth++;
+          } else if (ch === endChar) {
+            depth--;
+            if (depth === 0) {
+              const candidate = text.slice(i, j + 1).trim();
+              const p = tryParse(candidate);
+              if (p !== null && typeof p === 'object') {
+                parsed = p;
+                break;
+              }
+              break;
+            }
+          }
+        }
+      }
+      if (parsed !== null && typeof parsed === 'object') break;
+    }
+  }
+
+  // 4. Fallback: Outermost brace slice
+  if (parsed === null || typeof parsed !== 'object') {
+    const firstBrace = text.indexOf('{');
+    const lastBrace = text.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      const candidate = text.slice(firstBrace, lastBrace + 1).trim();
+      parsed = tryParse(candidate);
+    }
+  }
+
+  if (parsed === null || typeof parsed !== 'object') {
+    throw new AiUnavailableError('AI_MALFORMED', 'AI output was not valid JSON.', true);
+  }
+
+  const normalized = normalizeAiPayload(parsed);
+  return schema.parse(normalized);
 }
