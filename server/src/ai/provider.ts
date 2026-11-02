@@ -414,7 +414,7 @@ export function normalizeAiPayload(data: unknown): unknown {
         const text = typeof bObj.text === 'string' ? bObj.text.slice(0, 800) : String(bObj.text || '');
         return { ...bObj, itemId: rawId, index, text };
       })
-      .filter((b) => b && (b.itemId as string).length > 0 && typeof b.index === 'number' && !isNaN(b.index) && (b.text as string).length > 0);
+      .filter((b) => b && (b.itemId as string).length > 0 && typeof b.index === 'number' && !isNaN(b.index) && (b.text as string).trim().length >= 5);
   }
 
   // 3. Normalize removeBullets
@@ -462,7 +462,17 @@ export function normalizeAiPayload(data: unknown): unknown {
       if (adv[k] === null) delete adv[k];
     }
     if (Array.isArray(adv.recommendations)) {
-      adv.recommendations = adv.recommendations.map((rec, rIdx) => {
+      adv.recommendations = adv.recommendations
+        .filter((rec) => {
+          if (!rec || typeof rec !== 'object') return false;
+          const r = rec as Record<string, unknown>;
+          return Boolean(
+            (typeof r.issue === 'string' && r.issue.trim()) ||
+            (typeof r.actionableStep === 'string' && r.actionableStep.trim()) ||
+            (typeof r.title === 'string' && r.title.trim())
+          );
+        })
+        .map((rec, rIdx) => {
         if (!rec || typeof rec !== 'object') return rec;
         const r: Record<string, unknown> = { ...(rec as Record<string, unknown>) };
         for (const k of Object.keys(r)) {
@@ -525,83 +535,117 @@ export function parseStructured<T>(raw: string, schema: ZodType<T>): T {
     }
   }
 
-  // 1. Direct parse check (raw text is already valid JSON)
-  let parsed = tryParse(text);
+  // 1. Collect all candidate JSON structures from raw text, code fences, balanced braces, and outermost slice
+  const candidates: unknown[] = [];
 
-  // 2. Scan all markdown code fences (```json ... ``` or ``` ... ```)
-  if (parsed === null || typeof parsed !== 'object') {
-    const fenceRegex = /```(?:json)?\s*([\s\S]*?)```/gi;
-    let match: RegExpExecArray | null;
-    while ((match = fenceRegex.exec(text)) !== null) {
-      const candidate = match[1].trim();
-      const p = tryParse(candidate);
-      if (p !== null && typeof p === 'object') {
-        parsed = p;
-        break;
-      }
+  // 1a. Direct parse check (raw text is already valid JSON)
+  const direct = tryParse(text);
+  if (direct !== null && typeof direct === 'object') {
+    candidates.push(direct);
+  }
+
+  // 1b. Scan all markdown code fences (```json ... ``` or ``` ... ```)
+  const fenceRegex = /```(?:json)?\s*([\s\S]*?)```/gi;
+  let match: RegExpExecArray | null;
+  while ((match = fenceRegex.exec(text)) !== null) {
+    const candidate = match[1].trim();
+    const p = tryParse(candidate);
+    if (p !== null && typeof p === 'object') {
+      candidates.push(p);
     }
   }
 
-  // 3. Balanced scanner: find candidate JSON objects or arrays inside surrounding prose
-  if (parsed === null || typeof parsed !== 'object') {
-    for (let i = 0; i < text.length; i++) {
-      const startChar = text[i];
-      if (startChar !== '{' && startChar !== '[') continue;
+  // 1c. Balanced scanner: find candidate JSON objects or arrays inside surrounding prose
+  for (let i = 0; i < text.length; i++) {
+    const startChar = text[i];
+    if (startChar !== '{' && startChar !== '[') continue;
 
-      const endChar = startChar === '{' ? '}' : ']';
-      let depth = 0;
-      let inString = false;
-      let escape = false;
+    const endChar = startChar === '{' ? '}' : ']';
+    let depth = 0;
+    let inString = false;
+    let escape = false;
 
-      for (let j = i; j < text.length; j++) {
-        const ch = text[j];
-        if (escape) {
-          escape = false;
-          continue;
-        }
-        if (ch === '\\' && inString) {
-          escape = true;
-          continue;
-        }
-        if (ch === '"') {
-          inString = !inString;
-          continue;
-        }
-        if (!inString) {
-          if (ch === startChar) {
-            depth++;
-          } else if (ch === endChar) {
-            depth--;
-            if (depth === 0) {
-              const candidate = text.slice(i, j + 1).trim();
-              const p = tryParse(candidate);
-              if (p !== null && typeof p === 'object') {
-                parsed = p;
-                break;
-              }
-              break;
+    for (let j = i; j < text.length; j++) {
+      const ch = text[j];
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === '\\' && inString) {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (!inString) {
+        if (ch === startChar) {
+          depth++;
+        } else if (ch === endChar) {
+          depth--;
+          if (depth === 0) {
+            const candidate = text.slice(i, j + 1).trim();
+            const p = tryParse(candidate);
+            if (p !== null && typeof p === 'object') {
+              candidates.push(p);
             }
+            break;
           }
         }
       }
-      if (parsed !== null && typeof parsed === 'object') break;
     }
   }
 
-  // 4. Fallback: Outermost brace slice
-  if (parsed === null || typeof parsed !== 'object') {
-    const firstBrace = text.indexOf('{');
-    const lastBrace = text.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      const candidate = text.slice(firstBrace, lastBrace + 1).trim();
-      parsed = tryParse(candidate);
+  // 1d. Fallback: Outermost brace slice
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    const candidate = text.slice(firstBrace, lastBrace + 1).trim();
+    const p = tryParse(candidate);
+    if (p !== null && typeof p === 'object') {
+      candidates.push(p);
     }
   }
 
-  if (parsed === null || typeof parsed !== 'object') {
+  if (candidates.length === 0) {
     throw new AiUnavailableError('AI_MALFORMED', 'AI output was not valid JSON.', true);
   }
 
-  const normalized = normalizeAiPayload(parsed);
+  // 2. Select the best candidate that matches the schema and has real content
+  type ScoredCandidate = { data: unknown; score: number };
+  const validCandidates: ScoredCandidate[] = [];
+
+  for (const cand of candidates) {
+    const normalized = normalizeAiPayload(cand);
+    const parsedRes = schema.safeParse(normalized);
+    if (parsedRes.success) {
+      let score = 0;
+      if (cand && typeof cand === 'object') {
+        const keys = Object.keys(cand as Record<string, unknown>);
+        score += keys.length * 10;
+        try {
+          score += JSON.stringify(cand).length;
+        } catch {
+          // ignore serialization failure
+        }
+      }
+      validCandidates.push({ data: normalized, score });
+    }
+  }
+
+  if (validCandidates.length > 0) {
+    validCandidates.sort((a, b) => b.score - a.score);
+    return schema.parse(validCandidates[0].data);
+  }
+
+  // If none passed safeParse, run schema.parse on the largest candidate to trigger informative ZodError
+  const largestCandidate = candidates.reduce((prev, curr) => {
+    const prevLen = typeof prev === 'object' && prev !== null ? JSON.stringify(prev).length : 0;
+    const currLen = typeof curr === 'object' && curr !== null ? JSON.stringify(curr).length : 0;
+    return currLen >= prevLen ? curr : prev;
+  }, candidates[0]);
+
+  const normalized = normalizeAiPayload(largestCandidate);
   return schema.parse(normalized);
 }

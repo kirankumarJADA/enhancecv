@@ -22,6 +22,7 @@ import {
   OpenAiCompatibleProvider,
   AiUnavailableError,
   setAiProviderForTests,
+  normalizeAiPayload,
 } from '../src/ai/provider';
 import { proposalSchema, runResumeAgent } from '../src/ai/resumeAgent';
 import { buildApp } from '../src/app';
@@ -459,5 +460,60 @@ describe('Curevo AI — AI Response Reliability & Structured Output Hardening', 
     expect(result.truth.passedAll).toBe(true);
     expect(result.atsAfter.overallScore).toBeGreaterThanOrEqual(atsBefore.overallScore);
     expect(result.changeLog.length).toBeGreaterThan(0);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 13. Normalisation Safety: Multi-candidate preamble selection
+  // ---------------------------------------------------------------------------
+  it('13. prefers genuine schema-matching proposal candidate over unrelated preamble JSON object', () => {
+    const rawWithPreamble = [
+      'Preliminary response: {"status": "ok", "ready": true}',
+      'Here is the actual tailoring plan:',
+      '{"summary": "Staff Cloud Platform Engineer specializing in high-throughput distributed systems.", "bullets": [{"itemId": "exp-1", "index": 0, "text": "Architected AWS microservices infrastructure."}]}',
+    ].join('\n');
+
+    const result = parseStructured(rawWithPreamble, proposalSchema);
+    expect(result.summary).toContain('Staff Cloud Platform Engineer');
+    expect(result.bullets).toHaveLength(1);
+    expect(result.bullets?.[0]?.itemId).toBe('exp-1');
+  });
+
+  // ---------------------------------------------------------------------------
+  // 14. Normalisation Safety: Filters empty recommendation objects
+  // ---------------------------------------------------------------------------
+  it('14. filters out empty recommendation objects {} rather than generating ghost recommendations', () => {
+    const payloadWithEmptyRec = {
+      summary: 'Senior Cloud Platform Engineer.',
+      advisory: {
+        summary: 'Solid alignment.',
+        recommendations: [
+          {}, // empty object should be discarded
+          { issue: 'Needs more metrics', actionableStep: 'Add latency percentiles', category: 'metrics' },
+        ],
+      },
+    };
+
+    const normalized = normalizeAiPayload(payloadWithEmptyRec) as any;
+    expect(normalized.advisory.recommendations).toHaveLength(1);
+    expect(normalized.advisory.recommendations[0].issue).toBe('Needs more metrics');
+    expect(normalized.advisory.recommendations[0].category).toBe('quantification');
+  });
+
+  // ---------------------------------------------------------------------------
+  // 15. Normalisation Safety: Filters whitespace-only bullet rewrites
+  // ---------------------------------------------------------------------------
+  it('15. filters out whitespace-only bullet rewrites', () => {
+    const payloadWithWhitespaceBullet = {
+      summary: 'Senior Cloud Platform Engineer.',
+      bullets: [
+        { itemId: 'exp-1', index: 0, text: '   ' }, // whitespace only
+        { itemId: 'exp-1', index: 1, text: 'Architected robust Kubernetes deployment pipelines.' },
+      ],
+    };
+
+    const normalized = normalizeAiPayload(payloadWithWhitespaceBullet) as any;
+    expect(normalized.bullets).toHaveLength(1);
+    expect(normalized.bullets[0].index).toBe(1);
+    expect(normalized.bullets[0].text).toContain('Architected robust Kubernetes');
   });
 });
