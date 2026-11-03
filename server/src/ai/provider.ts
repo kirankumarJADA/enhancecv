@@ -398,6 +398,22 @@ export function normalizeAiPayload(data: unknown): unknown {
 
   const obj: Record<string, unknown> = { ...(data as Record<string, unknown>) };
 
+  // 0. Unwrap nested wrapper object if model returned { "proposal": { ... } } or { "critique": { ... } }
+  if (obj.proposal && typeof obj.proposal === 'object' && !Array.isArray(obj.proposal)) {
+    const inner = obj.proposal as Record<string, unknown>;
+    if (inner.summary || inner.bullets || inner.advisory) {
+      Object.assign(obj, inner);
+      delete obj.proposal;
+    }
+  }
+  if (obj.critique && typeof obj.critique === 'object' && !Array.isArray(obj.critique)) {
+    const inner = obj.critique as Record<string, unknown>;
+    if (inner.summary || inner.suggestions || inner.notes) {
+      Object.assign(obj, inner);
+      delete obj.critique;
+    }
+  }
+
   // 1. Strip top-level nulls
   for (const k of Object.keys(obj)) {
     if (obj[k] === null) {
@@ -535,9 +551,15 @@ export function normalizeAiPayload(data: unknown): unknown {
     }
   }
 
-  if (Array.isArray(obj.suggestions) || Array.isArray(obj.notes)) {
+  if (Array.isArray(obj.suggestions) || Array.isArray(obj.notes) || (typeof obj.summary === 'string' && (obj.suggestions !== undefined || obj.notes !== undefined))) {
     if (!obj.summary || typeof obj.summary !== 'string' || !obj.summary.trim()) {
       obj.summary = 'Resume critique completed.';
+    }
+    if (!Array.isArray(obj.notes)) {
+      obj.notes = [];
+    }
+    if (!Array.isArray(obj.suggestions)) {
+      obj.suggestions = [];
     }
   }
 

@@ -600,7 +600,7 @@ export async function runResumeAgent(
             `${CRITIQUE_TASK}\n\n=== TAILORED RESUME (current) ===\n${resumeSnapshot(working)}`
           ),
           schema: critiqueSchema,
-          maxTokens: 2500,
+          maxTokens: 3500,
           temperature: 0.2,
         });
         meta.iterations++;
@@ -701,7 +701,7 @@ export async function critiqueResume(
         `${CRITIQUE_TASK}\n\n=== RESUME UNDER REVIEW (current) ===\n${resumeSnapshot(resume)}`,
       ),
       schema: critiqueSchema,
-      maxTokens: 2500,
+          maxTokens: 3500,
       temperature: 0.2,
     });
 

@@ -613,4 +613,66 @@ And here is the final structured response:
     expect(parsed.bullets?.[0]?.text).toBe('Architected multi-region AWS Kubernetes clusters.');
     expect(parsed.skillsOrder).toEqual(['AWS', 'Kubernetes', 'Terraform']);
   });
+
+  // ---------------------------------------------------------------------------
+  // 19. Wrapped Proposal: Unwraps nested { "proposal": { ... } }
+  // ---------------------------------------------------------------------------
+  it('19. unwraps nested proposal wrapper object', () => {
+    const wrappedRaw = JSON.stringify({
+      proposal: {
+        summary: 'Tailored Senior Backend Engineer summary.',
+        bullets: [{ itemId: 'exp_1', index: 0, text: 'Engineered high-throughput payment services in Java.' }],
+      },
+    });
+    const parsed = parseStructured(wrappedRaw, proposalSchema);
+    expect(parsed.summary).toBe('Tailored Senior Backend Engineer summary.');
+    expect(parsed.bullets).toHaveLength(1);
+    expect(parsed.bullets?.[0]?.text).toBe('Engineered high-throughput payment services in Java.');
+  });
+
+  // ---------------------------------------------------------------------------
+  // 20. Wrapped Critique: Unwraps nested { "critique": { ... } }
+  // ---------------------------------------------------------------------------
+  it('20. unwraps nested critique wrapper object', () => {
+    const wrappedRaw = JSON.stringify({
+      critique: {
+        summary: 'Strong resume alignment with JD.',
+        suggestions: [
+          {
+            section: 'Experience',
+            itemId: 'exp_1',
+            index: 0,
+            current: 'Built services',
+            suggested: 'Engineered microservices in Java',
+            reason: 'Uses stronger action verb',
+          },
+        ],
+      },
+    });
+    const parsed = parseStructured(wrappedRaw, critiqueSchema);
+    expect(parsed.summary).toBe('Strong resume alignment with JD.');
+    expect(parsed.suggestions).toHaveLength(1);
+    expect(parsed.notes).toEqual([]);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 21. Critique Schema Robustness: Defaults missing notes and suggestions
+  // ---------------------------------------------------------------------------
+  it('21. safely normalizes critique when notes or suggestions array is omitted by model', () => {
+    const rawNoNotes = JSON.stringify({
+      summary: 'Critique without explicit notes.',
+      suggestions: [
+        {
+          section: 'Summary',
+          current: 'Old summary',
+          suggested: 'New summary',
+          reason: 'Better keyword coverage',
+        },
+      ],
+    });
+    const parsed = parseStructured(rawNoNotes, critiqueSchema);
+    expect(parsed.summary).toBe('Critique without explicit notes.');
+    expect(parsed.notes).toEqual([]);
+    expect(parsed.suggestions).toHaveLength(1);
+  });
 });
