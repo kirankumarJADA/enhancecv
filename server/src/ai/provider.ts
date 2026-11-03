@@ -386,6 +386,7 @@ export const setAiProviderForTests = __setAiProviderForTests;
  * Recursively normalizes AI responses:
  * - Converts null values to undefined so optional fields pass validation.
  * - Coerces stringified numbers and booleans into their proper types.
+ * - Clamps string and array lengths within schema limits.
  * - Normalizes category synonyms to valid application enum values.
  * - Auto-generates missing non-critical IDs.
  */
@@ -402,36 +403,84 @@ export function normalizeAiPayload(data: unknown): unknown {
     }
   }
 
+  // 1b. Normalize summary
+  if (obj.summary !== undefined && obj.summary !== null) {
+    const rawSummary = typeof obj.summary === 'object'
+      ? String((obj.summary as Record<string, unknown>).text || (obj.summary as Record<string, unknown>).summary || (obj.summary as Record<string, unknown>).content || (obj.summary as Record<string, unknown>).revised || JSON.stringify(obj.summary))
+      : String(obj.summary);
+    // If payload contains critique fields (suggestions or notes), summary max is 1000; otherwise proposal summary max is 2000
+    const maxLen = (obj.suggestions || obj.notes) ? 1000 : 2000;
+    obj.summary = rawSummary.slice(0, maxLen);
+  }
+
   // 2. Normalize bullets
+  if (obj.bullets && typeof obj.bullets === 'object' && !Array.isArray(obj.bullets)) {
+    obj.bullets = Object.values(obj.bullets);
+  }
   if (Array.isArray(obj.bullets)) {
     obj.bullets = obj.bullets
       .map((b, idx) => {
         if (!b || typeof b !== 'object') return null;
         const bObj = { ...(b as Record<string, unknown>) };
-        const rawId = bObj.itemId !== undefined && bObj.itemId !== null ? String(bObj.itemId).trim() : '';
+        const rawId = bObj.itemId !== undefined && bObj.itemId !== null ? String(bObj.itemId).trim().slice(0, 64) : '';
         const rawIndex = bObj.index !== undefined && bObj.index !== null ? bObj.index : idx;
         const index = typeof rawIndex === 'string' ? parseInt(rawIndex, 10) : rawIndex;
-        const text = typeof bObj.text === 'string' ? bObj.text.slice(0, 800) : String(bObj.text || '');
+        const text = typeof bObj.text === 'string' ? bObj.text.slice(0, 800) : String(bObj.text || '').slice(0, 800);
         return { ...bObj, itemId: rawId, index, text };
       })
-      .filter((b) => b && (b.itemId as string).length > 0 && typeof b.index === 'number' && !isNaN(b.index) && (b.text as string).trim().length >= 5);
+      .filter((b): b is { itemId: string; index: number; text: string } =>
+        Boolean(b && (b.itemId as string).length > 0 && typeof b.index === 'number' && !isNaN(b.index) && b.index >= 0 && (b.text as string).trim().length >= 5)
+      )
+      .slice(0, 60);
   }
 
   // 3. Normalize removeBullets
+  if (obj.removeBullets && typeof obj.removeBullets === 'object' && !Array.isArray(obj.removeBullets)) {
+    obj.removeBullets = Object.values(obj.removeBullets);
+  }
   if (Array.isArray(obj.removeBullets)) {
     obj.removeBullets = obj.removeBullets
       .map((b, idx) => {
         if (!b || typeof b !== 'object') return null;
         const bObj = { ...(b as Record<string, unknown>) };
-        const rawId = bObj.itemId !== undefined && bObj.itemId !== null ? String(bObj.itemId).trim() : '';
+        const rawId = bObj.itemId !== undefined && bObj.itemId !== null ? String(bObj.itemId).trim().slice(0, 64) : '';
         const rawIndex = bObj.index !== undefined && bObj.index !== null ? bObj.index : idx;
         const index = typeof rawIndex === 'string' ? parseInt(rawIndex, 10) : rawIndex;
         return { ...bObj, itemId: rawId, index };
       })
-      .filter((b) => b && (b.itemId as string).length > 0 && typeof b.index === 'number' && !isNaN(b.index));
+      .filter((b): b is { itemId: string; index: number } =>
+        Boolean(b && (b.itemId as string).length > 0 && typeof b.index === 'number' && !isNaN(b.index) && b.index >= 0)
+      )
+      .slice(0, 30);
   }
 
-  // 4. Normalize suggestions (critique)
+  // 4. Normalize skillsOrder
+  if (obj.skillsOrder !== undefined && obj.skillsOrder !== null) {
+    if (typeof obj.skillsOrder === 'string') {
+      obj.skillsOrder = obj.skillsOrder.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean);
+    } else if (typeof obj.skillsOrder === 'object' && !Array.isArray(obj.skillsOrder)) {
+      const sObj = obj.skillsOrder as Record<string, unknown>;
+      obj.skillsOrder = Array.isArray(sObj.skills) ? sObj.skills : Array.isArray(sObj.technical) ? sObj.technical : Object.values(sObj);
+    }
+    if (Array.isArray(obj.skillsOrder)) {
+      obj.skillsOrder = obj.skillsOrder
+        .map((s) => {
+          if (typeof s === 'string') return s.trim().slice(0, 100);
+          if (s && typeof s === 'object') {
+            const sObj = s as Record<string, unknown>;
+            return String(sObj.name || sObj.skill || sObj.title || Object.values(sObj)[0] || '').trim().slice(0, 100);
+          }
+          return String(s || '').trim().slice(0, 100);
+        })
+        .filter((s) => s.length > 0)
+        .slice(0, 80);
+    }
+  }
+
+  // 5. Normalize suggestions (critique)
+  if (obj.suggestions && typeof obj.suggestions === 'object' && !Array.isArray(obj.suggestions)) {
+    obj.suggestions = Object.values(obj.suggestions);
+  }
   if (Array.isArray(obj.suggestions)) {
     obj.suggestions = obj.suggestions
       .map((s, sIdx) => {
@@ -441,25 +490,108 @@ export function normalizeAiPayload(data: unknown): unknown {
           if (sObj[k] === null) delete sObj[k];
         }
         if (sObj.itemId !== undefined && sObj.itemId !== null) {
-          sObj.itemId = String(sObj.itemId).trim();
+          sObj.itemId = String(sObj.itemId).trim().slice(0, 64);
         }
         if (typeof sObj.index === 'string') {
           const parsedIdx = parseInt(sObj.index, 10);
           sObj.index = !isNaN(parsedIdx) ? parsedIdx : sIdx;
         }
-        if (typeof sObj.current === 'string') sObj.current = sObj.current.slice(0, 800);
-        if (typeof sObj.suggested === 'string') sObj.suggested = sObj.suggested.slice(0, 800);
-        if (typeof sObj.reason === 'string') sObj.reason = sObj.reason.slice(0, 500);
+        sObj.section = typeof sObj.section === 'string' ? sObj.section.slice(0, 150) : 'Experience';
+        sObj.current = typeof sObj.current === 'string' ? sObj.current.slice(0, 800) : String(sObj.current || '').slice(0, 800);
+        sObj.suggested = typeof sObj.suggested === 'string' ? sObj.suggested.slice(0, 800) : String(sObj.suggested || '').slice(0, 800);
+        sObj.reason = typeof sObj.reason === 'string' ? sObj.reason.slice(0, 500) : String(sObj.reason || '').slice(0, 500);
         return sObj;
       })
-      .filter(Boolean);
+      .filter(Boolean)
+      .slice(0, 8);
   }
 
-  // 5. Normalize advisory
-  if (obj.advisory && typeof obj.advisory === 'object') {
+  // Normalize critique notes & summary if present
+  if (obj.notes !== undefined && obj.notes !== null) {
+    if (typeof obj.notes === 'string') {
+      obj.notes = [obj.notes.slice(0, 500)];
+    } else if (Array.isArray(obj.notes)) {
+      obj.notes = obj.notes
+        .map((n) => (typeof n === 'string' ? n.slice(0, 500) : String((n as Record<string, unknown>)?.note || n || '').slice(0, 500)))
+        .filter((n) => n.length > 0)
+        .slice(0, 8);
+    }
+  }
+
+  if (Array.isArray(obj.suggestions) || Array.isArray(obj.notes)) {
+    if (!obj.summary || typeof obj.summary !== 'string' || !obj.summary.trim()) {
+      obj.summary = 'Resume critique completed.';
+    }
+  }
+
+  // 6. Normalize advisory
+  if (obj.advisory && typeof obj.advisory === 'object' && !Array.isArray(obj.advisory)) {
     const adv: Record<string, unknown> = { ...(obj.advisory as Record<string, unknown>) };
     for (const k of Object.keys(adv)) {
       if (adv[k] === null) delete adv[k];
+    }
+
+    if (adv.summary !== undefined && adv.summary !== null) {
+      adv.summary = typeof adv.summary === 'string' ? adv.summary.slice(0, 1000) : String(adv.summary).slice(0, 1000);
+    }
+
+    // Normalize keyStrengths: handle array of objects or strings, slice to 400
+    if (adv.keyStrengths !== undefined && adv.keyStrengths !== null) {
+      if (typeof adv.keyStrengths === 'string') {
+        adv.keyStrengths = [adv.keyStrengths.slice(0, 400)];
+      } else if (Array.isArray(adv.keyStrengths)) {
+        adv.keyStrengths = adv.keyStrengths
+          .map((s) => {
+            if (typeof s === 'string') return s.slice(0, 400);
+            if (s && typeof s === 'object') {
+              const sObj = s as Record<string, unknown>;
+              return String(sObj.strength || sObj.title || sObj.name || Object.values(sObj)[0] || '').slice(0, 400);
+            }
+            return String(s || '').slice(0, 400);
+          })
+          .filter((s) => s.length > 0);
+      }
+    }
+
+    // Normalize criticalGaps: handle array of objects or strings, slice to 400
+    if (adv.criticalGaps !== undefined && adv.criticalGaps !== null) {
+      if (typeof adv.criticalGaps === 'string') {
+        adv.criticalGaps = [adv.criticalGaps.slice(0, 400)];
+      } else if (Array.isArray(adv.criticalGaps)) {
+        adv.criticalGaps = adv.criticalGaps
+          .map((g) => {
+            if (typeof g === 'string') return g.slice(0, 400);
+            if (g && typeof g === 'object') {
+              const gObj = g as Record<string, unknown>;
+              return String(gObj.gap || gObj.title || gObj.name || Object.values(gObj)[0] || '').slice(0, 400);
+            }
+            return String(g || '').slice(0, 400);
+          })
+          .filter((g) => g.length > 0);
+      }
+    }
+
+    // Normalize candidateQuestions: handle array of objects or strings, slice to 400
+    if (adv.candidateQuestions !== undefined && adv.candidateQuestions !== null) {
+      if (typeof adv.candidateQuestions === 'string') {
+        adv.candidateQuestions = [adv.candidateQuestions.slice(0, 400)];
+      } else if (Array.isArray(adv.candidateQuestions)) {
+        adv.candidateQuestions = adv.candidateQuestions
+          .map((q) => {
+            if (typeof q === 'string') return q.slice(0, 400);
+            if (q && typeof q === 'object') {
+              const qObj = q as Record<string, unknown>;
+              return String(qObj.question || qObj.title || Object.values(qObj)[0] || '').slice(0, 400);
+            }
+            return String(q || '').slice(0, 400);
+          })
+          .filter((q) => q.length > 0);
+      }
+    }
+
+    // Normalize recommendations
+    if (adv.recommendations && typeof adv.recommendations === 'object' && !Array.isArray(adv.recommendations)) {
+      adv.recommendations = Object.values(adv.recommendations);
     }
     if (Array.isArray(adv.recommendations)) {
       adv.recommendations = adv.recommendations
@@ -468,47 +600,74 @@ export function normalizeAiPayload(data: unknown): unknown {
           const r = rec as Record<string, unknown>;
           return Boolean(
             (typeof r.issue === 'string' && r.issue.trim()) ||
-            (typeof r.actionableStep === 'string' && r.actionableStep.trim()) ||
-            (typeof r.title === 'string' && r.title.trim())
+              (typeof r.actionableStep === 'string' && r.actionableStep.trim()) ||
+              (typeof r.title === 'string' && r.title.trim())
           );
         })
         .map((rec, rIdx) => {
-        if (!rec || typeof rec !== 'object') return rec;
-        const r: Record<string, unknown> = { ...(rec as Record<string, unknown>) };
-        for (const k of Object.keys(r)) {
-          if (r[k] === null) delete r[k];
-        }
-        r.id = r.id !== undefined && r.id !== null ? String(r.id).trim() : `rec_${rIdx + 1}`;
-        if (!r.title) r.title = 'Recommendation';
-        if (!r.section) r.section = 'Experience';
-        if (!r.issue) r.issue = 'Improvement opportunity';
-        if (!r.whyItMatters) r.whyItMatters = 'Aligns with target role';
-        if (!r.actionableStep) r.actionableStep = 'Update resume with details';
+          if (!rec || typeof rec !== 'object') return rec;
+          const r: Record<string, unknown> = { ...(rec as Record<string, unknown>) };
+          for (const k of Object.keys(r)) {
+            if (r[k] === null) delete r[k];
+          }
+          r.id = r.id !== undefined && r.id !== null ? String(r.id).trim().slice(0, 64) : `rec_${rIdx + 1}`;
+          r.title = String(r.title || 'Recommendation').trim().slice(0, 150);
+          r.section = String(r.section || 'Experience').trim().slice(0, 100);
+          r.issue = String(r.issue || 'Improvement opportunity').trim().slice(0, 500);
+          r.whyItMatters = String(r.whyItMatters || 'Aligns with target role').trim().slice(0, 500);
+          r.actionableStep = String(r.actionableStep || 'Update resume with details').trim().slice(0, 500);
 
-        // Map category synonyms
-        const rawCat = String(r.category || '').toLowerCase().replace(/[\s-]+/g, '_');
-        if (rawCat.includes('impact') || rawCat.includes('bullet')) r.category = 'bullet_impact';
-        else if (rawCat.includes('keyword') || rawCat.includes('skill')) r.category = 'keyword_gap';
-        else if (rawCat.includes('missing') || rawCat.includes('require')) r.category = 'missing_requirement';
-        else if (rawCat.includes('quant') || rawCat.includes('metric') || rawCat.includes('number')) r.category = 'quantification';
-        else if (rawCat.includes('format') || rawCat.includes('struct') || rawCat.includes('layout')) r.category = 'formatting_structure';
-        else r.category = 'bullet_impact';
+          if (r.candidateQuestion !== undefined && r.candidateQuestion !== null) {
+            r.candidateQuestion = typeof r.candidateQuestion === 'string' ? r.candidateQuestion.slice(0, 400) : String(r.candidateQuestion).slice(0, 400);
+          }
+          if (r.metricPlaceholder !== undefined && r.metricPlaceholder !== null) {
+            r.metricPlaceholder = typeof r.metricPlaceholder === 'string' ? r.metricPlaceholder.slice(0, 120) : String(r.metricPlaceholder).slice(0, 120);
+          }
 
-        // Coerce boolean requiresCandidateInput
-        if (typeof r.requiresCandidateInput === 'string') {
-          r.requiresCandidateInput = r.requiresCandidateInput.toLowerCase() === 'true' || r.requiresCandidateInput === '1';
-        } else if (typeof r.requiresCandidateInput === 'number') {
-          r.requiresCandidateInput = r.requiresCandidateInput === 1;
-        } else if (typeof r.requiresCandidateInput !== 'boolean') {
-          r.requiresCandidateInput = false;
-        }
-        return r;
-      });
+          // Map category synonyms
+          const rawCat = String(r.category || '').toLowerCase().replace(/[\s-]+/g, '_');
+          if (rawCat.includes('impact') || rawCat.includes('bullet')) r.category = 'bullet_impact';
+          else if (rawCat.includes('keyword') || rawCat.includes('skill')) r.category = 'keyword_gap';
+          else if (rawCat.includes('missing') || rawCat.includes('require')) r.category = 'missing_requirement';
+          else if (rawCat.includes('quant') || rawCat.includes('metric') || rawCat.includes('number')) r.category = 'quantification';
+          else if (rawCat.includes('format') || rawCat.includes('struct') || rawCat.includes('layout')) r.category = 'formatting_structure';
+          else r.category = 'bullet_impact';
+
+          // Coerce boolean requiresCandidateInput
+          if (typeof r.requiresCandidateInput === 'string') {
+            r.requiresCandidateInput = r.requiresCandidateInput.toLowerCase() === 'true' || r.requiresCandidateInput === '1';
+          } else if (typeof r.requiresCandidateInput === 'number') {
+            r.requiresCandidateInput = r.requiresCandidateInput === 1;
+          } else if (typeof r.requiresCandidateInput !== 'boolean') {
+            r.requiresCandidateInput = false;
+          }
+          return r;
+        })
+        .slice(0, 12);
     }
     obj.advisory = adv;
   }
 
   return obj;
+}
+
+function calculateContentScore(obj: unknown): number {
+  if (!obj || typeof obj !== 'object') return 0;
+  const o = obj as Record<string, unknown>;
+  let score = 0;
+  if (Array.isArray(o.bullets) && o.bullets.length > 0) score += o.bullets.length * 1000;
+  if (typeof o.summary === 'string' && o.summary.trim().length > 0) score += 1000;
+  if (Array.isArray(o.skillsOrder) && o.skillsOrder.length > 0) score += o.skillsOrder.length * 100;
+  if (o.advisory && typeof o.advisory === 'object') {
+    const adv = o.advisory as Record<string, unknown>;
+    score += 500;
+    if (Array.isArray(adv.recommendations)) score += adv.recommendations.length * 200;
+    if (Array.isArray(adv.keyStrengths)) score += adv.keyStrengths.length * 100;
+    if (Array.isArray(adv.criticalGaps)) score += adv.criticalGaps.length * 100;
+  }
+  if (Array.isArray(o.suggestions) && o.suggestions.length > 0) score += o.suggestions.length * 1000;
+  if (Array.isArray(o.notes) && o.notes.length > 0) score += o.notes.length * 100;
+  return score;
 }
 
 /** Robust JSON extraction and parsing helper. */
@@ -613,29 +772,37 @@ export function parseStructured<T>(raw: string, schema: ZodType<T>): T {
   }
 
   // 2. Select the best candidate that matches the schema and has real content
-  type ScoredCandidate = { data: unknown; score: number };
+  type ScoredCandidate = { data: unknown; contentScore: number; rawScore: number };
   const validCandidates: ScoredCandidate[] = [];
 
   for (const cand of candidates) {
     const normalized = normalizeAiPayload(cand);
     const parsedRes = schema.safeParse(normalized);
     if (parsedRes.success) {
-      let score = 0;
+      const contentScore = calculateContentScore(normalized);
+      let rawScore = 0;
       if (cand && typeof cand === 'object') {
-        const keys = Object.keys(cand as Record<string, unknown>);
-        score += keys.length * 10;
+        rawScore += Object.keys(cand as Record<string, unknown>).length * 10;
         try {
-          score += JSON.stringify(cand).length;
+          rawScore += JSON.stringify(cand).length;
         } catch {
           // ignore serialization failure
         }
       }
-      validCandidates.push({ data: normalized, score });
+      validCandidates.push({ data: normalized, contentScore, rawScore });
     }
   }
 
+  // If we have candidates with real content, choose the best one
+  const substantiveCandidates = validCandidates.filter((c) => c.contentScore > 0);
+  if (substantiveCandidates.length > 0) {
+    substantiveCandidates.sort((a, b) => (b.contentScore !== a.contentScore ? b.contentScore - a.contentScore : b.rawScore - a.rawScore));
+    return schema.parse(substantiveCandidates[0].data);
+  }
+
+  // If no substantive candidates succeeded, but some valid candidates exist (e.g. valid empty object)
   if (validCandidates.length > 0) {
-    validCandidates.sort((a, b) => b.score - a.score);
+    validCandidates.sort((a, b) => b.rawScore - a.rawScore);
     return schema.parse(validCandidates[0].data);
   }
 

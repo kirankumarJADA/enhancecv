@@ -24,7 +24,7 @@ import {
   setAiProviderForTests,
   normalizeAiPayload,
 } from '../src/ai/provider';
-import { proposalSchema, runResumeAgent } from '../src/ai/resumeAgent';
+import { proposalSchema, critiqueSchema, runResumeAgent } from '../src/ai/resumeAgent';
 import { buildApp } from '../src/app';
 import { analyseJobDescription } from '../src/engine/jd';
 import { computeJobMatch } from '../src/engine/match';
@@ -515,5 +515,102 @@ describe('Curevo AI — AI Response Reliability & Structured Output Hardening', 
     expect(normalized.bullets).toHaveLength(1);
     expect(normalized.bullets[0].index).toBe(1);
     expect(normalized.bullets[0].text).toContain('Architected robust Kubernetes');
+  });
+
+  // ---------------------------------------------------------------------------
+  // 16. Problematic Production Structure: Advisory clamping & object flattening
+  // ---------------------------------------------------------------------------
+  it('16. safely normalises oversized advisory strings (>500 chars), >12 recommendations, and object arrays', () => {
+    const rawPayload = {
+      summary: 'S'.repeat(2500), // > 2000 chars
+      bullets: [
+        { itemId: 'exp-1', index: 0, text: 'Architected Kubernetes clusters across AWS regions.' },
+      ],
+      skillsOrder: [{ skill: 'AWS' }, { skill: 'Kubernetes' }, { skill: 'Terraform' }], // array of objects
+      advisory: {
+        summary: 'A'.repeat(1200), // > 1000 chars
+        keyStrengths: [{ strength: 'Deep AWS knowledge' }, 'K'.repeat(500)], // object + string > 400
+        criticalGaps: [{ gap: 'Kafka event streaming' }], // object
+        candidateQuestions: [{ question: 'What was your average query latency?' }], // object
+        recommendations: Array.from({ length: 15 }, (_, i) => ({
+          id: `rec_${i + 1}`,
+          category: 'bullet_impact_metrics',
+          title: `Recommendation ${i + 1} with long title: ${'T'.repeat(200)}`,
+          section: 'Experience',
+          issue: `Identified issue: ${'I'.repeat(600)}`,
+          whyItMatters: `Why it matters: ${'W'.repeat(600)}`,
+          actionableStep: `Actionable step: ${'A'.repeat(600)}`,
+          candidateQuestion: `Question: ${'Q'.repeat(500)}`,
+          metricPlaceholder: `[${'M'.repeat(150)}]`,
+          requiresCandidateInput: 'true', // stringified boolean
+        })),
+      },
+    };
+
+    const parsed = parseStructured(JSON.stringify(rawPayload), proposalSchema);
+    expect(parsed.summary?.length).toBeLessThanOrEqual(2000);
+    expect(parsed.bullets).toHaveLength(1);
+    expect(parsed.skillsOrder).toEqual(['AWS', 'Kubernetes', 'Terraform']);
+    expect(parsed.advisory?.summary?.length).toBeLessThanOrEqual(1000);
+    expect(parsed.advisory?.keyStrengths?.[0]).toBe('Deep AWS knowledge');
+    expect(parsed.advisory?.keyStrengths?.[1]?.length).toBeLessThanOrEqual(400);
+    expect(parsed.advisory?.criticalGaps?.[0]).toBe('Kafka event streaming');
+    expect(parsed.advisory?.candidateQuestions?.[0]).toBe('What was your average query latency?');
+    expect(parsed.advisory?.recommendations?.length).toBeLessThanOrEqual(12);
+    expect(parsed.advisory?.recommendations?.[0]?.category).toBe('bullet_impact');
+    expect(parsed.advisory?.recommendations?.[0]?.issue.length).toBeLessThanOrEqual(500);
+    expect(parsed.advisory?.recommendations?.[0]?.whyItMatters.length).toBeLessThanOrEqual(500);
+    expect(parsed.advisory?.recommendations?.[0]?.actionableStep.length).toBeLessThanOrEqual(500);
+    expect(parsed.advisory?.recommendations?.[0]?.requiresCandidateInput).toBe(true);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 17. Problematic Production Structure: Critique clamping
+  // ---------------------------------------------------------------------------
+  it('17. safely normalises oversized critique summaries, notes (>8), and suggestions (>8)', () => {
+    const rawCritique = {
+      summary: 'C'.repeat(1500), // > 1000
+      notes: Array.from({ length: 12 }, (_, i) => `Note ${i + 1}: ${'N'.repeat(600)}`),
+      suggestions: Array.from({ length: 10 }, (_, i) => ({
+        section: 'Experience',
+        itemId: 'exp-1',
+        index: i,
+        current: 'Old text',
+        suggested: `Suggested rewrite: ${'S'.repeat(900)}`,
+        reason: `Reason: ${'R'.repeat(600)}`,
+      })),
+    };
+
+    const parsed = parseStructured(JSON.stringify(rawCritique), critiqueSchema);
+    expect(parsed.summary.length).toBeLessThanOrEqual(1000);
+    expect(parsed.notes.length).toBeLessThanOrEqual(8);
+    expect(parsed.notes[0].length).toBeLessThanOrEqual(500);
+    expect(parsed.suggestions.length).toBeLessThanOrEqual(8);
+    expect(parsed.suggestions[0].suggested.length).toBeLessThanOrEqual(800);
+    expect(parsed.suggestions[0].reason.length).toBeLessThanOrEqual(500);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 18. Candidate Selection: Prefers rich proposal over empty inner fragment
+  // ---------------------------------------------------------------------------
+  it('18. selects real proposal when response contains inner closed fragments in preamble', () => {
+    const rawText = `
+Here is my preliminary thought:
+[{"itemId": "exp-1", "index": 0, "text": "Draft bullet rewrite"}]
+
+And here is the final structured response:
+{
+  "summary": "Senior Cloud Solutions Architect specializing in AWS and Kubernetes.",
+  "bullets": [
+    {"itemId": "exp-1", "index": 0, "text": "Architected multi-region AWS Kubernetes clusters."}
+  ],
+  "skillsOrder": ["AWS", "Kubernetes", "Terraform"]
+}
+`;
+
+    const parsed = parseStructured(rawText, proposalSchema);
+    expect(parsed.summary).toBe('Senior Cloud Solutions Architect specializing in AWS and Kubernetes.');
+    expect(parsed.bullets?.[0]?.text).toBe('Architected multi-region AWS Kubernetes clusters.');
+    expect(parsed.skillsOrder).toEqual(['AWS', 'Kubernetes', 'Terraform']);
   });
 });

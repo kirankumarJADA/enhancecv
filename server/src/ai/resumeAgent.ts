@@ -544,7 +544,7 @@ export async function runResumeAgent(
       system: SYSTEM_PROMPT,
       user: buildAgentUserPrompt({ master, job, jdText, ats: atsBefore, match: matchBefore, base: baseResult.resume }, TAILOR_TASK),
       schema: proposalSchema,
-      maxTokens: 2500,
+      maxTokens: 4000,
       temperature: 0.2,
     });
     meta.iterations++;
@@ -600,7 +600,7 @@ export async function runResumeAgent(
             `${CRITIQUE_TASK}\n\n=== TAILORED RESUME (current) ===\n${resumeSnapshot(working)}`
           ),
           schema: critiqueSchema,
-          maxTokens: 1500,
+          maxTokens: 2500,
           temperature: 0.2,
         });
         meta.iterations++;
@@ -701,7 +701,7 @@ export async function critiqueResume(
         `${CRITIQUE_TASK}\n\n=== RESUME UNDER REVIEW (current) ===\n${resumeSnapshot(resume)}`,
       ),
       schema: critiqueSchema,
-      maxTokens: 1500,
+      maxTokens: 2500,
       temperature: 0.2,
     });
 
