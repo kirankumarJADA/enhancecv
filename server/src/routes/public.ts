@@ -122,6 +122,7 @@ function handlePublicError(err: unknown, res: Response): void {
       error: {
         code: err.code,
         message: err.message,
+        ...(err.details ? { details: err.details } : {}),
       },
     });
     return;
