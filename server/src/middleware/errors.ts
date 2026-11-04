@@ -69,7 +69,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     res.status(err.status).json({ error: { code: err.code, message: err.message, requestId } });
     return;
   }
-  const anyErr = err as { code?: string; message?: string; status?: number };
+  const anyErr = err as { code?: string; message?: string; status?: number; type?: string };
   if (anyErr && anyErr.code && FRIENDLY[anyErr.code]) {
     const f = FRIENDLY[anyErr.code];
     res.status(f.status).json({ error: { code: anyErr.code, message: f.message, requestId } });
@@ -77,6 +77,18 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   }
   if (anyErr && (anyErr.code === 'LIMIT_FILE_SIZE' || anyErr.status === 413)) {
     res.status(413).json({ error: { code: 'FILE_TOO_LARGE', message: FRIENDLY.FILE_TOO_LARGE.message, requestId } });
+    return;
+  }
+  // Body-parser transport error: a syntactically invalid JSON body is a client
+  // mistake, not a server fault. body-parser marks it with `type: 'entity.parse.failed'`
+  // and its own 400 status — map it into the standard error shape instead of the
+  // generic 500. Response carries no stack, no internals, no package details;
+  // it is not captured to monitoring (same treatment as ZodError 400s), since a
+  // malformed client request is not an application fault.
+  if (anyErr && anyErr.type === 'entity.parse.failed') {
+    res.status(400).json({
+      error: { code: 'MALFORMED_JSON', message: 'Request body is not valid JSON.', requestId },
+    });
     return;
   }
   // Unexpected: capture (sanitised) for monitoring, return a safe response.
