@@ -11,7 +11,6 @@ import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { Logo, Spinner } from '../components/ui';
-import { loadDraft } from '../lib/draftStorage';
 import {
   getInterviewSessions,
   saveInterviewSession,
@@ -64,9 +63,19 @@ export default function Interview() {
 
   // Load draft resume on mount
   useEffect(() => {
-    const draft = loadDraft();
-    if (draft?.resume && draft.resume.experience.length > 0) {
-      setActiveResume(draft.resume);
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      const raw =
+        window.localStorage.getItem('curevo_builder_draft_v1_anonymous') ||
+        window.localStorage.getItem('curevo_builder_draft_v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.resume && Array.isArray(parsed.resume.experience) && parsed.resume.experience.length > 0) {
+          setActiveResume(parsed.resume);
+        }
+      }
+    } catch {
+      // ignore parsing errors
     }
   }, []);
 
