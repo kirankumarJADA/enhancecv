@@ -1,365 +1,1716 @@
-// Interview hub: Prepare (question package), Mock Interview (text mode with
-// truth-checked evaluation), and History. Voice mode is recorded as a mode on
-// sessions — speech capture is a browser-side concern and evaluation is
-// provider-abstracted; without an AI provider the mock uses honest generic
-// questions and says so.
+// Curevo AI — AI Interview Preparation & Mock Interview Coach (Phase 9F)
+//
+// 100% Public, anonymous, zero-auth, truth-grounded interview workspace.
+// Features:
+//   - Tab 1: Interview Preparation (Targeted questions, CV grounding, STAR guidance, study plan)
+//   - Tab 2: STAR Answer Coach (Interactive 4-box STAR editor, Truth Guard check, refinement)
+//   - Tab 3: AI Mock Interview (Question-by-question flow, adaptive follow-ups, final report)
+//   - Tab 4: History & STAR Story Bank (Client-side localStorage persistence, JSON export/import)
 
-import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useEffect, useMemo, type FormEvent } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api';
-import { EmptyState, Spinner } from '../components/ui';
-import { useToast } from '../state/ToastContext';
-import type { AiStatus } from '../types';
+import { Logo, Spinner } from '../components/ui';
+import { loadDraft } from '../lib/draftStorage';
+import {
+  getInterviewSessions,
+  saveInterviewSession,
+  deleteInterviewSession,
+  clearAllInterviewSessions,
+  exportInterviewSessionJson,
+  getSavedStarStories,
+  saveStarStory,
+  deleteStarStory,
+  exportAllInterviewDataJson,
+  importInterviewDataJson,
+  type InterviewSession,
+  type InterviewPrepQuestion,
+  type SavedStarStory,
+  type StarEvaluationResult,
+  type MockAnswerRecord,
+  type MockEvaluationResult,
+  type FinalMockReportResult,
+} from '../lib/interviewStorage';
+import type { ResumeData } from '../types';
 
-interface PrepQuestion {
-  id?: string;
-  position?: number;
-  category: string;
-  question: string;
-  why_it_may_be_asked: string;
-  evidence_from_cv: string;
-  recommended_answer_structure: string;
-  sample_truthful_answer?: string;
-  answer?: string | null;
-  evaluation?: MockEvaluation | null;
-}
+type Tab = 'prepare' | 'star' | 'mock' | 'history';
 
-interface MockEvaluation {
-  relevance: { level: 'low' | 'medium' | 'high'; explanation: string };
-  evidenceUsage: string;
-  structure: string;
-  clarity: string;
-  completeness: string;
-  unsupportedClaims: string[];
-  improvements: string[];
-  followUpQuestion: string;
-  overallFeedback: string;
-}
-
-interface SessionSummary {
-  id: string;
-  kind: 'PREP' | 'MOCK';
-  mode: string;
-  status: string;
-  job_title: string | null;
-  question_count: number;
-  answer_count: number;
-  created_at: string;
-  overall_feedback: string | null;
-}
-
-type Tab = 'prepare' | 'mock' | 'history';
+const COMMON_QUESTIONS = [
+  'Tell me about a challenging technical problem you solved and your contribution.',
+  'Describe a time you had a significant disagreement with a teammate or stakeholder.',
+  'How do you approach designing a scalable and reliable distributed system?',
+  'Walk me through a project where requirements changed abruptly midway through development.',
+  'Why are you interested in this role and what unique value do you bring to our team?',
+  'Tell me about a time a production incident occurred under your watch and how you handled it.',
+];
 
 export default function Interview() {
-  const { id } = useParams<{ id?: string }>();
-  const [tab, setTab] = useState<Tab>(id ? 'mock' : 'prepare');
-  const [ai, setAi] = useState<AiStatus | null>(null);
-  const [history, setHistory] = useState<SessionSummary[] | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const loadHistory = useCallback(async () => {
-    const res = await api.get<{ sessions: SessionSummary[] }>('/interview/history');
-    setHistory(res.sessions);
+  // Navigation & Active Tab
+  const initialTab = (searchParams.get('tab') as Tab) || 'prepare';
+  const [activeTab, setActiveTab] = useState<Tab>(['prepare', 'star', 'mock', 'history'].includes(initialTab) ? initialTab : 'prepare');
+
+  // Resume Context from local draft
+  const [activeResume, setActiveResume] = useState<ResumeData | null>(null);
+  const [useResumeContext, setUseResumeContext] = useState<boolean>(true);
+
+  // Global Toast
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // Load draft resume on mount
+  useEffect(() => {
+    const draft = loadDraft();
+    if (draft?.resume && draft.resume.experience.length > 0) {
+      setActiveResume(draft.resume);
+    }
   }, []);
 
-  useEffect(() => {
-    void api.get<AiStatus>('/ai/status').then(setAi).catch(() => setAi(null));
-    void loadHistory().catch(() => setHistory([]));
-  }, [loadHistory]);
+  // Update URL search param on tab change
+  const handleTabChange = (tab: Tab) => {
+    setActiveTab(tab);
+    setSearchParams((prev) => {
+      prev.set('tab', tab);
+      return prev;
+    });
+  };
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-ink-900">Interview</h1>
-        <p className="mt-1 text-sm text-ink-500">Prepare with truth-grounded questions and practise with a mock interviewer. Sample answers are built only from your Master CV.</p>
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-teal-100 selection:text-teal-900">
+      {/* Top Header */}
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-xs">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-4">
+            <Link to="/" className="inline-flex items-center gap-2">
+              <Logo />
+            </Link>
+            <span className="hidden sm:inline-flex items-center rounded-full bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800 border border-teal-200">
+              AI Interview Coach • 100% Free
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-4">
+            <Link
+              to="/builder"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
+            >
+              Resume Builder
+            </Link>
+            <Link
+              to="/jobs"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
+            >
+              Find Jobs
+            </Link>
+            <Link
+              to="/applications"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
+            >
+              Applications
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* Global Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white shadow-xl flex items-center gap-2 border border-slate-800">
+          <span className="text-teal-400">✓</span>
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Main Workspace */}
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 flex-1">
+        {/* Banner with Active Resume Context */}
+        <div className="mb-6 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 p-6 text-white shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-2 w-2 rounded-full bg-teal-400 animate-pulse" />
+              <span className="text-xs font-semibold tracking-wide uppercase text-teal-300">
+                Truth Guard™ Grounded Coaching
+              </span>
+            </div>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight">AI Interview Preparation & Mock Coach</h1>
+            <p className="mt-1 text-sm text-slate-300">
+              {activeResume ? (
+                <>
+                  Grounding answers in:{' '}
+                  <strong className="text-white">
+                    {activeResume.personal.fullName || 'Active Resume'} ({activeResume.experience.length} roles,{' '}
+                    {activeResume.skills.technical.length} skills)
+                  </strong>
+                </>
+              ) : (
+                'Prepare for technical, behavioural, situational, and HR questions with zero signup.'
+              )}
+            </p>
+          </div>
+
+          {activeResume && (
+            <label className="flex items-center gap-2 text-xs font-medium bg-slate-800/80 px-3.5 py-2 rounded-xl border border-slate-700 cursor-pointer hover:bg-slate-700/80 transition">
+              <input
+                type="checkbox"
+                checked={useResumeContext}
+                onChange={(e) => setUseResumeContext(e.target.checked)}
+                className="rounded border-slate-600 text-teal-500 focus:ring-teal-400"
+              />
+              <span>Use CV Evidence</span>
+            </label>
+          )}
+        </div>
+
+        {/* Tab Selector */}
+        <div className="flex items-center gap-2 border-b border-slate-200 pb-2 mb-6 overflow-x-auto">
+          {[
+            { id: 'prepare', label: '1. Interview Preparation' },
+            { id: 'star', label: '2. STAR Answer Coach' },
+            { id: 'mock', label: '3. AI Mock Interview' },
+            { id: 'history', label: '4. History & Story Bank' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => handleTabChange(tab.id as Tab)}
+              className={`rounded-lg px-4 py-2.5 text-sm font-semibold transition whitespace-nowrap cursor-pointer ${
+                activeTab === tab.id
+                  ? 'bg-teal-600 text-white shadow-sm'
+                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab 1: Interview Preparation */}
+        {activeTab === 'prepare' && (
+          <PrepareTab
+            activeResume={useResumeContext ? activeResume : null}
+            searchParams={searchParams}
+            showToast={showToast}
+            onSelectQuestionForStar={(q) => {
+              setSearchParams((prev) => {
+                prev.set('tab', 'star');
+                prev.set('question', q.question);
+                return prev;
+              });
+              setActiveTab('star');
+            }}
+          />
+        )}
+
+        {/* Tab 2: STAR Answer Coach */}
+        {activeTab === 'star' && (
+          <StarCoachTab
+            activeResume={useResumeContext ? activeResume : null}
+            searchParams={searchParams}
+            showToast={showToast}
+          />
+        )}
+
+        {/* Tab 3: AI Mock Interview Simulator */}
+        {activeTab === 'mock' && (
+          <MockInterviewTab
+            activeResume={useResumeContext ? activeResume : null}
+            searchParams={searchParams}
+            showToast={showToast}
+          />
+        )}
+
+        {/* Tab 4: History & Story Bank */}
+        {activeTab === 'history' && <HistoryAndStoryBankTab showToast={showToast} />}
+      </main>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 1. Preparation Tab Component
+// ---------------------------------------------------------------------------
+
+function PrepareTab({
+  activeResume,
+  searchParams,
+  showToast,
+  onSelectQuestionForStar,
+}: {
+  activeResume: ResumeData | null;
+  searchParams: URLSearchParams;
+  showToast: (msg: string) => void;
+  onSelectQuestionForStar: (q: InterviewPrepQuestion) => void;
+}) {
+  const [role, setRole] = useState(searchParams.get('role') || '');
+  const [company, setCompany] = useState(searchParams.get('company') || '');
+  const [jdText, setJdText] = useState(searchParams.get('jd') || '');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [questions, setQuestions] = useState<InterviewPrepQuestion[]>([]);
+  const [studyPlan, setStudyPlan] = useState<string[]>([]);
+  const [checkedPlanSteps, setCheckedPlanSteps] = useState<Set<number>>(new Set());
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [openSampleAnswers, setOpenSampleAnswers] = useState<Set<string>>(new Set());
+
+  const handleGenerate = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await api.post<{
+        ok: boolean;
+        questions: InterviewPrepQuestion[];
+        studyPlan: string[];
+        isFallback?: boolean;
+      }>('/public/interview/prep', {
+        resume: activeResume || undefined,
+        jobDescription: jdText || undefined,
+        targetRole: role || undefined,
+        company: company || undefined,
+      });
+
+      setQuestions(res.questions || []);
+      setStudyPlan(res.studyPlan || []);
+      showToast(`Generated ${res.questions?.length || 0} role-tailored interview questions.`);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to generate interview preparation package.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveSession = () => {
+    if (questions.length === 0) return;
+    const session: InterviewSession = {
+      id: `prep_${Date.now()}`,
+      title: `${role || 'Target Role'} @ ${company || 'General'} Prep`,
+      type: 'prep',
+      target_role: role || 'General Role',
+      company: company || 'General',
+      job_description: jdText || undefined,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      prep_questions: questions,
+      study_plan: studyPlan,
+      is_completed: true,
+    };
+    saveInterviewSession(session);
+    showToast('Interview preparation pack saved to History.');
+  };
+
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    questions.forEach((q) => {
+      if (q.category) set.add(q.category);
+    });
+    return Array.from(set);
+  }, [questions]);
+
+  const filteredQuestions = useMemo(() => {
+    if (categoryFilter === 'ALL') return questions;
+    return questions.filter((q) => q.category === categoryFilter);
+  }, [questions, categoryFilter]);
+
+  const toggleSample = (id: string) => {
+    setOpenSampleAnswers((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Configuration Form Card */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+        <h2 className="text-lg font-bold text-slate-900">Target Role & Opportunity</h2>
+        <p className="text-xs text-slate-500 mt-0.5">
+          Provide your target position and job details. We generate role-specific questions across technical, behavioural, situational, and HR categories.
+        </p>
+
+        <form onSubmit={handleGenerate} className="mt-4 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Target Job Title</label>
+              <input
+                type="text"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                placeholder="e.g. Senior Backend Engineer"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Company / Organisation</label>
+              <input
+                type="text"
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                placeholder="e.g. Monolith Financial Technologies"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+              Job Description or Requirements (optional)
+            </label>
+            <textarea
+              rows={4}
+              value={jdText}
+              onChange={(e) => setJdText(e.target.value)}
+              placeholder="Paste job posting text or key skills required..."
+              className="w-full rounded-lg border border-slate-300 p-3 text-xs leading-relaxed focus:border-teal-500 focus:outline-none font-mono"
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-lg bg-red-50 p-3 text-xs text-red-700 border border-red-200">
+              {error}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between pt-2">
+            <span className="text-xs text-slate-500">
+              {activeResume ? '✓ Grounded in your authentic CV evidence' : 'Tip: Import a CV in Resume Builder to personalize answers'}
+            </span>
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
+            >
+              {loading && <Spinner className="h-4 w-4 text-white" />}
+              <span>{loading ? 'Analyzing & Generating...' : 'Generate Interview Questions'}</span>
+            </button>
+          </div>
+        </form>
       </div>
 
-      <div className="flex gap-2" role="tablist">
-        {([['prepare', 'Prepare'], ['mock', 'Mock Interview'], ['history', 'History']] as [Tab, string][]).map(([k, label]) => (
-          <button key={k} role="tab" aria-selected={tab === k}
-            className={`rounded-lg px-4 py-2 text-sm font-semibold ${tab === k ? 'bg-brand-600 text-white' : 'bg-white text-ink-600 ring-1 ring-ink-200'}`}
-            onClick={() => setTab(k)}>
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Results Section */}
+      {questions.length > 0 && (
+        <div className="space-y-6">
+          {/* Header & Save Action */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">
+                Prepared Questions ({questions.length})
+              </h2>
+              <p className="text-xs text-slate-500">
+                Categorized by interview dimension with recommended answer structures and grounded sample responses.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleSaveSession}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+            >
+              Save Preparation Pack
+            </button>
+          </div>
 
-      {tab === 'prepare' && <PrepareTab aiEnabled={!!ai?.enabled} onDone={() => void loadHistory()} />}
-      {tab === 'mock' && <MockTab aiEnabled={!!ai?.enabled} />}
-      {tab === 'history' && <HistoryTab history={history} />}
+          {/* Category Filter Pills */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('ALL')}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition cursor-pointer ${
+                categoryFilter === 'ALL'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              All ({questions.length})
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setCategoryFilter(cat)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition cursor-pointer ${
+                  categoryFilter === cat
+                    ? 'bg-teal-700 text-white'
+                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {cat} ({questions.filter((q) => q.category === cat).length})
+              </button>
+            ))}
+          </div>
 
-      {history !== null && history.length === 0 && tab === 'history' && (
-        <EmptyState title="No interview sessions yet" body="Generate a preparation package or start a mock interview — sessions are saved here with full feedback." />
+          {/* Question Cards Grid */}
+          <div className="grid gap-4">
+            {filteredQuestions.map((q, idx) => (
+              <div
+                key={q.id || idx}
+                className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs transition hover:border-slate-300"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-md bg-teal-50 px-2 py-0.5 text-2xs font-bold text-teal-800 uppercase border border-teal-200">
+                      {q.category}
+                    </span>
+                    <span className="text-xs text-slate-400">Q{idx + 1}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onSelectQuestionForStar(q)}
+                    className="rounded-lg bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800 hover:bg-teal-100 border border-teal-200 transition cursor-pointer flex items-center gap-1"
+                  >
+                    <span>Practice in STAR Coach</span>
+                    <span>→</span>
+                  </button>
+                </div>
+
+                <h3 className="mt-2 text-base font-bold text-slate-900">{q.question}</h3>
+
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
+                    <span className="font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                      Why Interviewers Ask This
+                    </span>
+                    <p className="text-slate-600 leading-relaxed">{q.why_it_may_be_asked}</p>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
+                    <span className="font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                      CV Evidence Grounding
+                    </span>
+                    <p className="text-slate-600 leading-relaxed">{q.evidence_from_cv}</p>
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-lg bg-teal-50/50 p-3 border border-teal-100 text-xs">
+                  <span className="font-bold text-teal-900 uppercase tracking-wider block mb-1">
+                    Recommended STAR Strategy
+                  </span>
+                  <p className="text-teal-950 leading-relaxed">{q.recommended_answer_structure}</p>
+                </div>
+
+                {q.sample_truthful_answer && (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleSample(q.id || String(idx))}
+                      className="text-xs font-semibold text-teal-700 hover:text-teal-900 cursor-pointer flex items-center gap-1"
+                    >
+                      <span>{openSampleAnswers.has(q.id || String(idx)) ? 'Hide' : 'View'} Grounded Sample Answer</span>
+                      <span>{openSampleAnswers.has(q.id || String(idx)) ? '▲' : '▼'}</span>
+                    </button>
+                    {openSampleAnswers.has(q.id || String(idx)) && (
+                      <div className="mt-2 rounded-lg bg-slate-900 text-slate-100 p-4 text-xs leading-relaxed border border-slate-800">
+                        <div className="flex items-center gap-2 mb-2 text-teal-400 font-semibold text-2xs uppercase">
+                          <span>✓ Truth Guard Verified</span>
+                          <span>•</span>
+                          <span>Uses only verified facts from candidate profile</span>
+                        </div>
+                        <p className="italic">"{q.sample_truthful_answer}"</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Actionable Study Plan Checklist */}
+          {studyPlan.length > 0 && (
+            <div className="rounded-2xl border border-teal-200 bg-teal-50/40 p-6 shadow-xs">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <span>📋</span>
+                <span>Actionable Interview Preparation Plan</span>
+              </h3>
+              <p className="text-xs text-slate-600 mt-1">
+                Concrete steps to prepare before your interview. Track your readiness by checking them off.
+              </p>
+              <div className="mt-4 space-y-2">
+                {studyPlan.map((step, idx) => {
+                  const isDone = checkedPlanSteps.has(idx);
+                  return (
+                    <label
+                      key={idx}
+                      className={`flex items-start gap-3 p-3 rounded-xl border transition cursor-pointer ${
+                        isDone ? 'bg-white border-teal-300 text-slate-400 line-through' : 'bg-white border-slate-200 text-slate-800'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isDone}
+                        onChange={() => {
+                          setCheckedPlanSteps((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(idx)) next.delete(idx);
+                            else next.add(idx);
+                            return next;
+                          });
+                        }}
+                        className="mt-0.5 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                      />
+                      <span className="text-xs leading-relaxed">{step}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-function PrepareTab({ aiEnabled, onDone }: { aiEnabled: boolean; onDone: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ sessionId: string; questions: PrepQuestion[]; studyPlan: string[]; meta: { rejectedClaims: number } } | null>(null);
-  const [jobId, setJobId] = useState('');
-  const toast = useToast();
+// ---------------------------------------------------------------------------
+// 2. STAR Coach Tab Component
+// ---------------------------------------------------------------------------
 
-  async function prepare() {
-    setBusy(true);
-    setResult(null);
-    try {
-      const res = await api.post<{ sessionId: string; questions: PrepQuestion[]; studyPlan: string[]; meta: { rejectedClaims: number } }>(
-        '/interview/prepare',
-        jobId ? { jobId } : {},
-      );
-      setResult(res);
-      onDone();
-    } catch (err) {
-      toast.show(err instanceof ApiError ? err.message : 'Preparation failed.', 'error');
-    } finally {
-      setBusy(false);
+function StarCoachTab({
+  activeResume,
+  searchParams,
+  showToast,
+}: {
+  activeResume: ResumeData | null;
+  searchParams: URLSearchParams;
+  showToast: (msg: string) => void;
+}) {
+  const [question, setQuestion] = useState(searchParams.get('question') || COMMON_QUESTIONS[0]);
+  const [situation, setSituation] = useState('');
+  const [task, setTask] = useState('');
+  const [action, setAction] = useState('');
+  const [result, setResult] = useState('');
+  const [tagInput, setTagInput] = useState('technical, leadership');
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [evaluation, setEvaluation] = useState<StarEvaluationResult | null>(null);
+
+  const handleEvaluate = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!situation && !task && !action && !result) {
+      setError('Please provide at least one component of your STAR answer.');
+      return;
     }
-  }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await api.post<{ ok: boolean } & StarEvaluationResult>('/public/interview/star-coach', {
+        question,
+        star: { situation, task, action, result },
+        resume: activeResume || undefined,
+      });
+
+      setEvaluation(res);
+      showToast('STAR answer evaluated with Truth Guard checks.');
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Evaluation failed.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveToStoryBank = () => {
+    if (!situation && !action) return;
+    const tags = tagInput
+      .split(',')
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
+
+    const story: SavedStarStory = {
+      id: `star_${Date.now()}`,
+      title: question.slice(0, 80),
+      question,
+      situation,
+      task,
+      action,
+      result,
+      tags: tags.length ? tags : ['general'],
+      evaluation: evaluation || undefined,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    saveStarStory(story);
+    showToast('Saved to your STAR Story Bank!');
+  };
+
+  const handleApplyRefinement = () => {
+    if (!evaluation?.suggestedStarRefinement) return;
+    const ref = evaluation.suggestedStarRefinement;
+    if (ref.situation) setSituation(ref.situation);
+    if (ref.task) setTask(ref.task);
+    if (ref.action) setAction(ref.action);
+    if (ref.result) setResult(ref.result);
+    showToast('Applied suggested refinement into your editor.');
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="card p-6">
-        <label className="label" htmlFor="prep-job">Job description (optional — from your Job Analyses ID)</label>
-        <div className="flex gap-2">
-          <input id="prep-job" className="input flex-1" placeholder="Leave empty for general preparation, or paste a jobId" value={jobId} onChange={(e) => setJobId(e.target.value)} />
-          <button className="btn-primary" disabled={busy || !aiEnabled} onClick={() => void prepare()}>
-            {busy && <Spinner className="h-4 w-4" />} Generate preparation
-          </button>
+    <div className="space-y-6">
+      {/* Intro & Question Selection */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+        <h2 className="text-lg font-bold text-slate-900">STAR Answer Coach</h2>
+        <p className="text-xs text-slate-500 mt-0.5">
+          Structure behavioural answers using the proven STAR framework: Situation, Task, Action, and Result. Get instant feedback on specificity, impact, and factual grounding.
+        </p>
+
+        <div className="mt-4">
+          <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Interview Question</label>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="e.g. Tell me about a time you resolved a technical conflict..."
+              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+            />
+            <select
+              onChange={(e) => {
+                if (e.target.value) setQuestion(e.target.value);
+              }}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-xs focus:border-teal-500 focus:outline-none bg-white text-slate-700"
+            >
+              <option value="">Preset Questions...</option>
+              {COMMON_QUESTIONS.map((q, idx) => (
+                <option key={idx} value={q}>
+                  {q}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-        {!aiEnabled && <p className="mt-2 text-xs text-amber-700">Interview preparation requires a configured AI provider on this deployment.</p>}
+
+        {/* 4-Box STAR Editor */}
+        <form onSubmit={handleEvaluate} className="mt-5 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Situation */}
+            <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-bold text-teal-800 uppercase tracking-wider">
+                  S — Situation
+                </span>
+                <span className="text-2xs text-slate-400">Context & Challenge</span>
+              </div>
+              <textarea
+                rows={4}
+                value={situation}
+                onChange={(e) => setSituation(e.target.value)}
+                placeholder="Set the scene: What organization or project were you on? What was the business context or problem to solve?"
+                className="w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-teal-500 focus:outline-none bg-white"
+              />
+            </div>
+
+            {/* Task */}
+            <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-bold text-teal-800 uppercase tracking-wider">
+                  T — Task
+                </span>
+                <span className="text-2xs text-slate-400">Your Objective</span>
+              </div>
+              <textarea
+                rows={4}
+                value={task}
+                onChange={(e) => setTask(e.target.value)}
+                placeholder="What was your specific responsibility? What goal or deliverable were you accountable for?"
+                className="w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-teal-500 focus:outline-none bg-white"
+              />
+            </div>
+
+            {/* Action */}
+            <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-bold text-teal-800 uppercase tracking-wider">
+                  A — Action (Most Critical)
+                </span>
+                <span className="text-2xs text-slate-400">What YOU Did</span>
+              </div>
+              <textarea
+                rows={5}
+                value={action}
+                onChange={(e) => setAction(e.target.value)}
+                placeholder="Detail the concrete steps YOU took. Mention tools, architectures, trade-offs, and how you led or collaborated."
+                className="w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-teal-500 focus:outline-none bg-white"
+              />
+            </div>
+
+            {/* Result */}
+            <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-bold text-teal-800 uppercase tracking-wider">
+                  R — Result
+                </span>
+                <span className="text-2xs text-slate-400">Measurable Impact</span>
+              </div>
+              <textarea
+                rows={5}
+                value={result}
+                onChange={(e) => setResult(e.target.value)}
+                placeholder="Quantify outcomes: Latency reduced? Team velocity increased? Revenue saved? What did you learn?"
+                className="w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-teal-500 focus:outline-none bg-white"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="rounded-lg bg-red-50 p-3 text-xs text-red-700 border border-red-200">
+              {error}
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                placeholder="Tags (e.g. system design, conflict)"
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs focus:border-teal-500 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleSaveToStoryBank}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Save Story
+              </button>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {loading && <Spinner className="h-4 w-4 text-white" />}
+              <span>{loading ? 'Evaluating Structure & Truth Guard...' : 'Evaluate with STAR Coach'}</span>
+            </button>
+          </div>
+        </form>
       </div>
 
-      {result && (
-        <>
-          <div className="card border-brand-100 bg-brand-50/50 p-5">
-            <h2 className="text-sm font-semibold text-brand-900">Study plan</h2>
-            <ul className="mt-2 space-y-1 text-sm text-brand-800">
-              {result.studyPlan.map((s, i) => <li key={i}>• {s}</li>)}
-            </ul>
-            {result.meta.rejectedClaims > 0 && (
-              <p className="mt-2 text-xs text-amber-700">{result.meta.rejectedClaims} unsupported sentence(s) were removed from sample answers by the Truth Guard.</p>
+      {/* Evaluation Results Card */}
+      {evaluation && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-5">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">STAR Coach Feedback</h3>
+              <p className="text-xs text-slate-500 mt-0.5">{evaluation.overallSummary}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500">Relevance:</span>
+              <span
+                className={`rounded-full px-3 py-0.5 text-xs font-bold uppercase ${
+                  evaluation.relevance.level === 'high'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : evaluation.relevance.level === 'medium'
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-rose-100 text-rose-800'
+                }`}
+              >
+                {evaluation.relevance.level}
+              </span>
+            </div>
+          </div>
+
+          {/* Truth Guard Alert Banner */}
+          {evaluation.unsupportedClaims && evaluation.unsupportedClaims.length > 0 && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-xs text-amber-900">
+              <div className="flex items-center gap-2 font-bold mb-1">
+                <span>⚠️</span>
+                <span>Truth Guard Alert: Ungrounded Claims Detected</span>
+              </div>
+              <p className="leading-relaxed">
+                The following statements introduce metrics or achievements not verified in your CV:
+              </p>
+              <ul className="list-disc list-inside mt-1 font-mono text-2xs space-y-0.5">
+                {evaluation.unsupportedClaims.map((claim, idx) => (
+                  <li key={idx}>{claim}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-2xs text-amber-800">
+                Ensure all metrics and company names match your authentic background to pass background checks.
+              </p>
+            </div>
+          )}
+
+          {/* Framework Breakdown */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+            <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
+              <span className="font-bold text-slate-800 uppercase tracking-wider block mb-1">Structure</span>
+              <p className="text-slate-600 leading-relaxed">{evaluation.structureFeedback}</p>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
+              <span className="font-bold text-slate-800 uppercase tracking-wider block mb-1">Clarity</span>
+              <p className="text-slate-600 leading-relaxed">{evaluation.clarityFeedback}</p>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
+              <span className="font-bold text-slate-800 uppercase tracking-wider block mb-1">Specificity</span>
+              <p className="text-slate-600 leading-relaxed">{evaluation.specificityFeedback}</p>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
+              <span className="font-bold text-slate-800 uppercase tracking-wider block mb-1">Impact</span>
+              <p className="text-slate-600 leading-relaxed">{evaluation.impactFeedback}</p>
+            </div>
+          </div>
+
+          {/* Strengths & Improvements */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            {evaluation.strengths && evaluation.strengths.length > 0 && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">
+                <span className="font-bold text-emerald-900 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+                  <span>✓</span>
+                  <span>Key Strengths</span>
+                </span>
+                <ul className="space-y-1 text-emerald-950">
+                  {evaluation.strengths.map((s, idx) => (
+                    <li key={idx} className="flex items-start gap-1.5">
+                      <span className="text-emerald-600">•</span>
+                      <span>{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {evaluation.improvements && evaluation.improvements.length > 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+                <span className="font-bold text-amber-900 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+                  <span>↑</span>
+                  <span>Areas for Improvement</span>
+                </span>
+                <ul className="space-y-1 text-amber-950">
+                  {evaluation.improvements.map((imp, idx) => (
+                    <li key={idx} className="flex items-start gap-1.5">
+                      <span className="text-amber-600">•</span>
+                      <span>{imp}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
-          {result.questions.map((q, i) => (
-            <details key={i} className="card p-5" open={i === 0}>
-              <summary className="cursor-pointer">
-                <span className="chip bg-ink-100 text-ink-600">{q.category}</span>
-                <span className="ml-2 text-sm font-semibold text-ink-900">{q.question}</span>
-              </summary>
-              <div className="mt-3 space-y-2 text-sm text-ink-600">
-                <p><span className="font-semibold text-ink-700">Why it may be asked:</span> {q.why_it_may_be_asked}</p>
-                <p><span className="font-semibold text-ink-700">Evidence from your CV:</span> {q.evidence_from_cv}</p>
-                <p><span className="font-semibold text-ink-700">Answer structure:</span> {q.recommended_answer_structure}</p>
-                <div className="rounded-xl bg-emerald-50/70 p-3 text-emerald-900">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Sample truthful answer (Truth-Guarded)</p>
-                  <p className="mt-1">{q.sample_truthful_answer}</p>
+
+          {/* Suggested Refinement */}
+          {evaluation.suggestedStarRefinement && (
+            <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-teal-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>💡</span>
+                  <span>Suggested Truth-Grounded Refinement</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleApplyRefinement}
+                  className="rounded-lg bg-teal-600 px-3 py-1 text-xs font-semibold text-white hover:bg-teal-700 transition cursor-pointer"
+                >
+                  Apply into Editor
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                {evaluation.suggestedStarRefinement.situation && (
+                  <div>
+                    <span className="font-bold text-teal-950 uppercase block">Situation:</span>
+                    <p className="text-slate-700 italic">{evaluation.suggestedStarRefinement.situation}</p>
+                  </div>
+                )}
+                {evaluation.suggestedStarRefinement.task && (
+                  <div>
+                    <span className="font-bold text-teal-950 uppercase block">Task:</span>
+                    <p className="text-slate-700 italic">{evaluation.suggestedStarRefinement.task}</p>
+                  </div>
+                )}
+                {evaluation.suggestedStarRefinement.action && (
+                  <div>
+                    <span className="font-bold text-teal-950 uppercase block">Action:</span>
+                    <p className="text-slate-700 italic">{evaluation.suggestedStarRefinement.action}</p>
+                  </div>
+                )}
+                {evaluation.suggestedStarRefinement.result && (
+                  <div>
+                    <span className="font-bold text-teal-950 uppercase block">Result:</span>
+                    <p className="text-slate-700 italic">{evaluation.suggestedStarRefinement.result}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 3. Mock Interview Simulation Tab Component
+// ---------------------------------------------------------------------------
+
+function MockInterviewTab({
+  activeResume,
+  searchParams,
+  showToast,
+}: {
+  activeResume: ResumeData | null;
+  searchParams: URLSearchParams;
+  showToast: (msg: string) => void;
+}) {
+  const [stage, setStage] = useState<'config' | 'active' | 'finished'>('config');
+
+  // Config
+  const [role, setRole] = useState(searchParams.get('role') || 'Software Engineer');
+  const [company, setCompany] = useState(searchParams.get('company') || 'Technology Co.');
+  const [difficulty, setDifficulty] = useState<'entry' | 'mid' | 'senior' | 'lead'>('senior');
+  const [totalQuestionsCount, setTotalQuestionsCount] = useState<number>(3);
+
+  // Active Simulation
+  const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
+  const [scheduledQuestions, setScheduledQuestions] = useState<{ id: string; category: string; question: string }[]>([]);
+  const [candidateAnswer, setCandidateAnswer] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeEvaluation, setActiveEvaluation] = useState<MockEvaluationResult | null>(null);
+  const [answersLog, setAnswersLog] = useState<MockAnswerRecord[]>([]);
+
+  // Final Report
+  const [finalReport, setFinalReport] = useState<FinalMockReportResult | null>(null);
+  const [isGeneratingFinal, setIsGeneratingFinal] = useState(false);
+
+  // Start Simulation
+  const handleStartInterview = async () => {
+    // Generate starter questions based on role & difficulty
+    const starterQuestions = [
+      {
+        id: 'mock_q1',
+        category: 'TECHNICAL',
+        question: `Walk me through how you would architect a critical feature for a ${role} role, and what technical trade-offs you would make.`,
+      },
+      {
+        id: 'mock_q2',
+        category: 'BEHAVIOURAL',
+        question: `Describe a situation where a project deadline was at risk. How did you prioritize tasks and communicate with stakeholders?`,
+      },
+      {
+        id: 'mock_q3',
+        category: 'SITUATIONAL',
+        question: `Imagine you uncover a severe security vulnerability or data inconsistency in production. What are your immediate first three steps?`,
+      },
+      {
+        id: 'mock_q4',
+        category: 'LEADERSHIP',
+        question: `How do you mentor more junior engineers or advocate for best practices across cross-functional teams?`,
+      },
+      {
+        id: 'mock_q5',
+        category: 'HR',
+        question: `What excites you most about working at ${company}, and where do you want your engineering career to head over the next two years?`,
+      },
+    ].slice(0, totalQuestionsCount);
+
+    setScheduledQuestions(starterQuestions);
+    setActiveQuestionIndex(0);
+    setAnswersLog([]);
+    setActiveEvaluation(null);
+    setCandidateAnswer('');
+    setStage('active');
+    showToast('Mock interview started. Good luck!');
+  };
+
+  // Submit Answer to Active Question
+  const handleSubmitAnswer = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!candidateAnswer.trim()) return;
+
+    const currentQ = scheduledQuestions[activeQuestionIndex];
+    setIsSubmitting(true);
+
+    try {
+      const res = await api.post<{ ok: boolean } & MockEvaluationResult>('/public/interview/mock-evaluate', {
+        question: currentQ.question,
+        answer: candidateAnswer,
+        difficulty,
+        questionNumber: activeQuestionIndex + 1,
+        totalQuestions: scheduledQuestions.length,
+        resume: activeResume || undefined,
+      });
+
+      setActiveEvaluation(res);
+
+      const record: MockAnswerRecord = {
+        questionId: currentQ.id,
+        category: currentQ.category,
+        question: currentQ.question,
+        answer: candidateAnswer,
+        evaluation: res,
+        answered_at: new Date().toISOString(),
+      };
+
+      setAnswersLog((prev) => [...prev, record]);
+      showToast('Answer evaluated. Review feedback or proceed to next question.');
+    } catch (err) {
+      showToast('Evaluation failed; please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Next Question or Finish
+  const handleNextOrFinish = async () => {
+    if (activeQuestionIndex + 1 < scheduledQuestions.length) {
+      setActiveQuestionIndex((prev) => prev + 1);
+      setCandidateAnswer('');
+      setActiveEvaluation(null);
+    } else {
+      await handleFinishInterview();
+    }
+  };
+
+  // Generate Final Report
+  const handleFinishInterview = async () => {
+    setIsGeneratingFinal(true);
+    setStage('finished');
+
+    try {
+      const payload = answersLog.map((item) => ({
+        question: item.question,
+        category: item.category,
+        answer: item.answer,
+        evaluation: item.evaluation,
+      }));
+
+      const res = await api.post<{ ok: boolean } & FinalMockReportResult>('/public/interview/mock-final', {
+        questionsAndAnswers: payload.length ? payload : [{ question: 'Sample question', answer: 'Sample answer' }],
+        difficulty,
+        resume: activeResume || undefined,
+      });
+
+      setFinalReport(res);
+      showToast('Interview simulation complete! Performance report generated.');
+    } catch (err) {
+      showToast('Failed to compile final report.');
+    } finally {
+      setIsGeneratingFinal(false);
+    }
+  };
+
+  // Save Session
+  const handleSaveCompletedSession = () => {
+    const session: InterviewSession = {
+      id: `mock_${Date.now()}`,
+      title: `${role} Mock Interview (${difficulty})`,
+      type: 'mock',
+      target_role: role,
+      company,
+      difficulty,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      mock_answers: answersLog,
+      final_report: finalReport || undefined,
+      is_completed: true,
+    };
+
+    saveInterviewSession(session);
+    showToast('Interview transcript & report saved to History.');
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Configuration Stage */}
+      {stage === 'config' && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs max-w-2xl mx-auto">
+          <h2 className="text-xl font-bold text-slate-900">Configure AI Mock Interview</h2>
+          <p className="text-xs text-slate-500 mt-1">
+            Simulate a realistic, interactive interview with question-by-question qualitative evaluations and adaptive follow-up challenges.
+          </p>
+
+          <div className="mt-5 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Target Role</label>
+                <input
+                  type="text"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Company</label>
+                <input
+                  type="text"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Difficulty Level</label>
+                <select
+                  value={difficulty}
+                  onChange={(e) => setDifficulty(e.target.value as any)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none bg-white"
+                >
+                  <option value="entry">Entry-Level / Junior</option>
+                  <option value="mid">Mid-Level Engineer</option>
+                  <option value="senior">Senior Engineer</option>
+                  <option value="lead">Lead / Principal / Architect</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Number of Questions</label>
+                <select
+                  value={totalQuestionsCount}
+                  onChange={(e) => setTotalQuestionsCount(Number(e.target.value))}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none bg-white"
+                >
+                  <option value={3}>3 Questions (Quick Sprint)</option>
+                  <option value={4}>4 Questions (Balanced Round)</option>
+                  <option value={5}>5 Questions (Comprehensive Mock)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-xs text-slate-500">
+                {activeResume ? '✓ Grounded in your CV profile' : 'Standard questions without CV grounding'}
+              </span>
+              <button
+                type="button"
+                onClick={handleStartInterview}
+                className="rounded-lg bg-teal-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition cursor-pointer"
+              >
+                Start Mock Interview →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Active Simulation Stage */}
+      {stage === 'active' && scheduledQuestions[activeQuestionIndex] && (
+        <div className="space-y-6">
+          {/* Progress & Header */}
+          <div className="rounded-xl bg-white border border-slate-200 p-4 shadow-xs flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-teal-600 text-white text-xs font-bold">
+                {activeQuestionIndex + 1}
+              </span>
+              <div>
+                <span className="text-xs font-bold text-slate-900">
+                  Question {activeQuestionIndex + 1} of {scheduledQuestions.length}
+                </span>
+                <span className="text-2xs text-slate-400 block">
+                  {role} • {difficulty.toUpperCase()}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleFinishInterview}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Finish Early
+              </button>
+            </div>
+          </div>
+
+          {/* Interviewer Question Box */}
+          <div className="rounded-2xl border-2 border-teal-600 bg-white p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="rounded-md bg-teal-100 text-teal-800 text-2xs font-bold px-2 py-0.5 uppercase">
+                {scheduledQuestions[activeQuestionIndex].category}
+              </span>
+              <span className="text-xs text-slate-500">Interviewer Question</span>
+            </div>
+            <h2 className="text-xl font-bold text-slate-900 leading-snug">
+              "{scheduledQuestions[activeQuestionIndex].question}"
+            </h2>
+          </div>
+
+          {/* Candidate Answer Box */}
+          <form onSubmit={handleSubmitAnswer} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-700 uppercase">Your Spoken / Written Response</label>
+              <span className="text-2xs text-slate-400">
+                {candidateAnswer.trim().split(/\s+/).filter(Boolean).length} words
+              </span>
+            </div>
+
+            <textarea
+              rows={6}
+              value={candidateAnswer}
+              onChange={(e) => setCandidateAnswer(e.target.value)}
+              placeholder="Structure your answer clearly: start with context, explain your direct action, and highlight measurable outcomes..."
+              className="w-full rounded-xl border border-slate-300 p-3.5 text-sm leading-relaxed focus:border-teal-500 focus:outline-none font-sans"
+              disabled={isSubmitting || activeEvaluation !== null}
+            />
+
+            {!activeEvaluation && (
+              <div className="flex items-center justify-end">
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !candidateAnswer.trim()}
+                  className="rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isSubmitting && <Spinner className="h-4 w-4 text-white" />}
+                  <span>{isSubmitting ? 'Evaluating Response...' : 'Submit Answer'}</span>
+                </button>
+              </div>
+            )}
+          </form>
+
+          {/* Feedback & Follow-Up Section */}
+          {activeEvaluation && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-5 animate-fade-in">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="text-base font-bold text-slate-900">Instant Qualitative Feedback</h3>
+                <span
+                  className={`rounded-full px-3 py-0.5 text-xs font-bold uppercase ${
+                    activeEvaluation.relevance.level === 'high'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : activeEvaluation.relevance.level === 'medium'
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-rose-100 text-rose-800'
+                  }`}
+                >
+                  Relevance: {activeEvaluation.relevance.level}
+                </span>
+              </div>
+
+              <p className="text-xs text-slate-600 leading-relaxed">{activeEvaluation.overallFeedback}</p>
+
+              {/* Dimensions */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
+                  <span className="font-bold text-slate-700 uppercase block mb-1">Structure</span>
+                  <p className="text-slate-600">{activeEvaluation.structure}</p>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
+                  <span className="font-bold text-slate-700 uppercase block mb-1">Clarity</span>
+                  <p className="text-slate-600">{activeEvaluation.clarity}</p>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
+                  <span className="font-bold text-slate-700 uppercase block mb-1">Specificity</span>
+                  <p className="text-slate-600">{activeEvaluation.specificity}</p>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-3 border border-slate-100">
+                  <span className="font-bold text-slate-700 uppercase block mb-1">Impact</span>
+                  <p className="text-slate-600">{activeEvaluation.impact}</p>
                 </div>
               </div>
-            </details>
-          ))}
-        </>
-      )}
-    </div>
-  );
-}
 
-function MockTab({ aiEnabled }: { aiEnabled: boolean }) {
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [status, setStatus] = useState<'idle' | 'active' | 'paused' | 'completed'>('idle');
-  const [current, setCurrent] = useState<{ id: string; question: string; category: string } | null>(null);
-  const [answer, setAnswer] = useState('');
-  const [evaluation, setEvaluation] = useState<MockEvaluation | null>(null);
-  const [progress, setProgress] = useState<{ answered: number; total: number } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [mode, setMode] = useState<'TEXT' | 'VOICE'>('TEXT');
-  const [feedback, setFeedback] = useState('');
-  const toast = useToast();
+              {/* Adaptive Follow-Up Question */}
+              {activeEvaluation.followUpQuestion && (
+                <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4">
+                  <span className="text-xs font-bold text-teal-900 uppercase tracking-wider block mb-1 flex items-center gap-1.5">
+                    <span>💬</span>
+                    <span>Interviewer Follow-Up Question</span>
+                  </span>
+                  <p className="text-xs text-teal-950 font-medium italic">
+                    "{activeEvaluation.followUpQuestion}"
+                  </p>
+                </div>
+              )}
 
-  async function start() {
-    setBusy(true);
-    setEvaluation(null);
-    setFeedback('');
-    try {
-      const res = await api.post<{ sessionId: string; questions: { id?: string; position?: number; category: string; question: string }[]; meta: { provider: string } }>('/interview/session', { mode });
-      setSessionId(res.sessionId);
-      setCurrent(res.questions[0] ? { id: res.questions[0].id!, question: res.questions[0].question, category: res.questions[0].category } : null);
-      setStatus('active');
-      if (res.meta.provider === 'deterministic') {
-        toast.show('AI provider not configured — running with generic questions and deterministic feedback only.', 'info');
-      }
-    } catch (err) {
-      toast.show(err instanceof ApiError ? err.message : 'Could not start the session.', 'error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function submitAnswer() {
-    if (!sessionId || !current) return;
-    setBusy(true);
-    try {
-      const res = await api.post<{ evaluation: MockEvaluation; next: { id: string; question: string; category: string } | null; progress: { answered: number; total: number } }>(
-        `/interview/session/${sessionId}/answer`,
-        { questionId: current.id, answer },
-      );
-      setEvaluation(res.evaluation);
-      setProgress(res.progress);
-      setAnswer('');
-      setCurrent(res.next);
-      if (!res.next) {
-        await finish();
-      }
-    } catch (err) {
-      toast.show(err instanceof ApiError ? err.message : 'Evaluation failed.', 'error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function finish() {
-    if (!sessionId) return;
-    try {
-      const res = await api.post<{ overallFeedback: string }>(`/interview/session/${sessionId}/finish`);
-      setFeedback(res.overallFeedback);
-      setStatus('completed');
-    } catch (err) {
-      toast.show(err instanceof ApiError ? err.message : 'Could not finish.', 'error');
-    }
-  }
-
-  async function togglePause() {
-    if (!sessionId) return;
-    const res = await api.post<{ status: string }>(`/interview/session/${sessionId}/pause`);
-    setStatus(res.status.toLowerCase() as typeof status);
-  }
-
-  if (status === 'idle') {
-    return (
-      <div className="card p-6">
-        <h2 className="text-sm font-semibold text-ink-900">Start a mock interview</h2>
-        <p className="mt-1 text-xs text-ink-500">Text mode: answer each question and get a truth-checked, explainable evaluation. No numeric score is invented — dimensions are qualitative.</p>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <select className="input w-40" value={mode} onChange={(e) => setMode(e.target.value as 'TEXT' | 'VOICE')} aria-label="Interview mode">
-            <option value="TEXT">Text mode</option>
-            <option value="VOICE">Voice mode (browser mic)</option>
-          </select>
-          <button className="btn-primary" disabled={busy} onClick={() => void start()}>{busy && <Spinner className="h-4 w-4" />} Start</button>
-        </div>
-        {mode === 'VOICE' && (
-          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            Voice mode uses your browser microphone (with your permission) and a speech provider when configured. Without a speech provider the transcript falls back to typed answers — nothing is faked.
-          </p>
-        )}
-        {!aiEnabled && (
-          <p className="mt-3 text-xs text-amber-700">No AI provider configured: the session will run with generic questions and deterministic progress tracking only.</p>
-        )}
-      </div>
-    );
-  }
-
-  if (status === 'completed') {
-    return (
-      <div className="card p-6">
-        <h2 className="text-sm font-semibold text-ink-900">Session complete</h2>
-        <pre className="mt-3 whitespace-pre-wrap rounded-xl bg-ink-50 p-4 text-sm text-ink-700">{feedback}</pre>
-        <button className="btn-primary mt-4" onClick={() => { setStatus('idle'); setSessionId(null); setEvaluation(null); }}>Start another</button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {progress && <p className="text-xs text-ink-400">Progress: {progress.answered}/{progress.total} answered</p>}
-      {evaluation && (
-        <div className="card border-brand-100 bg-brand-50/40 p-5">
-          <h3 className="text-sm font-semibold text-brand-900">Evaluation of your last answer</h3>
-          <div className="mt-2 grid gap-2 text-sm text-ink-700 sm:grid-cols-2">
-            <p><span className="font-semibold">Relevance:</span> {evaluation.relevance.level} — {evaluation.relevance.explanation}</p>
-            <p><span className="font-semibold">Evidence usage:</span> {evaluation.evidenceUsage}</p>
-            <p><span className="font-semibold">Structure:</span> {evaluation.structure}</p>
-            <p><span className="font-semibold">Clarity:</span> {evaluation.clarity}</p>
-            <p className="sm:col-span-2"><span className="font-semibold">Completeness:</span> {evaluation.completeness}</p>
-          </div>
-          {evaluation.unsupportedClaims.length > 0 && (
-            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Claims needing evidence (deterministic check against your Master CV): {evaluation.unsupportedClaims.join(', ')}
-            </p>
-          )}
-          {evaluation.improvements.length > 0 && (
-            <ul className="mt-2 space-y-1 text-sm text-ink-600">
-              {evaluation.improvements.map((im, i) => <li key={i}>• {im}</li>)}
-            </ul>
-          )}
-          <p className="mt-2 text-xs text-ink-400">Suggested follow-up: {evaluation.followUpQuestion}</p>
-        </div>
-      )}
-
-      {current ? (
-        <div className="card p-6">
-          <span className="chip bg-ink-100 text-ink-600">{current.category}</span>
-          <p className="mt-2 text-base font-semibold text-ink-900">{current.question}</p>
-          {mode === 'VOICE' && (
-            <p className="mt-2 text-xs text-ink-400">
-              Voice capture: use your browser dictation or a configured speech provider, then paste/refine the transcript below (no transcript is fabricated).
-            </p>
-          )}
-          <textarea className="input mt-3 min-h-[140px]" rows={5} value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Type your answer…" aria-label="Your answer" />
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button className="btn-primary" disabled={busy || answer.trim().length < 10} onClick={() => void submitAnswer()}>{busy && <Spinner className="h-4 w-4" />} Submit answer</button>
-            <button className="btn-secondary" onClick={() => void togglePause()}>{status === 'paused' ? 'Continue' : 'Pause'}</button>
-            <button className="btn-ghost" onClick={() => void finish()}>End session</button>
-            <button className="btn-ghost" onClick={() => { setStatus('idle'); setSessionId(null); setEvaluation(null); }}>Restart</button>
-          </div>
-        </div>
-      ) : (
-        !feedback && <div className="card p-6 text-sm text-ink-500">All questions answered — finish to see the summary.</div>
-      )}
-    </div>
-  );
-}
-
-function HistoryTab({ history }: { history: SessionSummary[] | null }) {
-  if (!history) return null;
-  return (
-    <div className="space-y-3">
-      {history.map((s) => (
-        <details key={s.id} className="card p-5">
-          <summary className="cursor-pointer">
-            <span className="chip bg-brand-50 text-brand-700">{s.kind}</span>
-            <span className="ml-2 text-sm font-semibold text-ink-900">{s.job_title || (s.kind === 'PREP' ? 'General preparation' : 'Mock interview')}</span>
-            <span className="ml-2 text-xs text-ink-400">{s.mode} · {s.answer_count}/{s.question_count} answered · {new Date(s.created_at + 'Z').toLocaleString()}</span>
-          </summary>
-          {s.overall_feedback && <pre className="mt-3 whitespace-pre-wrap rounded-xl bg-ink-50 p-4 text-sm text-ink-700">{s.overall_feedback}</pre>}
-          <SessionDetailLink id={s.id} />
-        </details>
-      ))}
-    </div>
-  );
-}
-
-function SessionDetailLink({ id }: { id: string }) {
-  const [detail, setDetail] = useState<{ questions: PrepQuestion[] } | null>(null);
-  return (
-    <div className="mt-2">
-      <button className="btn-ghost px-2 py-1 text-xs" onClick={async () => {
-        if (detail) { setDetail(null); return; }
-        const res = await api.get<{ questions: PrepQuestion[] }>(`/interview/session/${id}`);
-        setDetail(res);
-      }}>
-        {detail ? 'Hide details' : 'Show questions & answers'}
-      </button>
-      {detail && (
-        <div className="mt-3 space-y-3">
-          {detail.questions.map((q, i) => (
-            <div key={i} className="rounded-xl border border-ink-100 p-4 text-sm">
-              <span className="chip bg-ink-100 text-ink-600">{q.category}</span>
-              <p className="mt-1.5 font-medium text-ink-900">{q.question}</p>
-              {q.sample_truthful_answer && <p className="mt-1 text-xs text-emerald-800">Model answer: {q.sample_truthful_answer}</p>}
-              {q.answer && <p className="mt-1 text-ink-700">Your answer: {q.answer}</p>}
-              {q.evaluation?.overallFeedback && <p className="mt-1 text-xs text-ink-500">{q.evaluation.overallFeedback}</p>}
+              {/* Proceed Action */}
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleNextOrFinish}
+                  className="rounded-lg bg-teal-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition cursor-pointer"
+                >
+                  {activeQuestionIndex + 1 < scheduledQuestions.length ? 'Next Question →' : 'Complete & View Final Report →'}
+                </button>
+              </div>
             </div>
-          ))}
+          )}
+        </div>
+      )}
+
+      {/* Final Performance Report Stage */}
+      {stage === 'finished' && (
+        <div className="space-y-6">
+          {isGeneratingFinal ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-xs">
+              <Spinner className="h-8 w-8 text-teal-600 mx-auto" />
+              <h2 className="mt-4 text-lg font-bold text-slate-900">Synthesizing Final Performance Report</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Evaluating qualitative competencies, recurring strengths, and actionable next steps...
+              </p>
+            </div>
+          ) : finalReport ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-6">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 pb-5">
+                <div>
+                  <span className="text-xs font-bold text-teal-700 uppercase">Final Evaluation</span>
+                  <h2 className="text-2xl font-bold text-slate-900">
+                    Interview Simulation Performance Report
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {role} • {difficulty.toUpperCase()} • {answersLog.length} questions completed
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-slate-500">Overall Rating:</span>
+                  <span
+                    className={`rounded-full px-4 py-1 text-xs font-bold uppercase ${
+                      finalReport.overallRating === 'exceptional'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : finalReport.overallRating === 'proficient'
+                        ? 'bg-teal-100 text-teal-800'
+                        : finalReport.overallRating === 'developing'
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-rose-100 text-rose-800'
+                    }`}
+                  >
+                    {finalReport.overallRating.replace('_', ' ')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="rounded-xl bg-slate-50 p-4 border border-slate-200 text-xs text-slate-700 leading-relaxed">
+                <span className="font-bold text-slate-900 uppercase block mb-1">Executive Summary</span>
+                <p>{finalReport.summary}</p>
+              </div>
+
+              {/* Competency Breakdown */}
+              {finalReport.competencyBreakdown && finalReport.competencyBreakdown.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">
+                    Competency Breakdown
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    {finalReport.competencyBreakdown.map((comp, idx) => (
+                      <div key={idx} className="rounded-xl border border-slate-200 p-4 bg-white">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-slate-900">{comp.category}</span>
+                          <span className="text-2xs font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                            {comp.scoreLabel}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 leading-relaxed">{comp.feedback}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Strengths & Critical Areas */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                {finalReport.keyStrengths && finalReport.keyStrengths.length > 0 && (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">
+                    <span className="font-bold text-emerald-900 uppercase tracking-wider block mb-2">
+                      Recurring Strengths
+                    </span>
+                    <ul className="space-y-1.5 text-emerald-950">
+                      {finalReport.keyStrengths.map((s, idx) => (
+                        <li key={idx} className="flex items-start gap-1.5">
+                          <span className="text-emerald-600 font-bold">✓</span>
+                          <span>{s}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {finalReport.criticalAreasForImprovement && finalReport.criticalAreasForImprovement.length > 0 && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+                    <span className="font-bold text-amber-900 uppercase tracking-wider block mb-2">
+                      Critical Areas for Improvement
+                    </span>
+                    <ul className="space-y-1.5 text-amber-950">
+                      {finalReport.criticalAreasForImprovement.map((imp, idx) => (
+                        <li key={idx} className="flex items-start gap-1.5">
+                          <span className="text-amber-600 font-bold">!</span>
+                          <span>{imp}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* Recommended Prep Steps */}
+              {finalReport.recommendedPreparationSteps && finalReport.recommendedPreparationSteps.length > 0 && (
+                <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 text-xs">
+                  <span className="font-bold text-teal-900 uppercase tracking-wider block mb-2">
+                    Recommended Next Steps Before Live Interview
+                  </span>
+                  <ul className="space-y-1.5 text-teal-950">
+                    {finalReport.recommendedPreparationSteps.map((step, idx) => (
+                      <li key={idx} className="flex items-start gap-1.5">
+                        <span className="text-teal-600 font-bold">→</span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStage('config')}
+                  className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  ← Start New Simulation
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveCompletedSession}
+                    className="rounded-lg bg-teal-600 px-4 py-2 text-xs font-semibold text-white hover:bg-teal-700 transition cursor-pointer"
+                  >
+                    Save to Session History
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 4. History & STAR Story Bank Tab Component
+// ---------------------------------------------------------------------------
+
+function HistoryAndStoryBankTab({ showToast }: { showToast: (msg: string) => void }) {
+  const [subTab, setSubTab] = useState<'sessions' | 'stories'>('sessions');
+  const [sessions, setSessions] = useState<InterviewSession[]>([]);
+  const [stories, setStories] = useState<SavedStarStory[]>([]);
+  const [selectedSession, setSelectedSession] = useState<InterviewSession | null>(null);
+
+  const refreshData = () => {
+    setSessions(getInterviewSessions());
+    setStories(getSavedStarStories());
+  };
+
+  useEffect(() => {
+    refreshData();
+  }, []);
+
+  const handleDeleteSession = (id: string) => {
+    deleteInterviewSession(id);
+    refreshData();
+    if (selectedSession?.id === id) setSelectedSession(null);
+    showToast('Session removed from history.');
+  };
+
+  const handleDeleteStory = (id: string) => {
+    deleteStarStory(id);
+    refreshData();
+    showToast('Story removed from STAR Bank.');
+  };
+
+  const handleClearAll = () => {
+    if (window.confirm('Are you sure you want to clear all interview session history?')) {
+      clearAllInterviewSessions();
+      refreshData();
+      setSelectedSession(null);
+      showToast('All sessions cleared.');
+    }
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      const res = importInterviewDataJson(content);
+      if (res.success) {
+        refreshData();
+        showToast(`Imported ${res.sessionsImported} sessions and ${res.storiesImported} STAR stories.`);
+      } else {
+        showToast(`Import failed: ${res.error || 'Invalid file format'}`);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Sub-tab navigation */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSubTab('sessions')}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+              subTab === 'sessions'
+                ? 'bg-slate-900 text-white'
+                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Saved Sessions ({sessions.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setSubTab('stories')}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+              subTab === 'stories'
+                ? 'bg-slate-900 text-white'
+                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            STAR Story Bank ({stories.length})
+          </button>
+        </div>
+
+        {/* Global actions */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={exportAllInterviewDataJson}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+          >
+            Export All (JSON)
+          </button>
+          <label className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer">
+            <span>Import Backup</span>
+            <input type="file" accept=".json" onChange={handleImportFile} className="hidden" />
+          </label>
+          {sessions.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClearAll}
+              className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition cursor-pointer"
+            >
+              Clear Sessions
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Sessions Sub-Tab */}
+      {subTab === 'sessions' && (
+        <div className="space-y-4">
+          {sessions.length === 0 ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center">
+              <span className="text-3xl block mb-2">📁</span>
+              <h3 className="text-base font-bold text-slate-900">No Saved Sessions Yet</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                Generate a prep package or complete a mock interview simulation. Your records will be saved here in local storage.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {sessions.map((s) => (
+                <div
+                  key={s.id}
+                  className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-md bg-teal-50 px-2 py-0.5 text-2xs font-bold text-teal-800 uppercase border border-teal-200">
+                        {s.type}
+                      </span>
+                      <h4 className="text-sm font-bold text-slate-900">{s.title}</h4>
+                    </div>
+                    <p className="text-2xs text-slate-400 mt-1">
+                      {new Date(s.created_at).toLocaleDateString()} • {s.target_role} @ {s.company}
+                      {s.mock_answers ? ` • ${s.mock_answers.length} answers` : ''}
+                      {s.prep_questions ? ` • ${s.prep_questions.length} questions` : ''}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => exportInterviewSessionJson(s)}
+                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                    >
+                      Export JSON
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSession(s.id)}
+                      className="rounded-lg p-1 text-slate-400 hover:text-red-600 transition cursor-pointer"
+                      title="Delete session"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* STAR Story Bank Sub-Tab */}
+      {subTab === 'stories' && (
+        <div className="space-y-4">
+          {stories.length === 0 ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center">
+              <span className="text-3xl block mb-2">⭐</span>
+              <h3 className="text-base font-bold text-slate-900">Story Bank is Empty</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                Save polished STAR stories from the STAR Coach tab to build your personal library of interview examples.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {stories.map((story) => (
+                <div key={story.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <h4 className="text-sm font-bold text-slate-900">{story.title}</h4>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteStory(story.id)}
+                      className="text-slate-400 hover:text-red-600 cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="space-y-1.5 text-xs text-slate-700">
+                    <div>
+                      <span className="font-bold text-teal-900 text-2xs uppercase block">S:</span>
+                      <p className="line-clamp-2">{story.situation}</p>
+                    </div>
+                    <div>
+                      <span className="font-bold text-teal-900 text-2xs uppercase block">T:</span>
+                      <p className="line-clamp-2">{story.task}</p>
+                    </div>
+                    <div>
+                      <span className="font-bold text-teal-900 text-2xs uppercase block">A:</span>
+                      <p className="line-clamp-2">{story.action}</p>
+                    </div>
+                    <div>
+                      <span className="font-bold text-teal-900 text-2xs uppercase block">R:</span>
+                      <p className="line-clamp-2">{story.result}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1 pt-1 border-t border-slate-100">
+                    {story.tags.map((tag) => (
+                      <span key={tag} className="rounded bg-slate-100 px-1.5 py-0.5 text-2xs text-slate-600">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

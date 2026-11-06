@@ -247,6 +247,12 @@ export default function Jobs() {
     triggerToast(`Added "${app.role}" to your Application Tracker!`);
   };
 
+  // Prepare Interview for this Job
+  const handlePrepareInterview = (job: CuratedJob | SavedJob) => {
+    const jd = `${job.title} at ${job.company}\n\n${job.description}\n\n${job.requirements || ''}`;
+    navigate(`/interview?role=${encodeURIComponent(job.title)}&company=${encodeURIComponent(job.company)}&jd=${encodeURIComponent(jd)}&tab=prepare`);
+  };
+
   // Tailor Resume for this Job
   const handleTailorForJob = (job: CuratedJob | SavedJob) => {
     const fullText = `${job.title} at ${job.company}\n\nOverview:\n${job.description}\n\nRequirements:\n${job.requirements}`;
@@ -321,9 +327,15 @@ export default function Jobs() {
             </Link>
             <Link
               to="/applications"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-2xs hover:bg-teal-700"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
             >
               Application Tracker
+            </Link>
+            <Link
+              to="/interview"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-2xs hover:bg-teal-700"
+            >
+              Interview Coach
             </Link>
             <Link to="/" className="text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900">
               Home
@@ -953,6 +965,15 @@ export default function Jobs() {
                     className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
                   >
                     + Track Application
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handlePrepareInterview(selectedJob);
+                    }}
+                    className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-800 hover:bg-teal-100 cursor-pointer"
+                  >
+                    Interview Prep →
                   </button>
                   <button
                     type="button"

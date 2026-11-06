@@ -233,9 +233,15 @@ export default function Applications() {
             </Link>
             <Link
               to="/builder"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-2xs hover:bg-slate-800"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
             >
               Resume Builder
+            </Link>
+            <Link
+              to="/interview"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-2xs hover:bg-teal-700"
+            >
+              Interview Coach
             </Link>
             <Link to="/" className="text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900">
               Home
@@ -454,6 +460,16 @@ export default function Applications() {
 
                               {/* Action buttons */}
                               <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigate(`/interview?role=${encodeURIComponent(app.role)}&company=${encodeURIComponent(app.company)}&jd=${encodeURIComponent(app.job_description || '')}&tab=prepare`);
+                                  }}
+                                  className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 p-1"
+                                  title="Prepare interview for this application"
+                                >
+                                  Interview
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => handleTailor(app)}

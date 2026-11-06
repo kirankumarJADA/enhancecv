@@ -14,6 +14,7 @@ export interface EvidenceInput {
   jdText?: string | null;
   match?: MatchAnalysis | null;
   company?: string | null;
+  targetRole?: string | null;
   applicationNotes?: string | null;
 }
 
@@ -76,6 +77,10 @@ export function buildAgentPrompt(input: EvidenceInput, task: string, extraBlocks
         `Job Match score: ${input.match.score}/100`,
       ].join('\n')
     );
+  }
+  if (input.targetRole) {
+    blocks.push('=== TARGET ROLE (user-provided context) ===');
+    blocks.push(input.targetRole);
   }
   if (input.company) {
     blocks.push('=== COMPANY (user-provided context) ===');

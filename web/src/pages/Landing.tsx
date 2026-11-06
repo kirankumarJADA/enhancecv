@@ -94,6 +94,7 @@ export default function Landing() {
             <Link to="/builder?mode=ats" className="text-teal-700 font-semibold transition hover:text-teal-900">Check ATS Score</Link>
             <Link to="/jobs" className="transition hover:text-slate-900">Find Jobs</Link>
             <Link to="/applications" className="transition hover:text-slate-900">Application Tracker</Link>
+            <Link to="/interview" className="transition hover:text-slate-900">Interview Coach</Link>
             <a href="#how" className="transition hover:text-slate-900">How It Works</a>
             <a href="#truth" className="transition hover:text-slate-900">Truth Guard™</a>
             <a href="#features" className="transition hover:text-slate-900">Features</a>

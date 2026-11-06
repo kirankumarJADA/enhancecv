@@ -3,6 +3,7 @@ import Landing from './pages/Landing';
 import PublicBuilder from './pages/PublicBuilder';
 import Jobs from './pages/Jobs';
 import Applications from './pages/Applications';
+import Interview from './pages/Interview';
 
 export default function App() {
   return (
@@ -19,6 +20,11 @@ export default function App() {
       <Route path="/jobs-discovery" element={<Navigate to="/jobs" replace />} />
       <Route path="/applications" element={<Applications />} />
       <Route path="/tracker" element={<Navigate to="/applications" replace />} />
+
+      {/* Public AI Interview Preparation & Mock Interview Coach (Phase 9F) */}
+      <Route path="/interview" element={<Interview />} />
+      <Route path="/interview/:id" element={<Interview />} />
+      <Route path="/interview-prep" element={<Navigate to="/interview" replace />} />
 
       {/* Redirect obsolete auth and stateful routes cleanly to the public builder */}
       <Route path="/login" element={<Navigate to="/builder" replace />} />

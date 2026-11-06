@@ -26,6 +26,14 @@ import { AppError } from '../middleware/errors';
 import { AiUnavailableError, getAiStatus } from '../ai/provider';
 import { getJobSourceProvider, isJobSourceConfigured } from '../lib/jobSource';
 import { CURATED_JOBS } from '../data/curatedJobs';
+import {
+  generateInterviewPrep,
+  evaluateStarAnswer,
+  evaluateMockAnswer,
+  generateFinalMockReport,
+  INTERVIEW_CATEGORIES,
+  type StarAnswerInput,
+} from '../ai/interviewAgent';
 import type { ResumeData, JobAnalysis, PageSize } from '../types';
 
 const router = Router();
@@ -684,6 +692,300 @@ router.post(
         configured: false,
         isConfigured: false,
         message: 'Live job provider not configured in environment. Displaying realistic curated benchmark roles.',
+      });
+    } catch (err) {
+      handlePublicError(err, res);
+    }
+  }
+);
+
+
+// ---------------------------------------------------------------------------
+// Helper: safe resume normalization
+// ---------------------------------------------------------------------------
+function getSafeResume(raw: any): ResumeData {
+  if (raw && typeof raw === 'object' && Array.isArray(raw.experience) && Array.isArray(raw.sectionOrder)) {
+    return raw as ResumeData;
+  }
+  return {
+    personal: {
+      fullName: raw?.personal?.fullName || '',
+      email: raw?.personal?.email || '',
+      phone: raw?.personal?.phone || '',
+      location: raw?.personal?.location || '',
+      headline: raw?.personal?.headline || '',
+    },
+    summary: raw?.summary || '',
+    experience: Array.isArray(raw?.experience) ? raw.experience : [],
+    education: Array.isArray(raw?.education) ? raw.education : [],
+    skills: {
+      technical: Array.isArray(raw?.skills?.technical) ? raw.skills.technical : [],
+      soft: Array.isArray(raw?.skills?.soft) ? raw.skills.soft : [],
+    },
+    projects: Array.isArray(raw?.projects) ? raw.projects : [],
+    certifications: Array.isArray(raw?.certifications) ? raw.certifications : [],
+    languages: Array.isArray(raw?.languages) ? raw.languages : [],
+    achievements: Array.isArray(raw?.achievements) ? raw.achievements : [],
+    customSections: Array.isArray(raw?.customSections) ? raw.customSections : [],
+    sectionOrder: Array.isArray(raw?.sectionOrder) ? raw.sectionOrder : [
+      'summary',
+      'experience',
+      'projects',
+      'skills',
+      'education',
+      'certifications',
+      'languages',
+      'achievements',
+    ],
+    hiddenSections: Array.isArray(raw?.hiddenSections) ? raw.hiddenSections : [],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 9. GET /api/public/interview/status
+// ---------------------------------------------------------------------------
+router.get('/interview/status', (_req: Request, res: Response) => {
+  res.json({
+    ok: true,
+    ai: getAiStatus(),
+    categories: INTERVIEW_CATEGORIES,
+    framework: 'STAR (Situation, Task, Action, Result)',
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. POST /api/public/interview/prep
+// Generate role-specific, truth-grounded interview questions & study plan
+// ---------------------------------------------------------------------------
+router.post(
+  '/interview/prep',
+  rateLimit({ windowMs: 15 * 60_000, max: 60 }),
+  aiConcurrencyGuard,
+  async (req: Request, res: Response) => {
+    try {
+      const resume = getSafeResume(req.body.resume);
+      const jdText =
+        typeof req.body.jobDescription === 'string' && req.body.jobDescription.trim().length > 0
+          ? req.body.jobDescription.slice(0, 10_000)
+          : typeof req.body.jdText === 'string' && req.body.jdText.trim().length > 0
+          ? req.body.jdText.slice(0, 10_000)
+          : null;
+
+      let job: JobAnalysis | null = null;
+      let match: any = undefined;
+
+      if (jdText) {
+        job = analyseJobDescription(jdText);
+        match = computeJobMatch(resume, job);
+      }
+
+      const targetRole =
+        typeof req.body.targetRole === 'string' && req.body.targetRole.trim()
+          ? req.body.targetRole.trim().slice(0, 120)
+          : job?.title || '';
+
+      const company =
+        typeof req.body.company === 'string' && req.body.company.trim()
+          ? req.body.company.trim().slice(0, 120)
+          : job?.company || '';
+
+      const prep = await generateInterviewPrep({
+        master: resume,
+        resume,
+        job,
+        jdText,
+        match,
+        targetRole,
+        company,
+      });
+
+      res.json({
+        ok: true,
+        ...prep,
+        targetRole: targetRole || undefined,
+        company: company || undefined,
+      });
+    } catch (err) {
+      handlePublicError(err, res);
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// 11. POST /api/public/interview/star-coach
+// Interactive STAR answer evaluator with Truth Guard check
+// ---------------------------------------------------------------------------
+router.post(
+  '/interview/star-coach',
+  rateLimit({ windowMs: 15 * 60_000, max: 60 }),
+  aiConcurrencyGuard,
+  async (req: Request, res: Response) => {
+    try {
+      const question = typeof req.body.question === 'string' ? req.body.question.trim().slice(0, 600) : '';
+      if (!question) {
+        res.status(400).json({ error: { code: 'INVALID_QUESTION', message: 'Interview question is required.' } });
+        return;
+      }
+
+      const starRaw = req.body.star || {};
+      const star: StarAnswerInput = {
+        situation: typeof starRaw.situation === 'string' ? starRaw.situation.trim().slice(0, 1500) : '',
+        task: typeof starRaw.task === 'string' ? starRaw.task.trim().slice(0, 1500) : '',
+        action: typeof starRaw.action === 'string' ? starRaw.action.trim().slice(0, 2500) : '',
+        result: typeof starRaw.result === 'string' ? starRaw.result.trim().slice(0, 1500) : '',
+      };
+
+      if (!star.situation && !star.task && !star.action && !star.result) {
+        res.status(400).json({
+          error: { code: 'EMPTY_STAR_ANSWER', message: 'At least one STAR component must be provided.' },
+        });
+        return;
+      }
+
+      const resume = getSafeResume(req.body.resume);
+      const jdText =
+        typeof req.body.jobDescription === 'string' && req.body.jobDescription.trim().length > 0
+          ? req.body.jobDescription.slice(0, 10_000)
+          : null;
+
+      let job: JobAnalysis | null = null;
+      if (jdText) {
+        job = analyseJobDescription(jdText);
+      }
+
+      const evaluation = await evaluateStarAnswer({
+        master: resume,
+        resume,
+        job,
+        jdText,
+        question,
+        star,
+      });
+
+      res.json({
+        ok: true,
+        ...evaluation,
+      });
+    } catch (err) {
+      handlePublicError(err, res);
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// 12. POST /api/public/interview/mock-evaluate
+// Single question evaluator for interactive mock interview simulations
+// ---------------------------------------------------------------------------
+router.post(
+  '/interview/mock-evaluate',
+  rateLimit({ windowMs: 15 * 60_000, max: 60 }),
+  aiConcurrencyGuard,
+  async (req: Request, res: Response) => {
+    try {
+      const question = typeof req.body.question === 'string' ? req.body.question.trim().slice(0, 600) : '';
+      const answer = typeof req.body.answer === 'string' ? req.body.answer.trim().slice(0, 4000) : '';
+
+      if (!question) {
+        res.status(400).json({ error: { code: 'INVALID_QUESTION', message: 'Interview question is required.' } });
+        return;
+      }
+      if (!answer) {
+        res.status(400).json({ error: { code: 'EMPTY_ANSWER', message: 'Candidate answer is required.' } });
+        return;
+      }
+
+      const difficulty =
+        typeof req.body.difficulty === 'string' ? req.body.difficulty.trim().slice(0, 30) : undefined;
+      const questionNumber = typeof req.body.questionNumber === 'number' ? req.body.questionNumber : undefined;
+      const totalQuestions = typeof req.body.totalQuestions === 'number' ? req.body.totalQuestions : undefined;
+
+      const resume = getSafeResume(req.body.resume);
+      const jdText =
+        typeof req.body.jobDescription === 'string' && req.body.jobDescription.trim().length > 0
+          ? req.body.jobDescription.slice(0, 10_000)
+          : null;
+
+      let job: JobAnalysis | null = null;
+      if (jdText) {
+        job = analyseJobDescription(jdText);
+      }
+
+      const evaluation = await evaluateMockAnswer({
+        master: resume,
+        resume,
+        job,
+        jdText,
+        question,
+        answer,
+        difficulty,
+        questionNumber,
+        totalQuestions,
+      });
+
+      res.json({
+        ok: true,
+        ...evaluation,
+      });
+    } catch (err) {
+      handlePublicError(err, res);
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// 13. POST /api/public/interview/mock-final
+// Comprehensive final performance report for completed mock interview sessions
+// ---------------------------------------------------------------------------
+router.post(
+  '/interview/mock-final',
+  rateLimit({ windowMs: 15 * 60_000, max: 60 }),
+  aiConcurrencyGuard,
+  async (req: Request, res: Response) => {
+    try {
+      const rawQa = req.body.questionsAndAnswers;
+      if (!Array.isArray(rawQa) || rawQa.length === 0) {
+        res.status(400).json({
+          error: {
+            code: 'INVALID_TRANSCRIPT',
+            message: 'A non-empty array of questions and answers is required to generate the final report.',
+          },
+        });
+        return;
+      }
+
+      const questionsAndAnswers = rawQa.map((item: any) => ({
+        question: typeof item.question === 'string' ? item.question.slice(0, 600) : '',
+        category: typeof item.category === 'string' ? item.category.slice(0, 50) : 'General',
+        answer: typeof item.answer === 'string' ? item.answer.slice(0, 4000) : '',
+        evaluation: item.evaluation,
+      }));
+
+      const difficulty =
+        typeof req.body.difficulty === 'string' ? req.body.difficulty.trim().slice(0, 30) : undefined;
+
+      const resume = getSafeResume(req.body.resume);
+      const jdText =
+        typeof req.body.jobDescription === 'string' && req.body.jobDescription.trim().length > 0
+          ? req.body.jobDescription.slice(0, 10_000)
+          : null;
+
+      let job: JobAnalysis | null = null;
+      if (jdText) {
+        job = analyseJobDescription(jdText);
+      }
+
+      const report = await generateFinalMockReport({
+        master: resume,
+        resume,
+        job,
+        jdText,
+        questionsAndAnswers,
+        difficulty,
+      });
+
+      res.json({
+        ok: true,
+        ...report,
       });
     } catch (err) {
       handlePublicError(err, res);
