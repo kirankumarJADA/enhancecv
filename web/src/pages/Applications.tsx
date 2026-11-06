@@ -1,180 +1,724 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { api, ApiError } from '../api';
-import { EmptyState, Modal } from '../components/ui';
-import { useToast } from '../state/ToastContext';
-import type { Application, ApplicationStatus } from '../types';
+// Curevo AI — Public Kanban Application Dashboard (Phase 9E)
+//
+// 100% Public, Free, and Login-Free.
+// Features:
+//   - Kanban board with 5 stages: SAVED, APPLIED, INTERVIEW, OFFER, REJECTED
+//   - Drag / 1-click status transitions
+//   - Quick add application, full modal editing, and deletion
+//   - 1-click CSV & JSON export
+//   - Match score integration and 1-click CV tailoring
+//   - Local Storage persistence with zero account requirement
 
-const STATUS_STYLES: Record<ApplicationStatus, string> = {
-  SAVED: 'bg-ink-100 text-ink-600',
-  APPLIED: 'bg-brand-50 text-brand-700',
-  SCREENING: 'bg-amber-50 text-amber-700',
-  INTERVIEW: 'bg-violet-50 text-violet-700',
-  OFFER: 'bg-emerald-50 text-emerald-700',
-  REJECTED: 'bg-red-50 text-red-700',
-  WITHDRAWN: 'bg-ink-100 text-ink-500',
-};
-const STATUSES: ApplicationStatus[] = ['SAVED', 'APPLIED', 'SCREENING', 'INTERVIEW', 'OFFER', 'REJECTED', 'WITHDRAWN'];
+import { useState, useEffect, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Logo } from '../components/ui';
+import {
+  getApplications,
+  saveApplication,
+  updateApplicationStatus,
+  deleteApplication,
+  exportApplicationsCsv,
+  exportApplicationsJson,
+  type TrackedApplication,
+  type ApplicationStage,
+} from '../lib/jobStorage';
+
+const STAGES: { key: ApplicationStage; label: string; color: string; badge: string; icon: string }[] = [
+  { key: 'SAVED', label: 'Wishlist / Saved', color: 'border-slate-300 bg-slate-100/70', badge: 'bg-slate-200 text-slate-800', icon: '☆' },
+  { key: 'APPLIED', label: 'Applied', color: 'border-blue-300 bg-blue-50/50', badge: 'bg-blue-100 text-blue-800', icon: '📨' },
+  { key: 'INTERVIEW', label: 'Interviewing', color: 'border-amber-300 bg-amber-50/50', badge: 'bg-amber-100 text-amber-800', icon: '🗓' },
+  { key: 'OFFER', label: 'Offer Received', color: 'border-emerald-300 bg-emerald-50/50', badge: 'bg-emerald-100 text-emerald-800', icon: '🎉' },
+  { key: 'REJECTED', label: 'Archived / Rejected', color: 'border-rose-200 bg-rose-50/40', badge: 'bg-rose-100 text-rose-800', icon: '📦' },
+];
 
 export default function Applications() {
-  const [apps, setApps] = useState<Application[] | null>(null);
-  const [summary, setSummary] = useState<{ total: number; byStatus: Record<string, number> } | null>(null);
-  const [creating, setCreating] = useState(false);
-  const toast = useToast();
+  const navigate = useNavigate();
+  const [applications, setApplications] = useState<TrackedApplication[]>([]);
+  const [searchFilter, setSearchFilter] = useState('');
+  const [activeMobileStage, setActiveMobileStage] = useState<ApplicationStage>('APPLIED');
 
-  async function load() {
-    const res = await api.get<{ applications: Application[]; summary: { total: number; byStatus: Record<string, number> } }>('/applications');
-    setApps(res.applications);
-    setSummary(res.summary);
-  }
+  // Modals & Forms
+  const [editingApp, setEditingApp] = useState<TrackedApplication | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Form State
+  const [formCompany, setFormCompany] = useState('');
+  const [formRole, setFormRole] = useState('');
+  const [formLocation, setFormLocation] = useState('Remote');
+  const [formSalary, setFormSalary] = useState('');
+  const [formStatus, setFormStatus] = useState<ApplicationStage>('APPLIED');
+  const [formAppliedDate, setFormAppliedDate] = useState('');
+  const [formInterviewDate, setFormInterviewDate] = useState('');
+  const [formJobUrl, setFormJobUrl] = useState('');
+  const [formNotes, setFormNotes] = useState('');
+
+  const loadData = () => {
+    const list = getApplications();
+    setApplications(list);
+  };
 
   useEffect(() => {
-    void load().catch(() => toast.show('Could not load applications.', 'error'));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadData();
   }, []);
 
-  async function changeStatus(a: Application, status: ApplicationStatus) {
-    try {
-      await api.patch(`/applications/${a.id}`, { status });
-      await load();
-    } catch (err) {
-      toast.show(err instanceof ApiError ? err.message : 'Update failed.', 'error');
-    }
-  }
+  const triggerToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
-  async function remove(a: Application) {
-    try {
-      await api.del(`/applications/${a.id}`);
-      toast.show('Application deleted.', 'success');
-      await load();
-    } catch (err) {
-      toast.show(err instanceof ApiError ? err.message : 'Delete failed.', 'error');
+  // Summary Metrics
+  const metrics = useMemo(() => {
+    const counts: Record<ApplicationStage, number> = {
+      SAVED: 0,
+      APPLIED: 0,
+      INTERVIEW: 0,
+      OFFER: 0,
+      REJECTED: 0,
+    };
+    applications.forEach((a) => {
+      if (counts[a.status] !== undefined) {
+        counts[a.status]++;
+      }
+    });
+    return {
+      total: applications.length,
+      ...counts,
+    };
+  }, [applications]);
+
+  // Filtered applications
+  const filteredApps = useMemo(() => {
+    if (!searchFilter.trim()) return applications;
+    const q = searchFilter.toLowerCase().trim();
+    return applications.filter(
+      (a) =>
+        a.company.toLowerCase().includes(q) ||
+        a.role.toLowerCase().includes(q) ||
+        a.location.toLowerCase().includes(q) ||
+        (a.notes && a.notes.toLowerCase().includes(q))
+    );
+  }, [applications, searchFilter]);
+
+  // Handle stage change
+  const handleStageChange = (id: string, newStage: ApplicationStage) => {
+    const success = updateApplicationStatus(id, newStage);
+    if (success) {
+      loadData();
+      triggerToast(`Moved application to ${newStage}`);
     }
-  }
+  };
+
+  // Handle delete
+  const handleDelete = (id: string, role: string) => {
+    if (window.confirm(`Delete application for "${role}"?`)) {
+      deleteApplication(id);
+      loadData();
+      triggerToast('Application removed');
+    }
+  };
+
+  // Open Create Modal
+  const openCreateModal = () => {
+    const today = new Date().toISOString().split('T')[0];
+    setFormCompany('');
+    setFormRole('');
+    setFormLocation('Remote');
+    setFormSalary('');
+    setFormStatus('APPLIED');
+    setFormAppliedDate(today);
+    setFormInterviewDate('');
+    setFormJobUrl('');
+    setFormNotes('');
+    setIsCreating(true);
+  };
+
+  // Open Edit Modal
+  const openEditModal = (app: TrackedApplication) => {
+    setEditingApp(app);
+    setFormCompany(app.company);
+    setFormRole(app.role);
+    setFormLocation(app.location || '');
+    setFormSalary(app.salary || '');
+    setFormStatus(app.status);
+    setFormAppliedDate(app.applied_date || '');
+    setFormInterviewDate(app.interview_date || '');
+    setFormJobUrl(app.job_url || '');
+    setFormNotes(app.notes || '');
+  };
+
+  // Submit Create or Edit Form
+  const handleSaveForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formCompany.trim() || !formRole.trim()) {
+      triggerToast('Company and Role Title are required.');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    if (editingApp) {
+      const updated: TrackedApplication = {
+        ...editingApp,
+        company: formCompany.trim(),
+        role: formRole.trim(),
+        location: formLocation.trim(),
+        salary: formSalary.trim(),
+        status: formStatus,
+        applied_date: formAppliedDate,
+        interview_date: formInterviewDate || undefined,
+        job_url: formJobUrl.trim(),
+        notes: formNotes.trim(),
+        updated_at: now,
+      };
+      saveApplication(updated);
+      setEditingApp(null);
+      triggerToast(`Updated "${updated.role}" application!`);
+    } else {
+      const newApp: TrackedApplication = {
+        id: `app_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`,
+        company: formCompany.trim(),
+        role: formRole.trim(),
+        location: formLocation.trim(),
+        salary: formSalary.trim(),
+        status: formStatus,
+        applied_date: formAppliedDate || (formStatus === 'APPLIED' ? now.split('T')[0] : ''),
+        interview_date: formInterviewDate || undefined,
+        job_url: formJobUrl.trim(),
+        notes: formNotes.trim(),
+        created_at: now,
+        updated_at: now,
+      };
+      saveApplication(newApp);
+      setIsCreating(false);
+      triggerToast(`Added "${newApp.role}" to your tracker!`);
+    }
+    loadData();
+  };
+
+  // Tailor Resume for this Application
+  const handleTailor = (app: TrackedApplication) => {
+    const text = `${app.role} at ${app.company}\nLocation: ${app.location}\n${app.notes ? `Notes:\n${app.notes}\n` : ''}${
+      app.job_description ? `Description:\n${app.job_description}` : ''
+    }`;
+    try {
+      sessionStorage.setItem('curevo_prefilled_jd', text);
+      sessionStorage.setItem('curevo_prefilled_role', app.role);
+      sessionStorage.setItem('curevo_prefilled_company', app.company);
+    } catch {
+      // ignore
+    }
+    navigate('/builder?mode=improve');
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink-900">Applications</h1>
-          <p className="mt-1 text-sm text-ink-500">Track every role you are pursuing, from saved to offer.</p>
-        </div>
-        <button className="btn-primary" onClick={() => setCreating(true)}>+ Add application</button>
-      </div>
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-teal-100 selection:text-teal-900">
+      {/* Top Header */}
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-xs">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-4">
+            <Link to="/" className="inline-flex items-center gap-2">
+              <Logo />
+            </Link>
+            <span className="hidden sm:inline-flex items-center rounded-full bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800 border border-teal-200">
+              Kanban Application Tracker • 100% Free
+            </span>
+          </div>
 
-      {summary && (
-        <div className="flex flex-wrap gap-2">
-          {STATUSES.map((s) => (
-            <span key={s} className={`chip ${STATUS_STYLES[s]}`}>{s}: {summary.byStatus[s] || 0}</span>
-          ))}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link
+              to="/jobs"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
+            >
+              Find Jobs
+            </Link>
+            <Link
+              to="/builder"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-2xs hover:bg-slate-800"
+            >
+              Resume Builder
+            </Link>
+            <Link to="/" className="text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900">
+              Home
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white shadow-xl flex items-center gap-2 border border-slate-800 animate-fade-in">
+          <span className="text-teal-400">✓</span>
+          <span>{toastMessage}</span>
         </div>
       )}
 
-      {!apps ? null : apps.length === 0 ? (
-        <EmptyState
-          title="No applications tracked yet"
-          body="Add a role you are pursuing — or create one straight from a job analysis — and track its status here."
-          action={<button className="btn-primary" onClick={() => setCreating(true)}>Add your first application</button>}
-        />
-      ) : (
-        <div className="space-y-3">
-          {apps.map((a) => (
-            <div key={a.id} className="card p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-sm font-semibold text-ink-900">{a.role}</h2>
-                    <span className="text-sm text-ink-500">· {a.company}</span>
-                    <span className={`chip ${STATUS_STYLES[a.status]}`}>{a.status}</span>
-                  </div>
-                  <p className="mt-1 text-xs text-ink-400">
-                    {[a.location, a.salary, a.applied_date && `Applied ${a.applied_date}`].filter(Boolean).join(' · ')}
-                    {a.job_url && (
-                      <>
-                        {' · '}
-                        <a className="text-brand-600 hover:text-brand-700" href={a.job_url} target="_blank" rel="noreferrer">job link</a>
-                      </>
-                    )}
-                  </p>
-                  {a.notes && <p className="mt-2 text-sm text-ink-600">{a.notes}</p>}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="text-xs text-ink-400" htmlFor={`status-${a.id}`}>Status</label>
-                  <select
-                    id={`status-${a.id}`}
-                    className="input w-36 py-1.5 text-xs"
-                    value={a.status}
-                    onChange={(e) => void changeStatus(a, e.target.value as ApplicationStatus)}
-                  >
-                    {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                  {a.resume_id && <Link className="btn-secondary px-3 py-1.5 text-xs" to={`/app/resumes/${a.resume_id}/edit`}>Resume</Link>}
-                  <button className="btn-ghost px-2 py-1.5 text-xs text-red-600 hover:bg-red-50" onClick={() => void remove(a)} aria-label={`Delete application for ${a.role}`}>✕</button>
-                </div>
+      {/* Main Dashboard Area */}
+      <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 flex-1 flex flex-col">
+        {/* Dashboard Top Banner */}
+        <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Application Kanban Board</h1>
+            <p className="mt-1 text-xs sm:text-sm text-slate-600">
+              Track your job pipeline across 5 stages with local persistence, match insights, and CSV/JSON exports.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={exportApplicationsCsv}
+              disabled={applications.length === 0}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition cursor-pointer"
+              title="Download spreadsheet of your applications"
+            >
+              📥 Export CSV
+            </button>
+            <button
+              type="button"
+              onClick={exportApplicationsJson}
+              disabled={applications.length === 0}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition cursor-pointer"
+              title="Download complete JSON backup"
+            >
+              Export JSON
+            </button>
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="rounded-lg bg-teal-600 px-3.5 py-1.5 text-xs sm:text-sm font-semibold text-white hover:bg-teal-700 shadow-xs transition cursor-pointer"
+            >
+              + Add Application
+            </button>
+          </div>
+        </div>
+
+        {/* Metrics Bar */}
+        <div className="mb-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+          <div className="rounded-xl bg-white p-3 border border-slate-200 shadow-2xs">
+            <span className="text-[11px] font-bold text-slate-500 uppercase">Total Tracked</span>
+            <p className="text-xl font-extrabold text-slate-900 mt-0.5">{metrics.total}</p>
+          </div>
+          {STAGES.map((s) => (
+            <div key={s.key} className="rounded-xl bg-white p-3 border border-slate-200 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-500 uppercase">{s.label}</span>
+                <span className="text-xs">{s.icon}</span>
               </div>
+              <p className="text-xl font-extrabold text-slate-900 mt-0.5">{metrics[s.key]}</p>
             </div>
           ))}
         </div>
-      )}
 
-      <ApplicationForm open={creating} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); void load(); }} />
-    </div>
-  );
-}
+        {/* Search & Filter */}
+        <div className="mb-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="w-full sm:w-80">
+            <input
+              type="text"
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              placeholder="Search by company, role or notes..."
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-xs sm:text-sm bg-white focus:border-teal-500 focus:outline-none"
+            />
+          </div>
 
-function ApplicationForm({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
-  const [company, setCompany] = useState('');
-  const [role, setRole] = useState('');
-  const [jobUrl, setJobUrl] = useState('');
-  const [location, setLocation] = useState('');
-  const [salary, setSalary] = useState('');
-  const [notes, setNotes] = useState('');
-  const [appliedDate, setAppliedDate] = useState('');
-  const [status, setStatus] = useState<ApplicationStatus>('SAVED');
-  const [busy, setBusy] = useState(false);
-  const toast = useToast();
-
-  async function submit() {
-    setBusy(true);
-    try {
-      await api.post('/applications', { company, role, jobUrl, location, salary, notes, appliedDate, status });
-      toast.show('Application added.', 'success');
-      setCompany(''); setRole(''); setJobUrl(''); setLocation(''); setSalary(''); setNotes(''); setAppliedDate(''); setStatus('SAVED');
-      onSaved();
-    } catch (err) {
-      toast.show(err instanceof ApiError ? err.message : 'Could not save.', 'error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Modal open={open} onClose={onClose} title="Add application">
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <div><label className="label" htmlFor="app-company">Company</label><input id="app-company" className="input" value={company} onChange={(e) => setCompany(e.target.value)} /></div>
-          <div><label className="label" htmlFor="app-role">Role</label><input id="app-role" className="input" value={role} onChange={(e) => setRole(e.target.value)} /></div>
-        </div>
-        <div><label className="label" htmlFor="app-url">Job URL (optional)</label><input id="app-url" className="input" value={jobUrl} onChange={(e) => setJobUrl(e.target.value)} placeholder="https://…" /></div>
-        <div className="grid grid-cols-2 gap-3">
-          <div><label className="label" htmlFor="app-loc">Location</label><input id="app-loc" className="input" value={location} onChange={(e) => setLocation(e.target.value)} /></div>
-          <div><label className="label" htmlFor="app-salary">Salary</label><input id="app-salary" className="input" value={salary} onChange={(e) => setSalary(e.target.value)} /></div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div><label className="label" htmlFor="app-date">Applied date</label><input id="app-date" className="input" value={appliedDate} placeholder="MM/YYYY" onChange={(e) => setAppliedDate(e.target.value)} /></div>
-          <div>
-            <label className="label" htmlFor="app-status">Status</label>
-            <select id="app-status" className="input" value={status} onChange={(e) => setStatus(e.target.value as ApplicationStatus)}>
-              {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+          {/* Mobile stage selector tabs */}
+          <div className="flex sm:hidden w-full overflow-x-auto gap-1 pb-1">
+            {STAGES.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setActiveMobileStage(s.key)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold whitespace-nowrap cursor-pointer ${
+                  activeMobileStage === s.key ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 border border-slate-200'
+                }`}
+              >
+                {s.label} ({metrics[s.key]})
+              </button>
+            ))}
           </div>
         </div>
-        <div><label className="label" htmlFor="app-notes">Notes</label><textarea id="app-notes" className="input min-h-[70px]" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
-        <div className="flex justify-end gap-2 pt-2">
-          <button className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" disabled={busy || !company.trim() || !role.trim()} onClick={() => void submit()}>Save</button>
-        </div>
-      </div>
-    </Modal>
+
+        {/* Kanban Board Container */}
+        {applications.length === 0 ? (
+          <div className="flex-1 rounded-2xl border border-dashed border-slate-300 p-12 text-center bg-white flex flex-col items-center justify-center">
+            <div className="h-12 w-12 rounded-full bg-teal-50 flex items-center justify-center text-teal-600 text-2xl mb-3">
+              📋
+            </div>
+            <h3 className="text-lg font-bold text-slate-900">Your Application Board is Empty</h3>
+            <p className="mt-1 text-sm text-slate-500 max-w-md">
+              Start tracking your job search! Add applications manually or discover curated benchmark jobs and track them with one click.
+            </p>
+            <div className="mt-5 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={openCreateModal}
+                className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
+              >
+                + Add First Application
+              </button>
+              <Link
+                to="/jobs"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Find Jobs to Track
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1">
+            {/* Desktop Kanban Grid (5 Columns) */}
+            <div className="hidden sm:grid sm:grid-cols-5 gap-3.5 items-start">
+              {STAGES.map((col) => {
+                const stageApps = filteredApps.filter((a) => a.status === col.key);
+
+                return (
+                  <div
+                    key={col.key}
+                    className={`rounded-2xl border p-3 flex flex-col min-h-[550px] ${col.color}`}
+                  >
+                    {/* Column Header */}
+                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200/60">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs">{col.icon}</span>
+                        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                          {col.label}
+                        </h2>
+                      </div>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${col.badge}`}>
+                        {stageApps.length}
+                      </span>
+                    </div>
+
+                    {/* Cards List */}
+                    <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[70vh] pr-0.5">
+                      {stageApps.length === 0 ? (
+                        <div className="py-8 text-center text-slate-400 text-xs">
+                          No {col.label.toLowerCase()} roles
+                        </div>
+                      ) : (
+                        stageApps.map((app) => (
+                          <div
+                            key={app.id}
+                            className="rounded-xl bg-white p-3.5 shadow-2xs border border-slate-200 hover:border-slate-300 transition flex flex-col justify-between group"
+                          >
+                            <div>
+                              <div className="flex items-start justify-between gap-1.5">
+                                <span className="text-[11px] font-bold text-teal-700 uppercase line-clamp-1">
+                                  {app.company}
+                                </span>
+                                {app.match_score !== null && app.match_score !== undefined && (
+                                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 shrink-0">
+                                    {app.match_score}%
+                                  </span>
+                                )}
+                              </div>
+                              <h3 className="text-sm font-bold text-slate-900 mt-0.5 leading-snug">{app.role}</h3>
+                              <p className="text-[11px] text-slate-500 mt-1">
+                                {[app.location, app.salary].filter(Boolean).join(' • ')}
+                              </p>
+
+                              {/* Dates indicator */}
+                              <div className="mt-2 text-[10px] text-slate-400 space-y-0.5">
+                                {app.applied_date && (
+                                  <p>Applied: <span className="text-slate-600">{app.applied_date}</span></p>
+                                )}
+                                {app.interview_date && (
+                                  <p className="text-amber-700 font-semibold">
+                                    Interview: {app.interview_date}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Notes snippet */}
+                              {app.notes && (
+                                <p className="mt-2 text-[11px] text-slate-600 bg-slate-50 p-1.5 rounded border border-slate-100 line-clamp-2">
+                                  {app.notes}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Card Stage Movement Dropdown & Actions */}
+                            <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                              {/* Move Stage Selector */}
+                              <select
+                                value={app.status}
+                                onChange={(e) => handleStageChange(app.id, e.target.value as ApplicationStage)}
+                                className="text-[11px] bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-slate-700 font-medium focus:outline-none"
+                              >
+                                {STAGES.map((s) => (
+                                  <option key={s.key} value={s.key}>
+                                    Move: {s.label}
+                                  </option>
+                                ))}
+                              </select>
+
+                              {/* Action buttons */}
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleTailor(app)}
+                                  className="text-[11px] font-semibold text-teal-700 hover:text-teal-900 p-1"
+                                  title="Tailor resume for this application"
+                                >
+                                  Tailor
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openEditModal(app)}
+                                  className="text-[11px] text-slate-500 hover:text-slate-800 p-1"
+                                  title="Edit details"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(app.id, app.role)}
+                                  className="text-[11px] text-rose-500 hover:text-rose-700 p-1"
+                                  title="Delete"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Mobile View: Active Stage Column */}
+            <div className="block sm:hidden space-y-3">
+              {filteredApps
+                .filter((a) => a.status === activeMobileStage)
+                .map((app) => (
+                  <div key={app.id} className="rounded-xl bg-white p-4 border border-slate-200 shadow-2xs">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <span className="text-xs font-bold text-teal-700 uppercase">{app.company}</span>
+                        <h3 className="text-base font-bold text-slate-900 mt-0.5">{app.role}</h3>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {[app.location, app.salary, app.applied_date && `Applied: ${app.applied_date}`]
+                            .filter(Boolean)
+                            .join(' • ')}
+                        </p>
+                      </div>
+                      {app.match_score !== null && app.match_score !== undefined && (
+                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+                          {app.match_score}%
+                        </span>
+                      )}
+                    </div>
+
+                    {app.notes && (
+                      <p className="mt-2 text-xs text-slate-600 bg-slate-50 p-2 rounded">{app.notes}</p>
+                    )}
+
+                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                      <select
+                        value={app.status}
+                        onChange={(e) => handleStageChange(app.id, e.target.value as ApplicationStage)}
+                        className="text-xs bg-slate-100 border border-slate-300 rounded-lg px-2 py-1 font-semibold"
+                      >
+                        {STAGES.map((s) => (
+                          <option key={s.key} value={s.key}>
+                            Stage: {s.label}
+                          </option>
+                        ))}
+                      </select>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleTailor(app)}
+                          className="text-xs font-bold text-teal-700"
+                        >
+                          Tailor CV
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(app)}
+                          className="text-xs text-slate-600"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(app.id, app.role)}
+                          className="text-xs text-rose-600"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              {filteredApps.filter((a) => a.status === activeMobileStage).length === 0 && (
+                <div className="py-12 text-center text-slate-400 text-sm bg-white rounded-xl border border-slate-200">
+                  No applications in this stage.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Add or Edit Application */}
+        {(isCreating || editingApp) && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h2 className="text-lg font-bold text-slate-900">
+                  {editingApp ? 'Edit Application' : 'Add New Application'}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreating(false);
+                    setEditingApp(null);
+                  }}
+                  className="rounded-lg p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveForm} className="mt-4 space-y-3.5 text-xs">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-1">Company *</label>
+                    <input
+                      type="text"
+                      required
+                      value={formCompany}
+                      onChange={(e) => setFormCompany(e.target.value)}
+                      placeholder="e.g. Google, Datadog"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-1">Role Title *</label>
+                    <input
+                      type="text"
+                      required
+                      value={formRole}
+                      onChange={(e) => setFormRole(e.target.value)}
+                      placeholder="e.g. Senior Software Engineer"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-1">Status Stage</label>
+                    <select
+                      value={formStatus}
+                      onChange={(e) => setFormStatus(e.target.value as ApplicationStage)}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none bg-white font-medium"
+                    >
+                      {STAGES.map((s) => (
+                        <option key={s.key} value={s.key}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-1">Location</label>
+                    <input
+                      type="text"
+                      value={formLocation}
+                      onChange={(e) => setFormLocation(e.target.value)}
+                      placeholder="e.g. London / Remote"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-1">Applied Date</label>
+                    <input
+                      type="date"
+                      value={formAppliedDate}
+                      onChange={(e) => setFormAppliedDate(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-1">Interview Date (optional)</label>
+                    <input
+                      type="date"
+                      value={formInterviewDate}
+                      onChange={(e) => setFormInterviewDate(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-1">Salary / Compensation</label>
+                    <input
+                      type="text"
+                      value={formSalary}
+                      onChange={(e) => setFormSalary(e.target.value)}
+                      placeholder="e.g. £90k - £110k"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-1">Job URL</label>
+                    <input
+                      type="url"
+                      value={formJobUrl}
+                      onChange={(e) => setFormJobUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 uppercase mb-1">Notes & Follow-ups</label>
+                  <textarea
+                    rows={3}
+                    value={formNotes}
+                    onChange={(e) => setFormNotes(e.target.value)}
+                    placeholder="Key contacts, referral info, interview round details, preparation points..."
+                    className="w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-teal-500 focus:outline-none leading-relaxed"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreating(false);
+                      setEditingApp(null);
+                    }}
+                    className="rounded-lg border border-slate-300 px-3.5 py-2 font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-teal-600 px-4 py-2 font-semibold text-white hover:bg-teal-700 transition cursor-pointer"
+                  >
+                    {editingApp ? 'Save Changes' : 'Create Application'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
   );
 }

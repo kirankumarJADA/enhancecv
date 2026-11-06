@@ -24,6 +24,8 @@ import { renderResumePdf, pdfFileName, renderCoverLetterPdf, coverLetterFileName
 import { rateLimit } from '../middleware/rateLimit';
 import { AppError } from '../middleware/errors';
 import { AiUnavailableError, getAiStatus } from '../ai/provider';
+import { getJobSourceProvider, isJobSourceConfigured } from '../lib/jobSource';
+import { CURATED_JOBS } from '../data/curatedJobs';
 import type { ResumeData, JobAnalysis, PageSize } from '../types';
 
 const router = Router();
@@ -595,6 +597,94 @@ router.post(
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 
       stream.pipe(res);
+    } catch (err) {
+      handlePublicError(err, res);
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// 7. GET /api/public/jobs/status
+// Reports whether an external live jobs API provider is configured
+// ---------------------------------------------------------------------------
+router.get('/jobs/status', (_req: Request, res: Response) => {
+    res.json({
+      ok: true,
+      configured: isJobSourceConfigured(),
+      isConfigured: isJobSourceConfigured(),
+      provider: isJobSourceConfigured() ? 'live-api' : 'curated-presets',
+      message: isJobSourceConfigured()
+        ? 'Connected to live external job provider'
+        : 'Live job provider not configured in environment. Displaying realistic curated benchmark roles.',
+    });
+  });
+
+// ---------------------------------------------------------------------------
+// 8. POST /api/public/jobs/discover
+// Public, login-free job discovery with search, filtering, and curated benchmark fallback
+// ---------------------------------------------------------------------------
+router.post(
+  '/jobs/discover',
+  rateLimit({ windowMs: 15 * 60_000, max: 60 }),
+  async (req: Request, res: Response) => {
+    try {
+      const query = typeof req.body.query === 'string' ? req.body.query.trim().toLowerCase() : '';
+      const location = typeof req.body.location === 'string' ? req.body.location.trim().toLowerCase() : '';
+      const remoteType = typeof req.body.remoteType === 'string' ? req.body.remoteType.trim().toLowerCase() : '';
+      const employmentType = typeof req.body.employmentType === 'string' ? req.body.employmentType.trim().toLowerCase() : '';
+      const limit = typeof req.body.limit === 'number' && req.body.limit > 0 ? Math.min(req.body.limit, 50) : 20;
+
+      if (isJobSourceConfigured()) {
+        const provider = getJobSourceProvider();
+        const results = await provider.search(
+          {
+            keywords: query,
+            location: location || undefined,
+            remoteType: remoteType || undefined,
+            employmentType: employmentType || undefined,
+          },
+          limit
+        );
+        res.json({
+          ok: true,
+          jobs: results,
+          total: results.length,
+          source: 'live',
+          configured: true,
+          isConfigured: true,
+        });
+        return;
+      }
+
+      let filtered = CURATED_JOBS;
+      if (query) {
+        filtered = filtered.filter(
+          (j) =>
+            j.title.toLowerCase().includes(query) ||
+            j.company.toLowerCase().includes(query) ||
+            j.description.toLowerCase().includes(query) ||
+            j.technologies.some((t) => t.toLowerCase().includes(query))
+        );
+      }
+      if (location) {
+        filtered = filtered.filter((j) => j.location.toLowerCase().includes(location));
+      }
+      if (remoteType && remoteType !== 'all') {
+        filtered = filtered.filter((j) => j.remote_type.toLowerCase() === remoteType);
+      }
+      if (employmentType && employmentType !== 'all') {
+        filtered = filtered.filter((j) => j.employment_type.toLowerCase() === employmentType);
+      }
+
+      res.json({
+        ok: true,
+        jobs: filtered.slice(0, limit),
+        total: filtered.length,
+        source: 'curated-presets',
+        configured: false,
+        isConfigured: false,
+        message: 'Live job provider not configured in environment. Displaying realistic curated benchmark roles.',
+      });
     } catch (err) {
       handlePublicError(err, res);
     }
