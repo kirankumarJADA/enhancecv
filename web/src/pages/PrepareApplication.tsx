@@ -8,7 +8,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
-import { Logo, Spinner } from '../components/ui';
+import { Spinner } from '../components/ui';
+import Navbar from '../components/Navbar';
 import CompanyResearchModal from '../components/CompanyResearchModal';
 import EmailModal from '../components/EmailModal';
 import { CURATED_JOBS, type CuratedJob } from '../data/curatedJobs';
@@ -216,34 +217,7 @@ export default function PrepareApplication() {
       )}
 
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-3">
-            <Link to="/" className="flex items-center gap-2 text-decoration-none">
-              <Logo className="h-7 w-7 text-teal-600" />
-              <span className="text-lg font-bold tracking-tight text-slate-900">Curevo AI</span>
-            </Link>
-            <span className="rounded-full bg-teal-100 text-teal-800 text-2xs font-bold px-2 py-0.5 uppercase tracking-wide">
-              Prepare My Application
-            </span>
-          </div>
-
-          <nav className="flex items-center gap-4 text-xs font-semibold text-slate-600">
-            <Link to="/jobs" className="hover:text-teal-600 transition">
-              Find Jobs
-            </Link>
-            <Link to="/applications" className="hover:text-teal-600 transition">
-              Applications
-            </Link>
-            <Link to="/interview" className="hover:text-teal-600 transition">
-              Interview Coach
-            </Link>
-            <Link to="/builder" className="hover:text-teal-600 transition">
-              Resume Builder
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <Navbar ctaText="Build Resume" ctaLink="/builder" />
 
       {/* Main Flow Container */}
       <main className="mx-auto max-w-5xl px-4 pt-8 sm:px-6 space-y-8">

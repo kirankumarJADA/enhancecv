@@ -18,3 +18,4 @@ __pycache__/
 *.pyc
 *.exe
 .codex/
+server/tests/*-evidence/

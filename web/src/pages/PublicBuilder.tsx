@@ -1546,6 +1546,18 @@ export default function PublicBuilder() {
               </button>
             )}
             <Link
+              to="/prepare-application"
+              className="hidden lg:inline-block text-xs sm:text-sm font-semibold text-teal-700 bg-teal-50 px-2 py-1 rounded-md border border-teal-200 hover:bg-teal-100 transition"
+            >
+              🚀 Prepare App
+            </Link>
+            <Link
+              to="/interview"
+              className="hidden md:inline-block text-xs sm:text-sm font-medium text-slate-600 hover:text-teal-700 transition"
+            >
+              Interview Coach
+            </Link>
+            <Link
               to="/jobs"
               className="text-xs sm:text-sm font-medium text-slate-600 hover:text-teal-700 transition"
             >

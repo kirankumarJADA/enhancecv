@@ -12,7 +12,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
-import { Logo, Spinner } from '../components/ui';
+import { Spinner } from '../components/ui';
+import Navbar from '../components/Navbar';
 import CompanyResearchModal from '../components/CompanyResearchModal';
 import { CURATED_JOBS, type CuratedJob } from '../data/curatedJobs';
 import {
@@ -325,48 +326,7 @@ export default function Jobs() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-teal-100 selection:text-teal-900">
       {/* Top Header */}
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-xs">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-4">
-            <Link to="/" className="inline-flex items-center gap-2">
-              <Logo />
-            </Link>
-            <span className="hidden sm:inline-flex items-center rounded-full bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800 border border-teal-200">
-              Jobs & Market Match • 100% Free
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-4">
-            <Link
-              to="/builder"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
-            >
-              Resume Builder
-            </Link>
-            <Link
-              to="/applications"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
-            >
-              Application Tracker
-            </Link>
-            <Link
-              to="/interview"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-2xs hover:bg-teal-700"
-            >
-              Interview Coach
-            </Link>
-            <Link
-              to="/linkedin"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
-            >
-              LinkedIn
-            </Link>
-            <Link to="/" className="text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900">
-              Home
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Navbar ctaText="Build Resume" ctaLink="/builder" />
 
       {/* Notification Toast */}
       {actionSuccessMessage && (

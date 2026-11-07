@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Logo } from '../components/ui';
+import Navbar from '../components/Navbar';
 import DataPrivacyModal from '../components/DataPrivacyModal';
 
 const HOW_IT_WORKS = [
@@ -89,43 +90,7 @@ export default function Landing() {
   return (
     <div className="bg-white text-slate-900 selection:bg-teal-100 selection:text-teal-900 min-h-screen flex flex-col">
       {/* Top Navigation */}
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Logo />
-          <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex" aria-label="Main Navigation">
-            <Link to="/prepare-application" className="text-teal-700 font-bold transition hover:text-teal-900 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">Prepare Application</Link>
-            <Link to="/jobs" className="transition hover:text-slate-900">Find Jobs</Link>
-            <Link to="/applications" className="transition hover:text-slate-900">Application Tracker</Link>
-            <Link to="/interview" className="transition hover:text-slate-900">Interview Coach</Link>
-            <Link to="/linkedin" className="transition hover:text-slate-900">LinkedIn</Link>
-            <Link to="/builder?mode=ats" className="transition hover:text-slate-900">Check ATS</Link>
-            <a href="#how" className="transition hover:text-slate-900">How It Works</a>
-            <a href="#truth" className="transition hover:text-slate-900">Truth Guard™</a>
-            <a href="#features" className="transition hover:text-slate-900">Features</a>
-            <a href="#faq" className="transition hover:text-slate-900">FAQ</a>
-          </nav>
-          <div className="flex items-center gap-3">
-            <Link
-              to="/builder?mode=ats"
-              className="hidden sm:inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
-            >
-              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-teal-600" aria-hidden="true">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.7-9.3a1 1 0 00-1.4-1.4L9 10.6 7.7 9.3a1 1 0 00-1.4 1.4l2 2a1 1 0 001.4 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span>Check ATS Score</span>
-            </Link>
-            <Link
-              to="/builder"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
-            >
-              <span>Start Building Free</span>
-              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-teal-400" aria-hidden="true">
-                <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Navbar onOpenPrivacy={() => setPrivacyModalOpen(true)} ctaText="Start Building Free" ctaLink="/builder" />
 
       {/* Hero Section */}
       <section className="bg-slate-50 border-b border-slate-200 pt-16 pb-20 sm:pt-24 sm:pb-28">

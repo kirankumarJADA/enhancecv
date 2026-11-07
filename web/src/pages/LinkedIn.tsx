@@ -9,9 +9,10 @@
 //   - Tab 5: History & JSON Export/Import
 
 import { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../api';
-import { Logo, Spinner } from '../components/ui';
+import { Spinner } from '../components/ui';
+import Navbar from '../components/Navbar';
 import {
   getSavedLinkedInProfile,
   saveLinkedInProfile,
@@ -203,45 +204,7 @@ export default function LinkedIn() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-teal-100 selection:text-teal-900">
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-xs">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-4">
-            <Link to="/" className="inline-flex items-center gap-2">
-              <Logo />
-            </Link>
-            <span className="hidden sm:inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-800 border border-blue-200">
-              LinkedIn Optimizer • 100% Free
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-4">
-            <Link
-              to="/builder"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
-            >
-              Resume Builder
-            </Link>
-            <Link
-              to="/jobs"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
-            >
-              Find Jobs
-            </Link>
-            <Link
-              to="/applications"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
-            >
-              Applications
-            </Link>
-            <Link
-              to="/interview"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
-            >
-              Interview Coach
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Navbar ctaText="Prepare App" ctaLink="/prepare-application" />
 
       {/* Toast Notification */}
       {toastMessage && (
