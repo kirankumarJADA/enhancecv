@@ -58,7 +58,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   const requestId = (req as Request & { requestId?: string }).requestId;
 
   if (err instanceof ZodError) {
-    const first = err.errors[0];
+    const first = (err.issues || (err as any).errors)?.[0];
     res.status(400).json({
       error: {
         code: 'VALIDATION',

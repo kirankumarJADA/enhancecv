@@ -1171,7 +1171,7 @@ const emailResumeSchema = z.object({
   candidateName: z.string().max(100).optional(),
   resumeSummary: z.string().max(3000),
   consent: z.literal(true, {
-    errorMap: () => ({ message: 'You must explicitly consent to receiving this email.' }),
+    message: 'You must explicitly consent to receiving this email.',
   }),
 });
 
@@ -1233,7 +1233,7 @@ const emailInterviewReportSchema = z.object({
   overallScore: z.number().min(0).max(100).optional(),
   summary: z.string().max(4000),
   consent: z.literal(true, {
-    errorMap: () => ({ message: 'You must explicitly consent to receiving this email.' }),
+    message: 'You must explicitly consent to receiving this email.',
   }),
 });
 
