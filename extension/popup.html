@@ -2,44 +2,76 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <title>Curevo Job Capture</title>
     <style>
-      body { width: 340px; font: 13px/1.5 system-ui, sans-serif; margin: 0; padding: 14px; color: #101828; }
-      h1 { font-size: 15px; margin: 0 0 2px; display: flex; align-items: center; gap: 6px; }
-      .logo { width: 18px; height: 18px; border-radius: 4px; background: #2547eb; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; }
-      p.hint { color: #667085; margin: 2px 0 10px; }
-      label { display: block; font-weight: 600; margin: 8px 0 3px; }
-      input { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid #d0d5dd; border-radius: 8px; font: inherit; }
-      button { margin-top: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 8px; background: #2547eb; color: #fff; font-weight: 600; cursor: pointer; }
-      button.secondary { background: #eef2f6; color: #101828; }
+      body { width: 340px; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 14px; color: #0f172a; background: #fff; }
+      header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+      h1 { font-size: 14px; margin: 0; display: flex; align-items: center; gap: 6px; font-weight: 700; color: #0f172a; }
+      .logo { width: 20px; height: 20px; border-radius: 5px; background: #0d9488; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 11px; }
+      .tag { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 9999px; background: #f0fdfa; color: #0f766e; border: 1px solid #ccfbf1; }
+      .card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; background: #f8fafc; margin-bottom: 12px; }
+      .field { margin-bottom: 6px; }
+      .field label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 2px; }
+      .field input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; background: #fff; }
+      .actions { display: flex; flex-direction: column; gap: 8px; }
+      button { width: 100%; padding: 8px 12px; border: 0; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s ease; }
+      button.primary { background: #0d9488; color: #fff; }
+      button.primary:hover { background: #0f766e; }
+      button.secondary { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+      button.secondary:hover { background: #e2e8f0; }
       button:disabled { opacity: .5; cursor: default; }
-      #status { margin-top: 9px; font-size: 12px; min-height: 32px; }
-      .ok { color: #067647; } .err { color: #b42318; }
-      .job { border: 1px solid #e4e7ec; border-radius: 8px; padding: 8px; margin-top: 8px; }
-      .job b { display: block; }
-      .muted { color: #667085; font-size: 11px; }
-      a { color: #2547eb; }
+      #status { margin-top: 10px; font-size: 11px; min-height: 20px; text-align: center; }
+      .ok { color: #059669; font-weight: 600; }
+      .err { color: #dc2626; }
+      footer { margin-top: 12px; padding-top: 8px; border-top: 1px solid #f1f5f9; text-align: center; font-size: 11px; color: #64748b; }
+      footer a { color: #0d9488; text-decoration: none; font-weight: 600; }
     </style>
   </head>
   <body>
-    <h1><span class="logo">C</span> Curevo Job Saver</h1>
-    <p class="hint">Save the job on the current tab to your Curevo account.</p>
+    <header>
+      <h1><span class="logo">C</span> Curevo Job Capture</h1>
+      <span class="tag">100% Free & Anonymous</span>
+    </header>
 
-    <div id="connect-view">
-      <label for="api-url">Curevo API URL</label>
-      <input id="api-url" placeholder="http://localhost:4000" />
-      <label for="api-token">API token</label>
-      <input id="api-token" type="password" placeholder="Paste the token from Curevo → Profile" />
-      <button id="connect">Connect</button>
-      <p class="muted">Create the token in Curevo AI (Profile → Browser extension token). The token is stored locally in your browser and sent only to your Curevo API.</p>
+    <div id="loading-view">
+      <p style="color:#64748b; font-size:12px; text-align:center;">Detecting job posting on this tab...</p>
     </div>
 
-    <div id="save-view" style="display:none">
-      <div id="job" class="job" style="display:none"></div>
-      <button id="save">Save this job</button>
-      <button id="disconnect" class="secondary">Disconnect</button>
+    <div id="job-view" style="display:none">
+      <div class="card">
+        <div class="field">
+          <label for="job-title">Job Title</label>
+          <input id="job-title" />
+        </div>
+        <div class="field">
+          <label for="job-company">Company</label>
+          <input id="job-company" />
+        </div>
+        <div class="field">
+          <label for="job-location">Location</label>
+          <input id="job-location" />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="open-curevo" class="primary">🚀 Open & Match in Curevo AI</button>
+        <button id="copy-json" class="secondary">📋 Copy Job JSON</button>
+      </div>
+    </div>
+
+    <div id="empty-view" style="display:none; text-align:center; padding: 12px 0;">
+      <p style="color:#64748b; font-size:12px; margin-bottom:10px;">
+        No structured job detected on this page. You can paste the job text directly into Curevo AI.
+      </p>
+      <button id="open-blank-curevo" class="primary">Open Curevo Job Discovery</button>
     </div>
 
     <div id="status" role="status"></div>
+
+    <footer>
+      <a href="https://enhancecv-orpin.vercel.app/jobs" target="_blank">enhancecv-orpin.vercel.app</a>
+    </footer>
+
     <script src="popup.js"></script>
   </body>
 </html>

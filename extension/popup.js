@@ -1,19 +1,12 @@
-// Curevo Job Saver — popup logic.
+// Curevo Job Saver — Chrome Extension Popup (Phase 9N)
+//
+// 100% Anonymous & Public: Detects job on active tab and transfers directly
+// into Curevo AI's web app without login walls.
 
 const $ = (id) => document.getElementById(id);
 
-async function init() {
-  const { apiUrl, token } = await chrome.storage.local.get(['apiUrl', 'token']);
-  if (token) {
-    $('connect-view').style.display = 'none';
-    $('save-view').style.display = 'block';
-    $('api-url').value = apiUrl || 'http://localhost:4000';
-  } else {
-    $('connect-view').style.display = 'block';
-    $('save-view').style.display = 'none';
-    $('api-url').value = apiUrl || 'http://localhost:4000';
-  }
-}
+let currentJob = null;
+const CUREVO_APP_URL = 'https://enhancecv-orpin.vercel.app';
 
 function setStatus(text, kind) {
   const el = $('status');
@@ -21,65 +14,93 @@ function setStatus(text, kind) {
   el.className = kind || '';
 }
 
-$('connect').addEventListener('click', async () => {
-  const apiUrl = $('api-url').value.trim().replace(/\/$/, '');
-  const token = $('api-token').value.trim();
-  if (!apiUrl || !token) {
-    setStatus('API URL and token are both required.', 'err');
-    return;
-  }
-  // Validate the token against the API before storing it.
-  try {
-    const res = await fetch(`${apiUrl}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) {
-      setStatus('Token rejected by the API — generate a new one in Curevo AI.', 'err');
-      return;
-    }
-    await chrome.storage.local.set({ apiUrl, token });
-    await init();
-    setStatus('Connected.', 'ok');
-  } catch {
-    setStatus('Could not reach the API URL.', 'err');
-  }
-});
-
-$('disconnect').addEventListener('click', async () => {
-  await chrome.storage.local.remove(['apiUrl', 'token']);
-  await init();
-  setStatus('Disconnected.', 'ok');
-});
-
-$('save').addEventListener('click', async () => {
-  $('save').disabled = true;
-  setStatus('Extracting job from this page…');
+async function extractActiveTabJob() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) {
-      setStatus('No active tab.', 'err');
+      showEmpty();
       return;
     }
-    const extract = await chrome.tabs.sendMessage(tab.id, { type: 'CUREVO_EXTRACT_JOB' });
-    if (!extract?.ok || !extract.job) {
-      setStatus('No job structure found on this page. Paste the description into Curevo manually instead.', 'err');
-      return;
-    }
-    const jobEl = $('job');
-    jobEl.style.display = 'block';
-    jobEl.innerHTML = `<b>${(extract.job.title || 'Untitled job').replace(/</g, '&lt;')}</b><span class="muted">${(extract.job.company || '').replace(/</g, '&lt;')}</span>`;
 
-    const saved = await new Promise((resolve) => {
-      chrome.runtime.sendMessage({ type: 'CUREVO_SAVE_JOB', job: extract.job }, resolve);
-    });
-    if (saved?.ok) {
-      setStatus('Saved! Open Curevo → Find Jobs → Saved Jobs to see fit analysis.', 'ok');
-    } else {
-      setStatus(saved?.error || 'Save failed.', 'err');
+    // Send extract message to content script
+    let res;
+    try {
+      res = await chrome.tabs.sendMessage(tab.id, { type: 'CUREVO_EXTRACT_JOB' });
+    } catch {
+      // Content script may not be injected on this page (e.g. chrome:// or restricted page)
+      showEmpty();
+      return;
     }
-  } catch (err) {
-    setStatus('This page cannot be read (browser-restricted page or missing content script).', 'err');
-  } finally {
-    $('save').disabled = false;
+
+    if (res?.ok && res.job && (res.job.title || res.job.company)) {
+      currentJob = res.job;
+      $('loading-view').style.display = 'none';
+      $('empty-view').style.display = 'none';
+      $('job-view').style.display = 'block';
+
+      $('job-title').value = res.job.title || '';
+      $('job-company').value = res.job.company || '';
+      $('job-location').value = res.job.location || 'Remote';
+    } else {
+      showEmpty();
+    }
+  } catch {
+    showEmpty();
+  }
+}
+
+function showEmpty() {
+  $('loading-view').style.display = 'none';
+  $('job-view').style.display = 'none';
+  $('empty-view').style.display = 'block';
+}
+
+$('open-curevo').addEventListener('click', () => {
+  const title = $('job-title').value.trim();
+  const company = $('job-company').value.trim();
+  const location = $('job-location').value.trim();
+  const desc = currentJob?.description || '';
+
+  const params = new URLSearchParams({
+    import_title: title,
+    import_company: company,
+    import_location: location,
+  });
+
+  if (desc) {
+    params.set('import_description', desc.slice(0, 3000));
+  }
+
+  const targetUrl = `${CUREVO_APP_URL}/jobs?${params.toString()}`;
+  chrome.tabs.create({ url: targetUrl });
+});
+
+$('copy-json').addEventListener('click', async () => {
+  const jobPayload = {
+    title: $('job-title').value.trim(),
+    company: $('job-company').value.trim(),
+    location: $('job-location').value.trim(),
+    salary: currentJob?.salary || 'Competitive',
+    remote_type: /remote/i.test($('job-location').value) ? 'remote' : 'on-site',
+    employment_type: 'Full-time',
+    description: currentJob?.description || '',
+    requirements: currentJob?.requirements || '',
+    technologies: currentJob?.technologies || [],
+    url: currentJob?.url || '',
+    source: 'Chrome Extension',
+    saved_at: new Date().toISOString(),
+  };
+
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(jobPayload, null, 2));
+    setStatus('✓ Copied to clipboard! Ready to paste into Curevo AI.', 'ok');
+  } catch {
+    setStatus('Failed to copy to clipboard.', 'err');
   }
 });
 
-init();
+$('open-blank-curevo')?.addEventListener('click', () => {
+  chrome.tabs.create({ url: `${CUREVO_APP_URL}/jobs` });
+});
+
+extractActiveTabJob();
