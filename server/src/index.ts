@@ -23,8 +23,14 @@ async function main(): Promise<void> {
   // Validate production JWT secret safety
   assertJwtSecretIsSafe();
 
-  // Initialize database schema and migrations when DATABASE_URL is configured
-  if (process.env.DATABASE_URL) {
+  // Curevo AI runs 100% public, anonymous, and client-side storage first.
+  // PostgreSQL is completely optional and disabled by default.
+  // Schema initialization runs ONLY if ENABLE_DATABASE=true or ENABLE_PERSISTENT_DATABASE=true and DATABASE_URL is set.
+  const isDbExplicitlyEnabled =
+    (process.env.ENABLE_DATABASE === 'true' || process.env.ENABLE_PERSISTENT_DATABASE === 'true') &&
+    Boolean(process.env.DATABASE_URL);
+
+  if (isDbExplicitlyEnabled) {
     try {
       const { initializeDatabase } = await import('./db/db');
       await initializeDatabase();
@@ -33,7 +39,7 @@ async function main(): Promise<void> {
       console.warn('PostgreSQL initialization warning (public routes remain functional):', err?.message || err);
     }
   } else {
-    console.log('DATABASE_URL not set — authentication endpoints require DB; public resume tools fully active.');
+    console.log('Stateless public mode: PostgreSQL initialization skipped (zero remote database dependencies).');
   }
 
   const app = await buildApp();
