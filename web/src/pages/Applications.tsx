@@ -230,7 +230,13 @@ export default function Applications() {
         {/* Dashboard Top Banner */}
         <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Application Kanban Board</h1>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-teal-100 text-teal-800 text-2xs font-bold px-2 py-0.5 uppercase tracking-wide">
+                Application Tracker
+              </span>
+              <span className="text-xs text-slate-500 font-medium">100% Free &amp; Anonymous</span>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 mt-1">Application Kanban Board</h1>
             <p className="mt-1 text-xs sm:text-sm text-slate-600">
               Track your job pipeline across 5 stages with local persistence, match insights, and CSV/JSON exports.
             </p>

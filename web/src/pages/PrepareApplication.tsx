@@ -220,7 +220,20 @@ export default function PrepareApplication() {
       <Navbar ctaText="Build Resume" ctaLink="/builder" />
 
       {/* Main Flow Container */}
-      <main className="mx-auto max-w-5xl px-4 pt-8 sm:px-6 space-y-8">
+      <main className="mx-auto max-w-5xl px-4 pt-8 sm:px-6 space-y-6">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-teal-100 text-teal-800 text-2xs font-bold px-2 py-0.5 uppercase tracking-wide">
+              5-Step Guided Orchestrator
+            </span>
+            <span className="text-xs text-slate-500 font-medium">100% Free &amp; Anonymous</span>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Prepare My Application</h1>
+          <p className="text-xs sm:text-sm text-slate-600">
+            Orchestrate your application end-to-end: Target Job &rarr; ATS Fit Analysis &rarr; Tailored Cover Letter &rarr; Company Intelligence &rarr; Interview Simulation.
+          </p>
+        </div>
+
         {/* Stepper Progress */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
