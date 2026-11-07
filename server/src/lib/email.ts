@@ -112,7 +112,16 @@ async function sendViaBrevo(msg: EmailMessage): Promise<boolean> {
   return true;
 }
 
+let customEmailSender: ((msg: EmailMessage) => Promise<EmailSendResult>) | null = null;
+
+export function __setEmailSenderForTests(sender: ((msg: EmailMessage) => Promise<EmailSendResult>) | null): void {
+  customEmailSender = sender;
+}
+
 export async function sendEmail(msg: EmailMessage): Promise<EmailSendResult> {
+  if (customEmailSender) {
+    return customEmailSender(msg);
+  }
   const provider = activeProvider();
   if (provider === 'console' || !process.env.EMAIL_API_KEY) {
     // No deliverable transport. Verification and password-reset messages carry
