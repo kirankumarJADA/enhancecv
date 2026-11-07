@@ -2,7 +2,12 @@
 //
 // Tests the live production frontend against all public workflows without authentication.
 
-const { chromium } = require('playwright');
+let chromium;
+try {
+  ({ chromium } = require('playwright'));
+} catch {
+  ({ chromium } = require('C:/Users/jadak/AppData/Local/npm-cache/_npx/e41f203b7505f1fb/node_modules/playwright'));
+}
 const fs = require('fs');
 const path = require('path');
 
@@ -15,7 +20,10 @@ if (!fs.existsSync(EVIDENCE_DIR)) {
 
 async function runBrowserAcceptance() {
   console.log(`Starting production browser acceptance tests on ${BASE_URL}...`);
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  });
   const context = await browser.newContext({
     viewport: { width: 1280, height: 800 },
   });
@@ -72,7 +80,7 @@ async function runBrowserAcceptance() {
 
   // 6. LinkedIn Optimizer
   await testRoute('06_LinkedIn_Optimizer', '/linkedin', async (p) => {
-    await p.waitForSelector('text=LinkedIn Profile Optimizer');
+    await p.waitForSelector('text=LinkedIn Profile Optimization Workspace');
   });
 
   // 7. Prepare Application Orchestrator
