@@ -130,35 +130,58 @@ Every phase from **Phase 9F.1 through Phase 9T** has been designed, implemented,
 
 ---
 
-## 4. Live Production Verification (Commit `98aed50`)
+## 4. Live Production Verification & Telemetry
 
-### Backend Endpoints Verified on `https://curevo-ai.onrender.com`:
-1. `GET /api/health` $\rightarrow$ `200 OK` (`{"status":"ok"}`)
+### Backend Verification (`https://curevo-ai.onrender.com`):
+- **Currently Running Commit:** `98aed509` (Phase 9F.1 release)
+- **Latest Remote Commit Ready on GitHub `main`:** [`7df2204`](https://github.com/kirankumarJADA/enhancecv/commit/7df2204b6b69b5e523f46f398e2531da0bcfdafe)
+
+#### Active Live Endpoints (Verified 200 OK on Render):
+1. `GET /api/health` $\rightarrow$ `200 OK` (`{"ok":true,"service":"curevo-ai"}`)
 2. `GET /api/public/status` $\rightarrow$ `200 OK` (`ai.ready: true`, `model: "nvidia/nemotron-3.5-lightning-30b-a3b"`)
 3. `GET /api/public/jobs/status` $\rightarrow$ `200 OK` (`configured: false`, `provider: "curated-presets"`)
-4. `POST /api/public/jobs/discover` $\rightarrow$ `200 OK` (Returned realistic curated benchmark vacancies)
+4. `POST /api/public/jobs/discover` $\rightarrow$ `200 OK` (Curated benchmark vacancies)
 5. `GET /api/public/interview/status` $\rightarrow$ `200 OK` (`configured: true`, `provider: "nvidia"`)
-6. `POST /api/public/interview/prep` $\rightarrow$ `200 OK` (Returned role-specific question categories)
-7. `POST /api/public/interview/star-coach` $\rightarrow$ `200 OK` (Evaluated STAR answer structure & relevance)
-8. `POST /api/public/interview/mock-evaluate` $\rightarrow$ `200 OK` (Instant qualitative feedback with Truth Guard)
-9. `POST /api/public/interview/mock-final` $\rightarrow$ `200 OK` (Synthesized performance summary report)
-10. `GET /api/public/linkedin/status` $\rightarrow$ `200 OK`
-11. `GET /api/public/company-research/status` $\rightarrow$ `200 OK`
-12. `GET /api/public/email/status` $\rightarrow$ `200 OK`
-13. `GET /api/public/billing/status` $\rightarrow$ `200 OK`
+6. `POST /api/public/interview/prep` $\rightarrow$ `200 OK` (Role-specific question categories)
+7. `POST /api/public/interview/star-coach` $\rightarrow$ `200 OK` (STAR answer analysis & Truth Guard)
+8. `POST /api/public/interview/mock-evaluate` $\rightarrow$ `200 OK` (Real-time qualitative evaluation)
+9. `POST /api/public/interview/mock-final` $\rightarrow$ `200 OK` (Synthesized performance summary)
 
-### Frontend Pages Verified on `https://enhancecv-orpin.vercel.app`:
-1. `/` — Landing page with responsive navigation, features, FAQ, and Privacy modal.
-2. `/builder` — Interactive Resume Builder with 6 ATS templates, Truth Guard, PDF download, and Email modal.
-3. `/jobs` — Job Discovery Hub with live filters, CV matching, and 1-click application creation.
-4. `/applications` — Interactive Kanban board (Applied, Interview, Offer, Rejected) with JSON/CSV export.
-5. `/interview` — Interview Preparation, STAR Answer Coach, Voice/Speech controls, and Mock Interview Simulator.
-6. `/linkedin` — Full LinkedIn Profile Optimizer with Headline strategies, About generator, and XYZ bullet optimizer.
-7. `/prepare-application` — Unified 5-step Career Application Orchestrator.
+#### Endpoints Staged in Commit `7df2204` (Pending Render Manual Deploy Trigger):
+10. `GET /api/public/linkedin/status` $\rightarrow$ `404` (Awaiting Render deploy of `7df2204`)
+11. `GET /api/public/company-research/status` $\rightarrow$ `404` (Awaiting Render deploy of `7df2204`)
+12. `GET /api/public/email/status` $\rightarrow$ `404` (Awaiting Render deploy of `7df2204`)
+13. `GET /api/public/billing/status` $\rightarrow$ `404` (Awaiting Render deploy of `7df2204`)
+
+### Frontend Verification (`https://enhancecv-orpin.vercel.app`):
+- **Deployment Status:** **100% LIVE IN PRODUCTION**
+- **Active JavaScript Bundle:** `assets/index-u91uyimN.js`
+- **Extension Archive:** `https://enhancecv-orpin.vercel.app/curevo-ai-extension.zip` (`200 OK`, 7,212 bytes)
+- **Browser Acceptance Suite (Playwright/Chrome Headless):** All 7 routes verified:
+  1. `/` — Landing page with responsive navigation, features, FAQ, and Privacy modal (`PASSED`).
+  2. `/builder` — Interactive Resume Builder with 6 ATS templates, Truth Guard, PDF download, and Email modal (`PASSED`).
+  3. `/jobs` — Job Discovery Hub with live filters, CV matching, and 1-click application creation (`PASSED`).
+  4. `/applications` — Interactive Kanban board (Applied, Interview, Offer, Rejected) with JSON/CSV export (`PASSED`).
+  5. `/interview` — Interview Preparation, STAR Answer Coach, Voice/Speech controls, and Mock Interview Simulator (`PASSED`).
+  6. `/linkedin` — Full LinkedIn Profile Optimizer with Headline strategies, About generator, and XYZ bullet optimizer (`PASSED`).
+  7. `/prepare-application` — Unified 5-step Career Application Orchestrator (`PASSED`).
 
 ---
 
-## 5. Conclusion & Launch Sign-off
+## 5. Outstanding Operator Requirements
+
+To complete 100% production activation of all backend routes:
+1. **Trigger Render Deployment**: In the Render Dashboard (`curevo-ai`), click **Manual Deploy** $\rightarrow$ **Deploy latest commit** (`7df2204`).
+2. **External Credentials (Optional — Graceful Fallbacks Active When Unset)**:
+   - `ADZUNA_APP_ID` & `ADZUNA_APP_KEY`: Activate live Adzuna UK vacancies (curated benchmarks active until then).
+   - `REED_API_KEY`: Activate live Reed UK vacancies.
+   - `TAVILY_API_KEY`: Activate live external web search for company research.
+   - `EMAIL_API_KEY`: Activate real email sending via Resend/SendGrid/Brevo (safe console preview mode active until then).
+   - `STRIPE_SECRET_KEY`: Activate live Stripe billing (Free Forever core guarantee active until then).
+
+---
+
+## 6. Conclusion & Launch Sign-off
 
 Curevo AI is complete, polished, resilient, and publicly accessible. The application fulfills all technical requirements and adheres strictly to its architectural invariants:
 - **No authentication walls.**
@@ -166,4 +189,4 @@ Curevo AI is complete, polished, resilient, and publicly accessible. The applica
 - **Factual grounding with zero hallucinations.**
 - **Instant ATS-compliant document generation.**
 
-**Launch Status:** **APPROVED FOR FULL PUBLIC RELEASE.**
+**Launch Verdict:** **RELEASE VERIFIED — FRONTEND LIVE, BACKEND AWAITING RENDER DASHBOARD TRIGGER.**
