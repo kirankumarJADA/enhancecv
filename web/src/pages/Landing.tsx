@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Logo } from '../components/ui';
+import DataPrivacyModal from '../components/DataPrivacyModal';
 
 const HOW_IT_WORKS = [
   {
@@ -83,6 +84,7 @@ const FAQS = [
 
 export default function Landing() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
 
   return (
     <div className="bg-white text-slate-900 selection:bg-teal-100 selection:text-teal-900 min-h-screen flex flex-col">
@@ -90,11 +92,13 @@ export default function Landing() {
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
           <Logo />
-          <nav className="hidden items-center gap-8 text-sm font-medium text-slate-600 md:flex" aria-label="Main Navigation">
-            <Link to="/builder?mode=ats" className="text-teal-700 font-semibold transition hover:text-teal-900">Check ATS Score</Link>
+          <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex" aria-label="Main Navigation">
+            <Link to="/prepare-application" className="text-teal-700 font-bold transition hover:text-teal-900 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">Prepare Application</Link>
             <Link to="/jobs" className="transition hover:text-slate-900">Find Jobs</Link>
             <Link to="/applications" className="transition hover:text-slate-900">Application Tracker</Link>
             <Link to="/interview" className="transition hover:text-slate-900">Interview Coach</Link>
+            <Link to="/linkedin" className="transition hover:text-slate-900">LinkedIn</Link>
+            <Link to="/builder?mode=ats" className="transition hover:text-slate-900">Check ATS</Link>
             <a href="#how" className="transition hover:text-slate-900">How It Works</a>
             <a href="#truth" className="transition hover:text-slate-900">Truth Guard™</a>
             <a href="#features" className="transition hover:text-slate-900">Features</a>
@@ -493,14 +497,26 @@ export default function Landing() {
           <p className="text-sm text-slate-600 text-center sm:text-left">
             Curevo AI — Your next resume starts here. © {new Date().getFullYear()} Curevo AI. All rights reserved.
           </p>
-          <div className="flex items-center gap-6 text-xs text-slate-600 font-medium">
+          <div className="flex flex-wrap items-center gap-5 text-xs text-slate-600 font-medium">
+            <button
+              type="button"
+              onClick={() => setPrivacyModalOpen(true)}
+              className="text-teal-700 hover:text-teal-900 font-bold cursor-pointer flex items-center gap-1"
+            >
+              <span>🛡️</span> Privacy & Portability
+            </button>
+            <Link to="/prepare-application" className="hover:text-slate-950 transition">Prepare Application</Link>
             <Link to="/builder?mode=ats" className="hover:text-slate-950 transition font-semibold text-teal-800">Check ATS Score</Link>
             <Link to="/builder" className="hover:text-slate-950 transition">Resume Builder</Link>
-            <a href="#how" className="hover:text-slate-950 transition">How It Works</a>
             <a href="#truth" className="hover:text-slate-950 transition">Truth Guard™</a>
           </div>
         </div>
       </footer>
+
+      <DataPrivacyModal
+        isOpen={privacyModalOpen}
+        onClose={() => setPrivacyModalOpen(false)}
+      />
     </div>
   );
 }

@@ -1,4 +1,7 @@
+import crypto from 'node:crypto';
 import { Pool, type PoolClient, type QueryResult } from 'pg';
+import { AppError } from '../middleware/errors';
+import { runPendingMigrations } from './migrations';
 
 let pool: Pool | null = null;
 
@@ -31,7 +34,7 @@ export function getDb(): Pool {
   const connectionString = process.env.DATABASE_URL;
 
   if (!connectionString) {
-    throw new Error('DATABASE_URL environment variable is not set.');
+    throw new AppError('AUTH_UNAVAILABLE', 'DATABASE_URL environment variable is not set.', 503);
   }
 
   pool = new Pool({
@@ -72,8 +75,29 @@ export function getDb(): Pool {
   return pool;
 }
 
+export async function closeDb(): Promise<void> {
+  if (pool) {
+    await pool.end();
+    pool = null;
+  }
+}
+
+export async function checkDatabaseHealth(): Promise<{ ok: boolean; error?: string }> {
+  if (!process.env.DATABASE_URL) {
+    return { ok: false, error: 'DATABASE_URL_NOT_SET' };
+  }
+  try {
+    const db = getDb();
+    await db.query('SELECT 1');
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'DB_CONNECTION_FAILED' };
+  }
+}
+
 export function newId(prefix: string): string {
-  return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+  const rand = crypto.randomBytes(5).toString('hex');
+  return `${prefix}_${Date.now().toString(36)}${rand}`;
 }
 
 export async function initializeDatabase(): Promise<void> {
@@ -200,6 +224,7 @@ export async function initializeDatabase(): Promise<void> {
   );
 
   await migrateExtensions(db);
+  await runPendingMigrations(db);
 }
 
 /** Additive migrations for the platform features (safe to run repeatedly). */
@@ -467,6 +492,27 @@ export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>)
   } finally {
     client.release();
   }
+}
+
+/**
+ * Run a transaction scoped to a specific authenticated user identity.
+ *
+ * Sets `app.current_user_id` locally using `set_config(..., true)`, which automatically
+ * clears on transaction commit or rollback, guaranteeing connection pool isolation.
+ */
+export async function withUserContext<T>(
+  userId: string,
+  fn: (client: PoolClient) => Promise<T>,
+  poolClient?: PoolClient,
+): Promise<T> {
+  if (poolClient) {
+    await poolClient.query("SELECT set_config('app.current_user_id', $1, true)", [userId]);
+    return fn(poolClient);
+  }
+  return withTransaction(async (client) => {
+    await client.query("SELECT set_config('app.current_user_id', $1, true)", [userId]);
+    return fn(client);
+  });
 }
 
 /** Render a timestamptz as the same 'YYYY-MM-DD HH:MM:SS' UTC text the API has always returned. */

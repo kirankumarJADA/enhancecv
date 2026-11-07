@@ -182,6 +182,7 @@ const stubFetcher = async (url: string) => {
 
 const stubJobSource: JobSourceProvider = {
   id: 'stub',
+  name: 'Stub Provider',
   async search(prefs: JobSearchPreferences, limit: number): Promise<DiscoveredJob[]> {
     void prefs;
     return [

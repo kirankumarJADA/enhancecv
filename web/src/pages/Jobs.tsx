@@ -10,9 +10,10 @@
 //   - 1-click Resume Tailoring transition (/builder?mode=improve)
 
 import { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { Logo, Spinner } from '../components/ui';
+import CompanyResearchModal from '../components/CompanyResearchModal';
 import { CURATED_JOBS, type CuratedJob } from '../data/curatedJobs';
 import {
   getSavedJobs,
@@ -30,6 +31,7 @@ type Tab = 'browse' | 'saved' | 'import';
 
 export default function Jobs() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>('browse');
 
   // Search & Filter state
@@ -52,6 +54,7 @@ export default function Jobs() {
 
   // Modals & Details
   const [selectedJob, setSelectedJob] = useState<CuratedJob | SavedJob | null>(null);
+  const [researchModalCompany, setResearchModalCompany] = useState<string | null>(null);
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
 
   // Custom Job Import Form
@@ -79,6 +82,21 @@ export default function Jobs() {
       setActiveResumeTitle('Sample Engineering CV');
     }
   }, []);
+
+  // Handle Extension 1-Click Import URL Parameters (Phase 9N)
+  useEffect(() => {
+    const pTitle = searchParams.get('import_title');
+    const pCompany = searchParams.get('import_company');
+    const pLoc = searchParams.get('import_location');
+    const pDesc = searchParams.get('import_description');
+    if (pTitle || pCompany) {
+      if (pTitle) setImportTitle(pTitle);
+      if (pCompany) setImportCompany(pCompany);
+      if (pLoc) setImportLocation(pLoc);
+      if (pDesc) setImportDescription(pDesc);
+      setTab('import');
+    }
+  }, [searchParams]);
 
   // Check Provider Status & Load Jobs
   useEffect(() => {
@@ -336,6 +354,12 @@ export default function Jobs() {
               className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-2xs hover:bg-teal-700"
             >
               Interview Coach
+            </Link>
+            <Link
+              to="/linkedin"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
+            >
+              LinkedIn
             </Link>
             <Link to="/" className="text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900">
               Home
@@ -969,6 +993,15 @@ export default function Jobs() {
                   <button
                     type="button"
                     onClick={() => {
+                      setResearchModalCompany(selectedJob.company);
+                    }}
+                    className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100 cursor-pointer"
+                  >
+                    🏢 Research Company
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
                       handlePrepareInterview(selectedJob);
                     }}
                     className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-800 hover:bg-teal-100 cursor-pointer"
@@ -989,6 +1022,17 @@ export default function Jobs() {
             </div>
           </div>
         )}
+
+        {/* Company Research Modal */}
+        <CompanyResearchModal
+          isOpen={!!researchModalCompany}
+          onClose={() => setResearchModalCompany(null)}
+          companyName={researchModalCompany || ''}
+          jobDescription={selectedJob?.description}
+          onSelectForInterview={(comp) => {
+            navigate(`/interview?tab=prepare&company=${encodeURIComponent(comp)}`);
+          }}
+        />
       </main>
     </div>
   );

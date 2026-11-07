@@ -11,6 +11,8 @@ import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { Logo, Spinner } from '../components/ui';
+import CompanyResearchModal from '../components/CompanyResearchModal';
+import EmailModal from '../components/EmailModal';
 import {
   getInterviewSessions,
   saveInterviewSession,
@@ -30,6 +32,12 @@ import {
   type MockEvaluationResult,
   type FinalMockReportResult,
 } from '../lib/interviewStorage';
+import {
+  isSpeechRecognitionSupported,
+  VoiceTranscriber,
+  speakQuestion,
+  stopSpeaking,
+} from '../lib/speechRecognition';
 import type { ResumeData } from '../types';
 
 type Tab = 'prepare' | 'star' | 'mock' | 'history';
@@ -56,6 +64,7 @@ export default function Interview() {
 
   // Global Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [researchCompany, setResearchCompany] = useState<string | null>(null);
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
@@ -201,6 +210,7 @@ export default function Interview() {
             activeResume={useResumeContext ? activeResume : null}
             searchParams={searchParams}
             showToast={showToast}
+            onResearchCompany={(comp) => setResearchCompany(comp)}
             onSelectQuestionForStar={(q) => {
               setSearchParams((prev) => {
                 prev.set('tab', 'star');
@@ -232,6 +242,13 @@ export default function Interview() {
 
         {/* Tab 4: History & Story Bank */}
         {activeTab === 'history' && <HistoryAndStoryBankTab showToast={showToast} />}
+
+        {/* Company Research Modal */}
+        <CompanyResearchModal
+          isOpen={!!researchCompany}
+          onClose={() => setResearchCompany(null)}
+          companyName={researchCompany || ''}
+        />
       </main>
     </div>
   );
@@ -246,11 +263,13 @@ function PrepareTab({
   searchParams,
   showToast,
   onSelectQuestionForStar,
+  onResearchCompany,
 }: {
   activeResume: ResumeData | null;
   searchParams: URLSearchParams;
   showToast: (msg: string) => void;
   onSelectQuestionForStar: (q: InterviewPrepQuestion) => void;
+  onResearchCompany?: (company: string) => void;
 }) {
   const [role, setRole] = useState(searchParams.get('role') || '');
   const [company, setCompany] = useState(searchParams.get('company') || '');
@@ -356,7 +375,18 @@ function PrepareTab({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Company / Organisation</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-slate-700 uppercase">Company / Organisation</label>
+                {company.trim().length > 0 && onResearchCompany && (
+                  <button
+                    type="button"
+                    onClick={() => onResearchCompany(company)}
+                    className="text-2xs font-semibold text-blue-600 hover:text-blue-800 transition cursor-pointer"
+                  >
+                    🏢 Research {company}
+                  </button>
+                )}
+              </div>
               <input
                 type="text"
                 value={company}
@@ -597,6 +627,69 @@ function StarCoachTab({
   const [error, setError] = useState<string | null>(null);
   const [evaluation, setEvaluation] = useState<StarEvaluationResult | null>(null);
 
+  // Voice Interaction State (Phase 9J)
+  const [isSpeakingQuestion, setIsSpeakingQuestion] = useState(false);
+  const [dictatingField, setDictatingField] = useState<'situation' | 'action' | 'result' | null>(null);
+  const [starTranscriber, setStarTranscriber] = useState<VoiceTranscriber | null>(null);
+
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+      starTranscriber?.stop();
+    };
+  }, [starTranscriber]);
+
+  const handleToggleSpeak = () => {
+    if (isSpeakingQuestion) {
+      stopSpeaking();
+      setIsSpeakingQuestion(false);
+    } else {
+      if (!question) return;
+      setIsSpeakingQuestion(true);
+      speakQuestion(
+        question,
+        () => setIsSpeakingQuestion(true),
+        () => setIsSpeakingQuestion(false),
+        () => setIsSpeakingQuestion(false)
+      );
+    }
+  };
+
+  const handleToggleDictation = (field: 'situation' | 'action' | 'result') => {
+    if (dictatingField === field) {
+      starTranscriber?.stop();
+      setDictatingField(null);
+      showToast('Voice dictation stopped.');
+    } else {
+      if (!isSpeechRecognitionSupported()) {
+        showToast('Speech recognition is not supported in this browser.');
+        return;
+      }
+      starTranscriber?.stop();
+      const currentVal = field === 'situation' ? situation : field === 'action' ? action : result;
+      const transcriber = new VoiceTranscriber({
+        onTranscript: ({ finalTranscript }) => {
+          if (field === 'situation') setSituation(finalTranscript);
+          else if (field === 'action') setAction(finalTranscript);
+          else setResult(finalTranscript);
+        },
+        onStateChange: (state) => {
+          if (state !== 'listening') setDictatingField(null);
+        },
+        onError: (err) => {
+          showToast(err);
+          setDictatingField(null);
+        },
+      });
+      setStarTranscriber(transcriber);
+      const started = transcriber.start(currentVal);
+      if (started) {
+        setDictatingField(field);
+        showToast(`Listening... Dictating into ${field.toUpperCase()}`);
+      }
+    }
+  };
+
   const handleEvaluate = async (e: FormEvent) => {
     e.preventDefault();
     if (!situation && !task && !action && !result) {
@@ -691,6 +784,18 @@ function StarCoachTab({
                 </option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={handleToggleSpeak}
+              className={`rounded-lg border px-3 py-2 text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                isSpeakingQuestion
+                  ? 'border-rose-300 bg-rose-50 text-rose-700 animate-pulse'
+                  : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+              title={isSpeakingQuestion ? 'Stop reading' : 'Read question aloud'}
+            >
+              <span>{isSpeakingQuestion ? '⏹ Stop' : '🔊 Listen'}</span>
+            </button>
           </div>
         </div>
 
@@ -703,7 +808,20 @@ function StarCoachTab({
                 <span className="text-xs font-bold text-teal-800 uppercase tracking-wider">
                   S — Situation
                 </span>
-                <span className="text-2xs text-slate-400">Context & Challenge</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleDictation('situation')}
+                    className={`text-2xs font-semibold px-2 py-0.5 rounded border transition cursor-pointer ${
+                      dictatingField === 'situation'
+                        ? 'border-rose-400 bg-rose-500 text-white animate-pulse'
+                        : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {dictatingField === 'situation' ? '🔴 Recording...' : '🎤 Dictate'}
+                  </button>
+                  <span className="text-2xs text-slate-400">Context & Challenge</span>
+                </div>
               </div>
               <textarea
                 rows={4}
@@ -737,7 +855,20 @@ function StarCoachTab({
                 <span className="text-xs font-bold text-teal-800 uppercase tracking-wider">
                   A — Action (Most Critical)
                 </span>
-                <span className="text-2xs text-slate-400">What YOU Did</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleDictation('action')}
+                    className={`text-2xs font-semibold px-2 py-0.5 rounded border transition cursor-pointer ${
+                      dictatingField === 'action'
+                        ? 'border-rose-400 bg-rose-500 text-white animate-pulse'
+                        : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {dictatingField === 'action' ? '🔴 Recording...' : '🎤 Dictate'}
+                  </button>
+                  <span className="text-2xs text-slate-400">What YOU Did</span>
+                </div>
               </div>
               <textarea
                 rows={5}
@@ -754,7 +885,20 @@ function StarCoachTab({
                 <span className="text-xs font-bold text-teal-800 uppercase tracking-wider">
                   R — Result
                 </span>
-                <span className="text-2xs text-slate-400">Measurable Impact</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleDictation('result')}
+                    className={`text-2xs font-semibold px-2 py-0.5 rounded border transition cursor-pointer ${
+                      dictatingField === 'result'
+                        ? 'border-rose-400 bg-rose-500 text-white animate-pulse'
+                        : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {dictatingField === 'result' ? '🔴 Recording...' : '🎤 Dictate'}
+                  </button>
+                  <span className="text-2xs text-slate-400">Measurable Impact</span>
+                </div>
               </div>
               <textarea
                 rows={5}
@@ -983,6 +1127,68 @@ function MockInterviewTab({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeEvaluation, setActiveEvaluation] = useState<MockEvaluationResult | null>(null);
   const [answersLog, setAnswersLog] = useState<MockAnswerRecord[]>([]);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+
+  // Voice Interaction State (Phase 9J)
+  const [isSpeakingQuestion, setIsSpeakingQuestion] = useState(false);
+  const [isRecordingAnswer, setIsRecordingAnswer] = useState(false);
+  const [transcriberInstance, setTranscriberInstance] = useState<VoiceTranscriber | null>(null);
+
+  // Stop audio on unmount or question change
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+      transcriberInstance?.stop();
+    };
+  }, [transcriberInstance]);
+
+  const handleToggleSpeakQuestion = () => {
+    if (isSpeakingQuestion) {
+      stopSpeaking();
+      setIsSpeakingQuestion(false);
+    } else {
+      const q = scheduledQuestions[activeQuestionIndex]?.question;
+      if (!q) return;
+      setIsSpeakingQuestion(true);
+      speakQuestion(
+        q,
+        () => setIsSpeakingQuestion(true),
+        () => setIsSpeakingQuestion(false),
+        () => setIsSpeakingQuestion(false)
+      );
+    }
+  };
+
+  const handleToggleRecording = () => {
+    if (isRecordingAnswer) {
+      transcriberInstance?.stop();
+      setIsRecordingAnswer(false);
+      showToast('Voice transcription stopped.');
+    } else {
+      if (!isSpeechRecognitionSupported()) {
+        showToast('Speech recognition is not supported in this browser. Please type your response.');
+        return;
+      }
+      const transcriber = new VoiceTranscriber({
+        onTranscript: ({ finalTranscript }) => {
+          setCandidateAnswer(finalTranscript);
+        },
+        onStateChange: (state) => {
+          setIsRecordingAnswer(state === 'listening');
+        },
+        onError: (err) => {
+          showToast(err);
+          setIsRecordingAnswer(false);
+        },
+      });
+      setTranscriberInstance(transcriber);
+      const started = transcriber.start(candidateAnswer);
+      if (started) {
+        setIsRecordingAnswer(true);
+        showToast('Listening... Speak your answer now.');
+      }
+    }
+  };
 
   // Final Report
   const [finalReport, setFinalReport] = useState<FinalMockReportResult | null>(null);
@@ -1068,6 +1274,10 @@ function MockInterviewTab({
 
   // Next Question or Finish
   const handleNextOrFinish = async () => {
+    stopSpeaking();
+    setIsSpeakingQuestion(false);
+    transcriberInstance?.stop();
+    setIsRecordingAnswer(false);
     if (activeQuestionIndex + 1 < scheduledQuestions.length) {
       setActiveQuestionIndex((prev) => prev + 1);
       setCandidateAnswer('');
@@ -1079,6 +1289,10 @@ function MockInterviewTab({
 
   // Generate Final Report
   const handleFinishInterview = async () => {
+    stopSpeaking();
+    setIsSpeakingQuestion(false);
+    transcriberInstance?.stop();
+    setIsRecordingAnswer(false);
     setIsGeneratingFinal(true);
     setStage('finished');
 
@@ -1233,11 +1447,25 @@ function MockInterviewTab({
 
           {/* Interviewer Question Box */}
           <div className="rounded-2xl border-2 border-teal-600 bg-white p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="rounded-md bg-teal-100 text-teal-800 text-2xs font-bold px-2 py-0.5 uppercase">
-                {scheduledQuestions[activeQuestionIndex].category}
-              </span>
-              <span className="text-xs text-slate-500">Interviewer Question</span>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="rounded-md bg-teal-100 text-teal-800 text-2xs font-bold px-2 py-0.5 uppercase">
+                  {scheduledQuestions[activeQuestionIndex].category}
+                </span>
+                <span className="text-xs text-slate-500">Interviewer Question</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleToggleSpeakQuestion}
+                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+                  isSpeakingQuestion
+                    ? 'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 animate-pulse'
+                    : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                }`}
+                title={isSpeakingQuestion ? 'Stop reading' : 'Read question aloud using browser speech'}
+              >
+                <span>{isSpeakingQuestion ? '⏹ Stop Audio' : '🔊 Listen to Question'}</span>
+              </button>
             </div>
             <h2 className="text-xl font-bold text-slate-900 leading-snug">
               "{scheduledQuestions[activeQuestionIndex].question}"
@@ -1248,9 +1476,24 @@ function MockInterviewTab({
           <form onSubmit={handleSubmitAnswer} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-700 uppercase">Your Spoken / Written Response</label>
-              <span className="text-2xs text-slate-400">
-                {candidateAnswer.trim().split(/\s+/).filter(Boolean).length} words
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleToggleRecording}
+                  disabled={isSubmitting || activeEvaluation !== null}
+                  className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition cursor-pointer disabled:opacity-50 ${
+                    isRecordingAnswer
+                      ? 'border-rose-400 bg-rose-500 text-white hover:bg-rose-600 animate-pulse'
+                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                  title={isRecordingAnswer ? 'Stop recording voice' : 'Dictate your response using your microphone'}
+                >
+                  <span>{isRecordingAnswer ? '🔴 Listening... (Click to stop)' : '🎤 Speak Answer'}</span>
+                </button>
+                <span className="text-2xs text-slate-400">
+                  {candidateAnswer.trim().split(/\s+/).filter(Boolean).length} words
+                </span>
+              </div>
             </div>
 
             <textarea
@@ -1261,6 +1504,22 @@ function MockInterviewTab({
               className="w-full rounded-xl border border-slate-300 p-3.5 text-sm leading-relaxed focus:border-teal-500 focus:outline-none font-sans"
               disabled={isSubmitting || activeEvaluation !== null}
             />
+
+            {isRecordingAnswer && (
+              <div className="flex items-center justify-between rounded-lg bg-teal-50 border border-teal-200 px-3 py-2 text-xs text-teal-800 animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
+                  <span>Microphone active — speaking is transcribed live. Audio is processed locally and never stored.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleRecording}
+                  className="font-bold underline text-teal-900 hover:text-black cursor-pointer"
+                >
+                  Done Speaking
+                </button>
+              </div>
+            )}
 
             {!activeEvaluation && (
               <div className="flex items-center justify-end">
@@ -1480,6 +1739,13 @@ function MockInterviewTab({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
+                    onClick={() => setEmailModalOpen(true)}
+                    className="rounded-lg border border-teal-600 bg-white px-4 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-50 transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>✉️ Email Report to Me</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={handleSaveCompletedSession}
                     className="rounded-lg bg-teal-600 px-4 py-2 text-xs font-semibold text-white hover:bg-teal-700 transition cursor-pointer"
                   >
@@ -1487,6 +1753,19 @@ function MockInterviewTab({
                   </button>
                 </div>
               </div>
+
+              {/* Email Report Modal */}
+              <EmailModal
+                isOpen={emailModalOpen}
+                onClose={() => setEmailModalOpen(false)}
+                title="Email Interview Report to Me"
+                type="interview-report"
+                payload={{
+                  role,
+                  summary: `${finalReport.summary}\n\nStrengths:\n${finalReport.keyStrengths?.map((s) => `• ${s}`).join('\n') || 'N/A'}\n\nAreas for Improvement:\n${finalReport.criticalAreasForImprovement?.map((a) => `• ${a}`).join('\n') || 'N/A'}`,
+                }}
+                onSuccess={(msg) => showToast(msg)}
+              />
             </div>
           ) : null}
         </div>

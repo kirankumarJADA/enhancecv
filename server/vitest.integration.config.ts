@@ -1,9 +1,8 @@
 import { defineConfig } from 'vitest/config';
 
-// Dedicated integration test config for legacy PostgreSQL-dependent suites.
-// These suites test the stateful user accounts platform (signup, session revocation,
-// billing webhooks, PostgreSQL connection pools) which are unmounted in the stateless
-// deployment architecture.
+// Dedicated integration test config for PostgreSQL-dependent suites.
+// These suites test the user accounts platform (signup, login, session revocation,
+// password resets, database connection pools, migrations) against real PostgreSQL.
 //
 // Requires local PostgreSQL running on localhost:5434 (see server/.env.example):
 //   docker run -d --name ecv-pg -e POSTGRES_PASSWORD=ecvlocal -e POSTGRES_DB=enhancecv_test -p 5434:5432 postgres:15-alpine
@@ -12,12 +11,15 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: [
+      'tests/phase9c_auth_database.test.ts',
+      'tests/security_hardening_rls_csrf.test.ts',
+      'tests/phase9d_master_cv.test.ts',
+      'tests/security-session.test.ts',
+      'tests/security-reset.test.ts',
+      'tests/db-pool.test.ts',
       'tests/api.test.ts',
       'tests/career.test.ts',
-      'tests/db-pool.test.ts',
       'tests/features.test.ts',
-      'tests/security-reset.test.ts',
-      'tests/security-session.test.ts',
     ],
     testTimeout: 30000,
     hookTimeout: 60000,

@@ -138,28 +138,28 @@ describe('Phase 1 & 1.1 — Stateless Backend Foundation', () => {
   // 3. Obsolete Database Routes Unmounted (Return 404)
   // -------------------------------------------------------------
   describe('3. Obsolete database-backed routes are unmounted', () => {
-    it('returns 404 for unmounted auth endpoints', async () => {
-      const signupRes = await request(app).post('/api/auth/signup').send({ email: 'test@example.com', password: 'password123' });
-      expect(signupRes.status).toBe(404);
-      expect(signupRes.body.error?.code).toBe('NOT_FOUND');
+    it('returns 503 AUTH_UNAVAILABLE or 401 UNAUTHENTICATED for auth endpoints when DATABASE_URL is unset', async () => {
+      const signupRes = await request(app).post('/api/auth/signup').send({ name: 'Test', email: 'test@example.com', password: 'password123' });
+      expect(signupRes.status).toBe(503);
+      expect(signupRes.body.error?.code).toBe('AUTH_UNAVAILABLE');
 
       const loginRes = await request(app).post('/api/auth/login').send({ email: 'test@example.com', password: 'password123' });
-      expect(loginRes.status).toBe(404);
-      expect(loginRes.body.error?.code).toBe('NOT_FOUND');
+      expect(loginRes.status).toBe(503);
+      expect(loginRes.body.error?.code).toBe('AUTH_UNAVAILABLE');
 
       const meRes = await request(app).get('/api/auth/me');
-      expect(meRes.status).toBe(404);
-      expect(meRes.body.error?.code).toBe('NOT_FOUND');
+      expect(meRes.status).toBe(401);
+      expect(meRes.body.error?.code).toBe('UNAUTHENTICATED');
     });
 
-    it('returns 404 for unmounted Master CV and saved-resume endpoints', async () => {
+    it('returns 401 UNAUTHENTICATED for mounted Master CV and saved-resume endpoints when unauthenticated', async () => {
       const masterRes = await request(app).get('/api/master');
-      expect(masterRes.status).toBe(404);
-      expect(masterRes.body.error?.code).toBe('NOT_FOUND');
+      expect(masterRes.status).toBe(401);
+      expect(masterRes.body.error?.code).toBe('UNAUTHENTICATED');
 
       const resumesRes = await request(app).get('/api/resumes');
-      expect(resumesRes.status).toBe(404);
-      expect(resumesRes.body.error?.code).toBe('NOT_FOUND');
+      expect(resumesRes.status).toBe(401);
+      expect(resumesRes.body.error?.code).toBe('UNAUTHENTICATED');
     });
 
     it('returns 404 for unmounted billing, applications, and interview endpoints', async () => {

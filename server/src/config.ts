@@ -223,3 +223,117 @@ export function envList(name: string): string[] {
     .map((s) => s.trim())
     .filter(Boolean);
 }
+
+export interface ProductionConfigValidation {
+  ok: boolean;
+  errors: string[];
+  warnings: string[];
+  details: {
+    database: { ok: boolean; message?: string };
+    jwtSecret: { ok: boolean; message?: string };
+    appUrl: { ok: boolean; message?: string };
+    email: { ok: boolean; provider?: string; message?: string };
+  };
+}
+
+export function validateDatabaseUrl(raw: string | undefined): { ok: boolean; message?: string } {
+  const value = (raw ?? '').trim();
+  if (!value) {
+    return { ok: false, message: 'DATABASE_URL is not set.' };
+  }
+  if (!value.startsWith('postgres://') && !value.startsWith('postgresql://')) {
+    return { ok: false, message: 'DATABASE_URL must start with postgres:// or postgresql://.' };
+  }
+  try {
+    const parsed = new URL(value);
+    if (!parsed.hostname) {
+      return { ok: false, message: 'DATABASE_URL missing valid hostname.' };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, message: 'DATABASE_URL is not a valid connection URI.' };
+  }
+}
+
+export function validateEmailConfig(env: NodeJS.ProcessEnv = process.env): {
+  ok: boolean;
+  provider?: string;
+  message?: string;
+} {
+  const provider = (env.EMAIL_PROVIDER ?? '').trim().toLowerCase();
+  const validProviders = ['resend', 'sendgrid', 'brevo'];
+
+  if (!provider || !validProviders.includes(provider)) {
+    return {
+      ok: false,
+      message:
+        'EMAIL_PROVIDER must be set to "resend", "sendgrid", or "brevo" in production (found: ' +
+        (provider ? `"${provider}"` : 'unset') +
+        '). Console mode cannot deliver action tokens.',
+    };
+  }
+
+  const apiKey = (env.EMAIL_API_KEY ?? '').trim();
+  if (!apiKey || apiKey.length < 8) {
+    return {
+      ok: false,
+      provider,
+      message: 'EMAIL_API_KEY is missing or invalid for provider ' + provider + '.',
+    };
+  }
+
+  const from = (env.EMAIL_FROM ?? '').trim();
+  if (!from || !from.includes('@')) {
+    return {
+      ok: false,
+      provider,
+      message: 'EMAIL_FROM must be configured with a valid sender email address.',
+    };
+  }
+
+  return { ok: true, provider };
+}
+
+export function validateProductionAuthConfig(env: NodeJS.ProcessEnv = process.env): ProductionConfigValidation {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  const dbCheck = validateDatabaseUrl(env.DATABASE_URL);
+  if (!dbCheck.ok) {
+    errors.push(`Database: ${dbCheck.message}`);
+  }
+
+  const jwtCheck = checkJwtSecret(env.JWT_SECRET, true);
+  if (!jwtCheck.ok) {
+    errors.push(`JWT Secret: ${jwtCheck.message}`);
+  }
+
+  const appUrlCheck = checkAppUrl(env.APP_URL, true);
+  if (!appUrlCheck.ok) {
+    errors.push(`App URL: ${appUrlCheck.message}`);
+  }
+
+  const emailCheck = validateEmailConfig(env);
+  if (!emailCheck.ok) {
+    errors.push(`Email: ${emailCheck.message}`);
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    warnings,
+    details: {
+      database: dbCheck,
+      jwtSecret: jwtCheck,
+      appUrl: appUrlCheck,
+      email: emailCheck,
+    },
+  };
+}
+
+export function assertProductionAuthConfigIsSafe(env: NodeJS.ProcessEnv = process.env): void {
+  const res = validateProductionAuthConfig(env);
+  if (!res.ok) {
+    throw new Error(`Production configuration validation failed:\n${res.errors.map((e) => `  - ${e}`).join('\n')}`);
+  }
+}

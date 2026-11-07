@@ -9,8 +9,13 @@ import { config } from './config';
 import { errorHandler, notFoundHandler } from './middleware/http';
 import { newRequestId } from './lib/monitoring';
 import { corsOriginCheck } from './lib/cors';
+import { csrfProtection } from './middleware/csrf';
 import { getAiProvider } from './ai/provider';
 import publicRoutes from './routes/public';
+import authRoutes from './routes/auth';
+import profileRoutes from './routes/profile';
+import masterRoutes from './routes/master';
+import resumesRoutes from './routes/resumes';
 
 export async function buildApp(): Promise<express.Express> {
   getAiProvider(); // initialise the AI provider singleton from env (when configured)
@@ -38,7 +43,7 @@ export async function buildApp(): Promise<express.Express> {
     origin: corsOriginCheck,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
     maxAge: 86400,
   }));
 
@@ -52,8 +57,16 @@ export async function buildApp(): Promise<express.Express> {
   // Public stateless resume routes (NVIDIA Nemotron powered, in-memory, no database)
   app.use('/api/public', publicRoutes);
 
-  // Obsolete database-backed routes are safely unmounted for the stateless, no-login architecture:
-  // - /api/auth, /api/master, /api/resumes, /api/dashboard, /api/profile, /api/ai
+  // Authentication & Identity Foundation (Phase 9C) with CSRF Protection
+  app.use('/api/auth', csrfProtection, authRoutes);
+  app.use('/api/profile', csrfProtection, profileRoutes);
+
+  // Persistent Master CV, Cloud Autosave & Resume Version History (Phase 9D) with CSRF Protection
+  app.use('/api/master', csrfProtection, masterRoutes);
+  app.use('/api/resumes', csrfProtection, resumesRoutes);
+
+  // Future database-backed routes safely unmounted until Phase 9D / 9E:
+  // - /api/master, /api/resumes, /api/dashboard, /api/ai
   // - /api/billing, /api/applications, /api/templates, /api/admin, /api/interview
   // - /api/jobs, /api/import, /api/analytics
   // These routes safely resolve to 404 NOT FOUND via notFoundHandler without attempting

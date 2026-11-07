@@ -16,10 +16,26 @@ try {
   // Ignore in environments without .env
 }
 
-import { config } from './config';
+import { config, assertJwtSecretIsSafe } from './config';
 import { buildApp } from './app';
 
 async function main(): Promise<void> {
+  // Validate production JWT secret safety
+  assertJwtSecretIsSafe();
+
+  // Initialize database schema and migrations when DATABASE_URL is configured
+  if (process.env.DATABASE_URL) {
+    try {
+      const { initializeDatabase } = await import('./db/db');
+      await initializeDatabase();
+      console.log('PostgreSQL database initialized and migrations verified successfully.');
+    } catch (err: any) {
+      console.warn('PostgreSQL initialization warning (public routes remain functional):', err?.message || err);
+    }
+  } else {
+    console.log('DATABASE_URL not set — authentication endpoints require DB; public resume tools fully active.');
+  }
+
   const app = await buildApp();
 
   app.listen(config.port, () => {

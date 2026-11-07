@@ -26,6 +26,40 @@ import { apiUrl, resolveApiBase } from './apiBase';
 /** Production: VITE_API_URL (e.g. https://curevo-ai.onrender.com). Local dev: '' → same-origin /api. */
 export const API_BASE = resolveApiBase(import.meta.env.VITE_API_URL as string | undefined);
 
+let inMemoryCsrfToken: string | null = null;
+
+export function setCsrfToken(token: string | null): void {
+  inMemoryCsrfToken = token;
+}
+
+export function getCsrfToken(): string | null {
+  if (inMemoryCsrfToken) return inMemoryCsrfToken;
+  if (typeof document !== 'undefined') {
+    const match = document.cookie.match(/(?:^|;\s*)ecv_csrf=([^;]+)/);
+    if (match) return decodeURIComponent(match[1]);
+  }
+  return null;
+}
+
+export async function fetchCsrfToken(): Promise<string | null> {
+  try {
+    const res = await fetch(apiUrl('/auth/csrf', API_BASE), {
+      method: 'GET',
+      credentials: 'include',
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.csrfToken && typeof data.csrfToken === 'string') {
+        setCsrfToken(data.csrfToken);
+        return data.csrfToken;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let code = 'ERROR';
@@ -41,19 +75,44 @@ async function handle<T>(res: Response): Promise<T> {
     }
     throw new ApiError(code, message, res.status);
   }
-  return res.json() as Promise<T>;
+  const data = (await res.json()) as T;
+  if (data && typeof data === 'object' && 'csrfToken' in (data as Record<string, unknown>)) {
+    const token = (data as { csrfToken?: unknown }).csrfToken;
+    if (typeof token === 'string') {
+      setCsrfToken(token);
+    }
+  }
+  return data;
 }
 
 async function request<T>(method: string, path: string, body?: unknown, isForm = false): Promise<T> {
   const init: RequestInit = { method, credentials: 'include' };
+  const headers: Record<string, string> = {};
+
   if (body !== undefined) {
     if (isForm) {
       init.body = body as FormData;
     } else {
-      init.headers = { 'Content-Type': 'application/json' };
+      headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(body);
     }
   }
+
+  const upperMethod = method.toUpperCase();
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(upperMethod)) {
+    let token = getCsrfToken();
+    if (!token && (path.includes('/auth') || path.includes('/profile'))) {
+      token = await fetchCsrfToken();
+    }
+    if (token) {
+      headers['X-CSRF-Token'] = token;
+    }
+  }
+
+  if (Object.keys(headers).length > 0) {
+    init.headers = headers;
+  }
+
   const res = await fetch(apiUrl(path, API_BASE), init);
   return handle<T>(res);
 }

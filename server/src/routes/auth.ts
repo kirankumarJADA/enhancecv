@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { getDb, newId, withTransaction, asQueryable } from '../db/db';
 import { signSession, requireAuth, sessionRefFromToken } from '../middleware/auth';
+import { ensureCsrfCookie, CSRF_COOKIE_NAME, csrfCookieOptions } from '../middleware/csrf';
 import { createUserSession, revokeSession, revokeAllSessions } from '../lib/sessions';
 import { AppError } from '../middleware/errors';
 import { rateLimit } from '../middleware/rateLimit';
@@ -52,6 +53,14 @@ export function sessionCookieOptions(isProd: boolean) {
   };
 }
 
+export function clearCookieOptions(isProd: boolean) {
+  return {
+    sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
+    secure: isProd,
+    path: '/',
+  };
+}
+
 /**
  * Start a session: record this device's session row, then issue a token that
  * names it.
@@ -64,10 +73,13 @@ export async function startSession(
   uid: string,
   email: string,
   sessionVersion: number,
-): Promise<void> {
+  req?: Request,
+): Promise<string> {
   const sessionId = await createUserSession(uid);
   const token = signSession({ uid, email }, sessionVersion, sessionId);
   res.cookie(config.cookieName, token, sessionCookieOptions(config.isProd));
+  const csrfToken = ensureCsrfCookie(req, res);
+  return csrfToken;
 }
 
 async function sendVerificationEmail(email: string, token: string): Promise<EmailSendResult> {
@@ -116,7 +128,7 @@ router.post('/signup', rateLimit({ windowMs: 15 * 60_000, max: 20 }), async (req
   }
 
   const id = newId('usr');
-  const hash = bcrypt.hashSync(body.password, 10);
+  const hash = await bcrypt.hash(body.password, 10);
 
   await db.query(
     'INSERT INTO users (id, email, password_hash, name) VALUES ($1, $2, $3, $4)',
@@ -129,7 +141,7 @@ router.post('/signup', rateLimit({ windowMs: 15 * 60_000, max: 20 }), async (req
 
   track(id, 'signup', { emailProvider: emailResult.provider });
   // A brand-new row starts at session_version 0 (the schema default).
-  await startSession(res, id, body.email, 0);
+  const csrfToken = await startSession(res, id, body.email, 0, req);
 
   res.status(201).json({
     user: {
@@ -141,7 +153,13 @@ router.post('/signup', rateLimit({ windowMs: 15 * 60_000, max: 20 }), async (req
       emailDelivered: emailResult.delivered,
       devActionUrl: devOnlyActionUrl(emailResult),
     },
+    csrfToken,
   });
+});
+
+router.get('/csrf', (req, res) => {
+  const csrfToken = ensureCsrfCookie(req, res);
+  res.json({ csrfToken });
 });
 
 router.post(
@@ -172,12 +190,12 @@ router.post(
         }
       | undefined;
 
-    if (!row || !bcrypt.compareSync(body.password, row.password_hash)) {
+    if (!row || !(await bcrypt.compare(body.password, row.password_hash))) {
       throw new AppError('INVALID_CREDENTIALS', 'Incorrect email or password.', 401);
     }
 
     track(row.id, 'login', {});
-    await startSession(res, row.id, row.email, Number(row.session_version));
+    const csrfToken = await startSession(res, row.id, row.email, Number(row.session_version), req);
 
     res.json({
       user: {
@@ -187,6 +205,7 @@ router.post(
         onboarded: !!row.onboarded,
         emailVerified: !!row.email_verified,
       },
+      csrfToken,
     });
   },
 );
@@ -203,14 +222,16 @@ router.post('/logout', async (req, res) => {
     } catch (err) {
       // Tell the caller sign-out did not complete rather than pretending it did.
       captureError(err, { code: 'SESSION_REVOKE_FAILED', route: req.path });
-      res.clearCookie(config.cookieName, { path: '/' });
+      res.clearCookie(config.cookieName, clearCookieOptions(config.isProd));
+      res.clearCookie(CSRF_COOKIE_NAME, clearCookieOptions(config.isProd));
       res.status(503).json({
         error: { code: 'AUTH_UNAVAILABLE', message: 'Could not complete sign-out. Please try again.' },
       });
       return;
     }
   }
-  res.clearCookie(config.cookieName, { path: '/' });
+  res.clearCookie(config.cookieName, clearCookieOptions(config.isProd));
+  res.clearCookie(CSRF_COOKIE_NAME, clearCookieOptions(config.isProd));
   res.json({ ok: true });
 });
 
@@ -238,6 +259,8 @@ router.get('/me', requireAuth, async (req, res) => {
     throw new AppError('NOT_FOUND', 'Account not found.', 404);
   }
 
+  const csrfToken = ensureCsrfCookie(req, res);
+
   res.json({
     user: {
       id: row.id,
@@ -248,6 +271,7 @@ router.get('/me', requireAuth, async (req, res) => {
       emailVerified: !!row.email_verified,
       role: row.role,
     },
+    csrfToken,
   });
 });
 
@@ -341,10 +365,11 @@ router.post('/reset-password', rateLimit({ windowMs: 15 * 60_000, max: 10 }), as
   // revokes EVERY device (not just the one that requested it): the password
   // change and the revocations commit together, so a token cannot outlive the
   // reset it was meant to reverse.
+  const passwordHash = await bcrypt.hash(body.newPassword, 10);
   await withTransaction(async (client) => {
     const db = asQueryable(client);
     await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [
-      bcrypt.hashSync(body.newPassword, 10),
+      passwordHash,
       result.userId,
     ]);
     await revokeAllSessions(result.userId, db);

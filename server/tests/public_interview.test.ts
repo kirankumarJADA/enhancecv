@@ -3,7 +3,7 @@ import request from 'supertest';
 import { buildApp } from '../src/app';
 import { __resetConcurrencyForTests } from '../src/routes/public';
 import type { Express } from 'express';
-import type { ResumeData } from '../types';
+import type { ResumeData } from '../src/types';
 
 describe('Curevo AI — Phase 9F Public Interview Prep & Mock Interview Coach API', () => {
   let app: Express;
@@ -54,7 +54,7 @@ describe('Curevo AI — Phase 9F Public Interview Prep & Mock Interview Coach AP
       },
     ],
     certifications: [],
-    languages: [{ id: 'lang-1', language: 'English', proficiency: 'Native' }],
+    languages: [{ id: 'lang-1', name: 'English', proficiency: 'Native' }],
     achievements: ['Speaker at London Node User Group 2023'],
     customSections: [],
     sectionOrder: [

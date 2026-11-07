@@ -44,6 +44,14 @@ const FRIENDLY: Record<string, { status: number; message: string }> = {
     status: 422,
     message: 'The search provider returned no results for this company.',
   },
+  AUTH_UNAVAILABLE: {
+    status: 503,
+    message: 'Authentication service is temporarily unavailable. Please try again later.',
+  },
+  DB_UNAVAILABLE: {
+    status: 503,
+    message: 'Database service is temporarily unavailable. Please try again later.',
+  },
 };
 
 export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
@@ -88,6 +96,23 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   if (anyErr && anyErr.type === 'entity.parse.failed') {
     res.status(400).json({
       error: { code: 'MALFORMED_JSON', message: 'Request body is not valid JSON.', requestId },
+    });
+    return;
+  }
+  if (
+    anyErr &&
+    (anyErr.code === 'ECONNREFUSED' ||
+      anyErr.code === 'ENOTFOUND' ||
+      anyErr.code === '57P01' ||
+      anyErr.code === 'ETIMEDOUT' ||
+      (err instanceof Error && err.message?.includes('DATABASE_URL')))
+  ) {
+    res.status(503).json({
+      error: {
+        code: 'AUTH_UNAVAILABLE',
+        message: 'Authentication service is temporarily unavailable. Database connection is not configured or reachable.',
+        requestId,
+      },
     });
     return;
   }

@@ -12,6 +12,7 @@
 //   - POST /api/public/cover-letter/pdf (Stream ATS-safe Cover Letter PDF)
 
 import { Router, Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import multer from 'multer';
 import { extractFile } from '../engine/extract';
 import { analyseATS } from '../engine/ats';
@@ -24,7 +25,7 @@ import { renderResumePdf, pdfFileName, renderCoverLetterPdf, coverLetterFileName
 import { rateLimit } from '../middleware/rateLimit';
 import { AppError } from '../middleware/errors';
 import { AiUnavailableError, getAiStatus } from '../ai/provider';
-import { getJobSourceProvider, isJobSourceConfigured } from '../lib/jobSource';
+import { getJobSourceProvider, isJobSourceConfigured, searchJobsWithCache } from '../lib/jobSource';
 import { CURATED_JOBS } from '../data/curatedJobs';
 import {
   generateInterviewPrep,
@@ -34,6 +35,17 @@ import {
   INTERVIEW_CATEGORIES,
   type StarAnswerInput,
 } from '../ai/interviewAgent';
+import {
+  optimizePublicLinkedin,
+  generateDeterministicLinkedin,
+  type PublicLinkedinInput,
+} from '../ai/publicLinkedinAgent';
+import {
+  researchCompany,
+  CURATED_COMPANY_RESEARCH,
+} from '../ai/companyResearchAgent';
+import { isWebSearchConfigured, resolveSearchProvider } from '../lib/webSearch';
+import { sendEmail, isEmailConfigured } from '../lib/email';
 import type { ResumeData, JobAnalysis, PageSize } from '../types';
 
 const router = Router();
@@ -616,13 +628,17 @@ router.post(
 // Reports whether an external live jobs API provider is configured
 // ---------------------------------------------------------------------------
 router.get('/jobs/status', (_req: Request, res: Response) => {
+    const provider = getJobSourceProvider();
+    const configured = isJobSourceConfigured();
     res.json({
       ok: true,
-      configured: isJobSourceConfigured(),
-      isConfigured: isJobSourceConfigured(),
-      provider: isJobSourceConfigured() ? 'live-api' : 'curated-presets',
-      message: isJobSourceConfigured()
-        ? 'Connected to live external job provider'
+      configured,
+      isConfigured: configured,
+      provider: configured ? 'live-api' : 'curated-presets',
+      providerId: provider.id,
+      providerName: provider.name,
+      message: configured
+        ? `Connected to ${provider.name}`
         : 'Live job provider not configured in environment. Displaying realistic curated benchmark roles.',
     });
   });
@@ -644,7 +660,7 @@ router.post(
 
       if (isJobSourceConfigured()) {
         const provider = getJobSourceProvider();
-        const results = await provider.search(
+        const results = await searchJobsWithCache(
           {
             keywords: query,
             location: location || undefined,
@@ -657,7 +673,9 @@ router.post(
           ok: true,
           jobs: results,
           total: results.length,
-          source: 'live',
+          source: provider.id,
+          provider: provider.id,
+          providerName: provider.name,
           configured: true,
           isConfigured: true,
         });
@@ -992,5 +1010,293 @@ router.post(
     }
   }
 );
+
+// ---------------------------------------------------------------------------
+// 14. GET /api/public/linkedin/status
+// Status of LinkedIn Optimization feature & AI availability
+// ---------------------------------------------------------------------------
+router.get('/linkedin/status', (_req: Request, res: Response) => {
+  const ai = getAiStatus();
+  res.json({
+    ok: true,
+    ai,
+    supportedHeadlineStyles: [
+      'Impact-Driven',
+      'Skill-Focused',
+      'Executive / Leadership',
+      'Modern Specialist',
+    ],
+    supportedSections: ['Headline', 'About', 'Experience', 'Skills', 'Recruiter Keywords'],
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 15. POST /api/public/linkedin/optimize
+// 100% public, truth-grounded LinkedIn profile optimization & scoring
+// ---------------------------------------------------------------------------
+router.post(
+  '/linkedin/optimize',
+  rateLimit({ windowMs: 15 * 60_000, max: 60 }),
+  aiConcurrencyGuard,
+  async (req: Request, res: Response) => {
+    try {
+      const headline = typeof req.body.headline === 'string' ? req.body.headline.trim().slice(0, 300) : '';
+      const about = typeof req.body.about === 'string' ? req.body.about.trim().slice(0, 4000) : '';
+      const targetRole = typeof req.body.targetRole === 'string' ? req.body.targetRole.trim().slice(0, 150) : undefined;
+      const industry = typeof req.body.industry === 'string' ? req.body.industry.trim().slice(0, 150) : undefined;
+      const jobDescription = typeof req.body.jobDescription === 'string' ? req.body.jobDescription.trim().slice(0, 10_000) : undefined;
+
+      let experience: Array<{ title: string; company: string; period?: string; bullets: string[] }> | undefined;
+      if (Array.isArray(req.body.experience)) {
+        experience = req.body.experience.map((e: any) => ({
+          title: typeof e.title === 'string' ? e.title.slice(0, 100) : '',
+          company: typeof e.company === 'string' ? e.company.slice(0, 100) : '',
+          period: typeof e.period === 'string' ? e.period.slice(0, 50) : '',
+          bullets: Array.isArray(e.bullets)
+            ? e.bullets.map((b: any) => (typeof b === 'string' ? b.slice(0, 600) : '')).filter(Boolean)
+            : [],
+        }));
+      }
+
+      let skills: string[] | undefined;
+      if (Array.isArray(req.body.skills)) {
+        skills = req.body.skills.map((s: any) => (typeof s === 'string' ? s.trim().slice(0, 80) : '')).filter(Boolean);
+      }
+
+      const resume = getSafeResume(req.body.resume);
+
+      const optimization = await optimizePublicLinkedin({
+        headline,
+        about,
+        experience,
+        skills,
+        targetRole,
+        industry,
+        resume,
+        jobDescription,
+      });
+
+      res.json({
+        ok: true,
+        ...optimization,
+      });
+    } catch (err) {
+      handlePublicError(err, res);
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// 16. GET /api/public/company-research/status
+// Status of company research web search provider & curated benchmark options
+// ---------------------------------------------------------------------------
+router.get('/company-research/status', (_req: Request, res: Response) => {
+  const configured = isWebSearchConfigured();
+  const provider = resolveSearchProvider();
+  res.json({
+    ok: true,
+    configured,
+    isConfigured: configured,
+    provider: provider.id,
+    curatedBenchmarkAvailable: true,
+    curatedCompanies: ['Apex Cloud Systems', 'FinEdge Global'],
+    message: configured
+      ? 'Live web search provider active. Company research sourced from verified web results.'
+      : 'Live web search provider not configured in environment. Displaying realistic curated benchmark company intelligence.',
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 17. POST /api/public/company-research
+// 100% public, source-grounded company intelligence
+// ---------------------------------------------------------------------------
+router.post(
+  '/company-research',
+  rateLimit({ windowMs: 15 * 60_000, max: 40 }),
+  aiConcurrencyGuard,
+  async (req: Request, res: Response) => {
+    try {
+      const company =
+        typeof req.body.company === 'string' ? req.body.company.trim().slice(0, 200) : '';
+      if (!company) {
+        res.status(400).json({
+          error: {
+            code: 'INVALID_COMPANY',
+            message: 'Company name is required for research.',
+          },
+        });
+        return;
+      }
+
+      const jdText =
+        typeof req.body.jobDescription === 'string' && req.body.jobDescription.trim().length > 0
+          ? req.body.jobDescription.slice(0, 5000)
+          : null;
+
+      const research = await researchCompany({ company, jdText });
+
+      res.json({
+        ok: true,
+        research,
+      });
+    } catch (err) {
+      handlePublicError(err, res);
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// 18. GET /api/public/email/status
+// Check email provider readiness (Phase 9K)
+// ---------------------------------------------------------------------------
+router.get('/email/status', (_req: Request, res: Response) => {
+  const configured = isEmailConfigured();
+  res.json({
+    ok: true,
+    configured,
+    isConfigured: configured,
+    provider: process.env.EMAIL_PROVIDER || 'console',
+    message: configured
+      ? 'Live email delivery is configured.'
+      : 'Email service in preview mode (console output). No live email credentials configured.',
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 19. POST /api/public/email/resume
+// Explicit consent user-requested resume email dispatch (Phase 9K)
+// ---------------------------------------------------------------------------
+const emailResumeSchema = z.object({
+  email: z.string().email('Please enter a valid email address.').max(254),
+  candidateName: z.string().max(100).optional(),
+  resumeSummary: z.string().max(3000),
+  consent: z.literal(true, {
+    errorMap: () => ({ message: 'You must explicitly consent to receiving this email.' }),
+  }),
+});
+
+router.post(
+  '/email/resume',
+  rateLimit({ windowMs: 15 * 60_000, max: 10 }),
+  async (req: Request, res: Response) => {
+    try {
+      const parsed = emailResumeSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({
+          error: {
+            code: 'INVALID_EMAIL_REQUEST',
+            message: parsed.error.issues[0]?.message || 'Invalid email request.',
+          },
+        });
+        return;
+      }
+
+      const { email, candidateName, resumeSummary } = parsed.data;
+      const greeting = candidateName ? `Hi ${candidateName},` : 'Hello,';
+      const text = `${greeting}
+
+Here is a copy of your CV from Curevo AI:
+
+${resumeSummary}
+
+---
+You requested this email from Curevo AI (https://enhancecv-orpin.vercel.app).
+We respect your privacy: your email is never sold, shared, or retained for marketing.`;
+
+      const result = await sendEmail({
+        to: email,
+        subject: `Your CV from Curevo AI${candidateName ? ` — ${candidateName}` : ''}`,
+        text,
+      });
+
+      res.json({
+        ok: true,
+        delivered: result.delivered,
+        provider: result.provider,
+        message: result.delivered
+          ? 'Resume successfully sent to your email.'
+          : 'Email queued in preview mode (check server console for details).',
+      });
+    } catch (err) {
+      handlePublicError(err, res);
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// 20. POST /api/public/email/interview-report
+// Explicit consent user-requested interview report dispatch (Phase 9K)
+// ---------------------------------------------------------------------------
+const emailInterviewReportSchema = z.object({
+  email: z.string().email('Please enter a valid email address.').max(254),
+  role: z.string().max(100),
+  overallScore: z.number().min(0).max(100).optional(),
+  summary: z.string().max(4000),
+  consent: z.literal(true, {
+    errorMap: () => ({ message: 'You must explicitly consent to receiving this email.' }),
+  }),
+});
+
+router.post(
+  '/email/interview-report',
+  rateLimit({ windowMs: 15 * 60_000, max: 10 }),
+  async (req: Request, res: Response) => {
+    try {
+      const parsed = emailInterviewReportSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({
+          error: {
+            code: 'INVALID_REPORT_REQUEST',
+            message: parsed.error.issues[0]?.message || 'Invalid interview report request.',
+          },
+        });
+        return;
+      }
+
+      const { email, role, overallScore, summary } = parsed.data;
+      const text = `Hello,
+
+Here is your Interview Preparation & Mock Coaching Report for ${role} from Curevo AI:
+
+${overallScore !== undefined ? `Overall Readiness Score: ${overallScore}/100\n\n` : ''}Key Findings & Recommendations:
+${summary}
+
+---
+Generated by Curevo AI Interview Coach (https://enhancecv-orpin.vercel.app/interview).
+Truth-grounded and privacy-first: your email is never shared or retained for marketing.`;
+
+      const result = await sendEmail({
+        to: email,
+        subject: `Interview Coaching Report: ${role} — Curevo AI`,
+        text,
+      });
+
+      res.json({
+        ok: true,
+        delivered: result.delivered,
+        provider: result.provider,
+        message: result.delivered
+          ? 'Interview report successfully sent to your email.'
+          : 'Report queued in preview mode (check server console for details).',
+      });
+    } catch (err) {
+      handlePublicError(err, res);
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// 21. GET /api/public/billing/status
+// Reports public free tier guarantee and optional monetization readiness (Phase 9L)
+// ---------------------------------------------------------------------------
+router.get('/billing/status', (_req: Request, res: Response) => {
+  res.json({
+    ok: true,
+    freeForever: true,
+    publicCoreGuarantee:
+      'All core features (Resume Builder, ATS, Truth Guard, Job Discovery, Application Tracker, Interview Coach) are 100% free and open to everyone without login or credit card.',
+    stripeConfigured: !!process.env.STRIPE_SECRET_KEY,
+  });
+});
 
 export default router;

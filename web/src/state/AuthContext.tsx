@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { performLogout, type LogoutResult } from './logout';
 import type { User } from '../types';
@@ -28,13 +28,36 @@ const AuthContext = createContext<AuthState>({
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [logoutWarning, setLogoutWarning] = useState<string | null>(null);
 
-  // In the login-free stateless architecture, there is no session to fetch.
-  // Kept as a safe no-op to maintain full interface compatibility without
-  // making doomed GET /auth/me network calls that 404.
-  const refresh = useCallback(async () => {}, []);
+  const refresh = useCallback(async () => {
+    try {
+      const res = await api.get<{ user: User }>('/auth/me');
+      setUser(res.user);
+    } catch {
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    void (async () => {
+      try {
+        const res = await api.get<{ user: User }>('/auth/me');
+        if (mounted) setUser(res.user);
+      } catch {
+        if (mounted) setUser(null);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const logout = useCallback(async (): Promise<LogoutResult> => {
     const result = await performLogout((path) => api.post(path));

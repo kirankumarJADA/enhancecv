@@ -44,7 +44,7 @@ router.put('/password', requireAuth, async (req, res) => {
     'SELECT password_hash FROM users WHERE id = $1',
     [req.user!.uid],
   )).rows[0] as { password_hash: string } | undefined;
-  if (!row || !bcrypt.compareSync(body.currentPassword, row.password_hash)) {
+  if (!row || !(await bcrypt.compare(body.currentPassword, row.password_hash))) {
     throw new AppError('INVALID_CREDENTIALS', 'Current password is incorrect.', 401);
   }
   // Changing the password revokes every OTHER device, then issues a brand-new
@@ -52,10 +52,11 @@ router.put('/password', requireAuth, async (req, res) => {
   // while any other session (including one an attacker may hold) stops working
   // immediately. The password update and the revocations commit together.
   const uid = req.user!.uid;
+  const newPasswordHash = await bcrypt.hash(body.newPassword, 10);
   const version = await withTransaction(async (client) => {
     const tx = asQueryable(client);
     await tx.query('UPDATE users SET password_hash = $1 WHERE id = $2', [
-      bcrypt.hashSync(body.newPassword, 10),
+      newPasswordHash,
       uid,
     ]);
     await revokeAllSessions(uid, tx);

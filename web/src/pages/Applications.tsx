@@ -12,6 +12,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Logo } from '../components/ui';
+import CompanyResearchModal from '../components/CompanyResearchModal';
 import {
   getApplications,
   saveApplication,
@@ -52,6 +53,7 @@ export default function Applications() {
   const [formInterviewDate, setFormInterviewDate] = useState('');
   const [formJobUrl, setFormJobUrl] = useState('');
   const [formNotes, setFormNotes] = useState('');
+  const [researchCompany, setResearchCompany] = useState<string | null>(null);
 
   const loadData = () => {
     const list = getApplications();
@@ -242,6 +244,12 @@ export default function Applications() {
               className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs sm:text-sm font-semibold text-white shadow-2xs hover:bg-teal-700"
             >
               Interview Coach
+            </Link>
+            <Link
+              to="/linkedin"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50"
+            >
+              LinkedIn
             </Link>
             <Link to="/" className="text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900">
               Home
@@ -462,6 +470,14 @@ export default function Applications() {
                               <div className="flex items-center gap-1">
                                 <button
                                   type="button"
+                                  onClick={() => setResearchCompany(app.company)}
+                                  className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 p-1"
+                                  title="Research company intelligence"
+                                >
+                                  Research
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => {
                                     navigate(`/interview?role=${encodeURIComponent(app.role)}&company=${encodeURIComponent(app.company)}&jd=${encodeURIComponent(app.job_description || '')}&tab=prepare`);
                                   }}
@@ -546,6 +562,13 @@ export default function Applications() {
                       </select>
 
                       <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setResearchCompany(app.company)}
+                          className="text-xs font-bold text-blue-700"
+                        >
+                          Research
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleTailor(app)}
@@ -734,6 +757,16 @@ export default function Applications() {
             </div>
           </div>
         )}
+
+        {/* Company Research Intelligence Modal */}
+        <CompanyResearchModal
+          isOpen={!!researchCompany}
+          onClose={() => setResearchCompany(null)}
+          companyName={researchCompany || ''}
+          onSelectForInterview={(comp) => {
+            navigate(`/interview?tab=prepare&company=${encodeURIComponent(comp)}`);
+          }}
+        />
       </main>
     </div>
   );

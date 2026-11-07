@@ -437,6 +437,47 @@ export interface ResumeSummary {
   atsScore: number | null;
   jobId: string | null;
   jobTitle: string | null;
+  targetRole?: string;
+  targetCompany?: string;
+  truthGuardResult?: any;
+  createdAt: string;
+  updatedAt: string;
+}
+
+
+export interface MasterCvVersionSummary {
+  id: string;
+  masterCvId: string;
+  versionNumber: number;
+  versionLabel: string;
+  contentSnapshot: ResumeData;
+  source: 'manual' | 'autosave' | 'restore' | 'import';
+  createdAt: string;
+}
+
+export interface MasterCvData {
+  id: string;
+  title: string;
+  targetRole?: string;
+  content: ResumeData;
+  revision: number;
+  atsScore: number | null;
+  completeness: number;
+  updatedAt: string;
+  createdAt?: string;
+}
+
+export interface TailoredResumeRecord {
+  id: string;
+  masterCvVersionId?: string | null;
+  title: string;
+  targetRole: string;
+  targetCompany: string;
+  jobDescriptionSnapshot?: string;
+  resumeContent: ResumeData;
+  atsScore: number | null;
+  atsBreakdown?: any;
+  truthGuardResult?: any;
   createdAt: string;
   updatedAt: string;
 }

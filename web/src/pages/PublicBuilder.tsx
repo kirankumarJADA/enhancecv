@@ -7,6 +7,17 @@ import AdvancedAtsAuditView from '../components/AdvancedAtsAuditView';
 import ResumeFormEditor from '../components/ResumeFormEditor';
 import { getSampleCv, SAMPLE_ATS_FALLBACK } from '../data/sampleCv';
 import { SAMPLE_JD_PRESETS } from '../data/sampleJdPresets';
+import {
+  saveDraft,
+  loadDraft,
+  clearDraft,
+  hasStoredDraft,
+  hasAnonymousDraft,
+  importAnonymousDraftToAccount,
+  discardAnonymousDraft,
+  type BuilderDraft,
+} from '../lib/draftStorage';
+import { useAuth } from '../state/AuthContext';
 import type {
   ResumeData,
   ATSAnalysis,
@@ -20,6 +31,7 @@ import type {
   CoverLetterTone,
   CoverLetterResponse,
 } from '../types';
+import EmailModal from '../components/EmailModal';
 
 type Mode = 'improve' | 'create' | 'ats';
 type Step = 'idle' | 'processing' | 'ready';
@@ -203,6 +215,7 @@ export default function PublicBuilder() {
   const [selectedPageSize, setSelectedPageSize] = useState<PageSize>('A4');
   const [previewScale, setPreviewScale] = useState<number>(1);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState<boolean>(false);
 
   // Direct Content Editor & Real-Time ATS Audit State
   const [isAuditing, setIsAuditing] = useState<boolean>(false);
@@ -253,6 +266,19 @@ export default function PublicBuilder() {
 
   // Sample CV Mode state
   const [isSampleCv, setIsSampleCv] = useState<boolean>(false);
+
+  // Draft Persistence State (Phase 9B / 9C)
+  const { user } = useAuth();
+  const userId = user?.id || null;
+  const [showImportPrompt, setShowImportPrompt] = useState<boolean>(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [cloudStatus, setCloudStatus] = useState<'idle' | 'saving' | 'synced' | 'conflict' | 'error'>('idle');
+  const [serverRevision, setServerRevision] = useState<number | null>(null);
+  const [isSavingTailored, setIsSavingTailored] = useState<boolean>(false);
+  const [savedTailoredId, setSavedTailoredId] = useState<string | null>(null);
+  const [isHydrated, setIsHydrated] = useState<boolean>(false);
+  const [restoredDraftToast, setRestoredDraftToast] = useState<string | null>(null);
+  const [showClearConfirmModal, setShowClearConfirmModal] = useState<boolean>(false);
 
   // 1-Click Sample CV Loader: Immediately loads complete synthetic engineering profile
   // and audits ATS score without requiring file upload or account creation.
@@ -713,8 +739,77 @@ export default function PublicBuilder() {
   const [projects, setProjects] = useState<ProjectFormItem[]>([]);
   const [certifications, setCertifications] = useState<CertFormItem[]>([]);
 
-  // Update mode if URL query parameter changes
+  // Phase 9B / 9C: Hydrate draft from localStorage on initial mount (account-isolated)
   useEffect(() => {
+    const urlMode = searchParams.get('mode');
+    const isSampleParam = searchParams.get('sample') === 'true' || urlMode === 'sample';
+
+    if (isSampleParam) {
+      void handleLoadSampleCv(urlMode === 'ats' ? 'ats' : undefined);
+      setIsHydrated(true);
+      return;
+    }
+
+    // Check for anonymous draft import when signed in
+    if (userId && hasAnonymousDraft()) {
+      setShowImportPrompt(true);
+    }
+
+    const draft = loadDraft(userId);
+    if (draft) {
+      if (draft.resume) {
+        setResume(draft.resume);
+        setStep(draft.step);
+        setMode(draft.mode);
+        setActiveTab(urlMode === 'ats' ? 'ats' : draft.activeTab);
+        setSelectedTemplate(draft.selectedTemplate || 'classic');
+        setSelectedMarginDensity(draft.selectedMarginDensity || 'normal');
+        setSelectedPageSize(draft.selectedPageSize || 'A4');
+        setActiveJobText(draft.activeJobText || '');
+        setActiveTargetRole(draft.activeTargetRole || '');
+        setIsSampleCv(Boolean(draft.isSampleCv));
+        if (draft.ats) setAts(draft.ats);
+        if (draft.truth) setTruth(draft.truth);
+        if (draft.changeLog) setChangeLog(draft.changeLog);
+        if (draft.match) setMatch(draft.match);
+        if (draft.coverLetter) setCoverLetter(draft.coverLetter);
+        if (draft.coverRole) setCoverRole(draft.coverRole);
+        if (draft.coverCompany) setCoverCompany(draft.coverCompany);
+        if (draft.coverJdText) setCoverJdText(draft.coverJdText);
+        if (draft.coverTone) setCoverTone(draft.coverTone);
+        setSaveStatus('saved');
+        setRestoredDraftToast(userId ? `Restored your draft (${user?.email || 'account'}).` : 'Restored your draft from this browser.');
+      } else if (draft.createForm && draft.mode === 'create') {
+        setMode('create');
+        setFullName(draft.createForm.fullName || '');
+        setEmail(draft.createForm.email || '');
+        setPhone(draft.createForm.phone || '');
+        setLocation(draft.createForm.location || '');
+        setPortfolio(draft.createForm.portfolio || '');
+        setLinkedin(draft.createForm.linkedin || '');
+        setGithub(draft.createForm.github || '');
+        setCareerTitle(draft.createForm.careerTitle || '');
+        setSkillsRaw(draft.createForm.skillsRaw || '');
+        if (draft.createForm.experiences?.length) setExperiences(draft.createForm.experiences);
+        if (draft.createForm.educations?.length) setEducations(draft.createForm.educations);
+        if (draft.createForm.projects?.length) setProjects(draft.createForm.projects);
+        if (draft.createForm.certs?.length) setCertifications(draft.createForm.certs);
+        setSaveStatus('saved');
+        setRestoredDraftToast(userId ? `Restored your draft form details (${user?.email || 'account'}).` : 'Restored your draft form details.');
+      }
+    } else if (urlMode === 'create' || urlMode === 'improve' || urlMode === 'ats') {
+      setMode(urlMode);
+      if (urlMode === 'ats') {
+        setActiveTab('ats');
+      }
+    }
+
+    setIsHydrated(true);
+  }, [userId]);
+
+  // Sync mode if query parameter changes after hydration
+  useEffect(() => {
+    if (!isHydrated) return;
     const urlMode = searchParams.get('mode');
     const isSampleParam = searchParams.get('sample') === 'true' || urlMode === 'sample';
     if (isSampleParam) {
@@ -725,7 +820,141 @@ export default function PublicBuilder() {
         setActiveTab('ats');
       }
     }
-  }, [searchParams]);
+  }, [searchParams, isHydrated]);
+
+  // Phase 9B: Debounced Auto-Saving to LocalStorage
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    const hasData =
+      resume !== null ||
+      Boolean(
+        fullName.trim() ||
+        careerTitle.trim() ||
+        skillsRaw.trim() ||
+        experiences[0]?.company.trim() ||
+        activeJobText.trim() ||
+        coverLetter !== null
+      );
+
+    if (!hasData) return;
+
+    setSaveStatus('saving');
+
+    const timer = setTimeout(() => {
+      const draftPayload: Omit<BuilderDraft, 'version' | 'savedAt' | 'seq'> = {
+        mode,
+        step,
+        activeTab,
+        selectedTemplate,
+        selectedMarginDensity,
+        selectedPageSize,
+        activeJobText,
+        activeTargetRole,
+        isSampleCv,
+        resume,
+        ats,
+        truth,
+        changeLog,
+        match,
+        coverLetter,
+        coverRole,
+        coverCompany,
+        coverJdText,
+        coverTone,
+        createForm:
+          mode === 'create' && step === 'idle'
+            ? {
+                fullName,
+                email,
+                phone,
+                location,
+                portfolio,
+                linkedin,
+                github,
+                careerTitle,
+                skillsRaw,
+                experiences,
+                educations,
+                projects,
+                certs: certifications,
+              }
+            : undefined,
+      };
+
+      const result = saveDraft(draftPayload, Date.now(), userId);
+      if (result.success) {
+        setSaveStatus('saved');
+      } else {
+        setSaveStatus('error');
+      }
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [
+    isHydrated,
+    userId,
+    resume,
+    ats,
+    truth,
+    changeLog,
+    mode,
+    step,
+    activeTab,
+    selectedTemplate,
+    selectedMarginDensity,
+    selectedPageSize,
+    activeJobText,
+    activeTargetRole,
+    match,
+    coverLetter,
+    coverRole,
+    coverCompany,
+    coverJdText,
+    coverTone,
+    isSampleCv,
+    fullName,
+    email,
+    phone,
+    location,
+    portfolio,
+    linkedin,
+    github,
+    careerTitle,
+    skillsRaw,
+    experiences,
+    educations,
+    projects,
+    certifications,
+  ]);
+
+  // Phase 9D: Cloud Autosave for Authenticated Users
+  useEffect(() => {
+    if (!isHydrated || !user || !resume) return;
+    if (mode === 'ats') return;
+
+    setCloudStatus('saving');
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.put<{ id: string; revision: number }>('/master', {
+          resume,
+          title: 'Master CV',
+          expectedRevision: serverRevision || undefined,
+        });
+        setServerRevision(res.revision);
+        setCloudStatus('synced');
+      } catch (err: unknown) {
+        const apiErr = err as { status?: number };
+        if (apiErr.status === 409) {
+          setCloudStatus('conflict');
+        } else {
+          setCloudStatus('error');
+        }
+      }
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, [isHydrated, user, resume, mode, serverRevision]);
 
   // Reset to initial state
   const handleStartOver = () => {
@@ -747,23 +976,53 @@ export default function PublicBuilder() {
     setMatch(null);
     setActiveJobText('');
     setActiveTargetRole('');
+    setCoverLetter(null);
+    setOriginalGeneratedCover(null);
+    setCoverRole('');
+    setCoverCompany('');
+    setCoverJdText('');
+    setFullName('');
+    setEmail('');
+    setPhone('');
+    setLocation('');
+    setPortfolio('');
+    setLinkedin('');
+    setGithub('');
+    setCareerTitle('');
+    setSkillsRaw('');
+    setExperiences([{ company: '', title: '', location: '', startDate: '', endDate: '', current: false, description: '' }]);
+    setEducations([{ institution: '', degree: '', field: '', startDate: '', endDate: '', grade: '' }]);
+    setProjects([]);
+    setCertifications([]);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  // Phase 9B / 9C: Clear locally stored draft and reset builder
+  const handleClearDraft = () => {
+    clearDraft(userId);
+    handleStartOver();
+    setSaveStatus('idle');
+    setRestoredDraftToast(null);
+    setShowClearConfirmModal(false);
   };
 
   // ---------------------------------------------------------------------------
   // In-Memory Draft Protection (beforeunload, popstate, in-app navigation)
   // ---------------------------------------------------------------------------
   const hasUnsavedDraft =
-    step === 'ready' ||
-    Boolean(
-      fullName.trim() ||
-      careerTitle.trim() ||
-      skillsRaw.trim() ||
-      (experiences[0]?.company.trim() || experiences[0]?.title.trim()) ||
-      selectedFileName
-    );
+    saveStatus === 'saving' ||
+    (saveStatus === 'error' && (
+      step === 'ready' ||
+      Boolean(
+        fullName.trim() ||
+        careerTitle.trim() ||
+        skillsRaw.trim() ||
+        experiences[0]?.company.trim() ||
+        selectedFileName
+      )
+    ));
 
   // Before-unload warning for browser refresh and tab closure
   useEffect(() => {
@@ -790,7 +1049,7 @@ export default function PublicBuilder() {
     const handlePopState = () => {
       if (hasUnsavedDraft) {
         const leave = window.confirm(
-          'You have an active resume draft in memory. Navigating away will discard your changes. Are you sure you want to leave?'
+          'You have unsaved changes currently being processed. Navigating away may lose your most recent edits. Are you sure you want to leave?'
         );
         if (!leave) {
           window.history.pushState({ enhancecvDraft: true }, '', window.location.href);
@@ -808,7 +1067,7 @@ export default function PublicBuilder() {
   const handleNavHome = (e: React.MouseEvent) => {
     if (hasUnsavedDraft) {
       const leave = window.confirm(
-        'You have an active resume draft in memory. Navigating to Home will discard your changes. Are you sure you want to leave?'
+        'You have unsaved changes currently being processed. Navigating to Home may lose your most recent edits. Are you sure you want to leave?'
       );
       if (!leave) {
         e.preventDefault();
@@ -818,13 +1077,11 @@ export default function PublicBuilder() {
 
   // Guard for "Start Over" button
   const handleStartOverPrompt = () => {
-    if (hasUnsavedDraft) {
-      const discard = window.confirm(
-        'Are you sure you want to start over? Any unsaved edits will be discarded.'
-      );
-      if (!discard) return;
-    }
-    handleStartOver();
+    const discard = window.confirm(
+      'Are you sure you want to start over? This will reset your resume and clear your current saved draft.'
+    );
+    if (!discard) return;
+    handleClearDraft();
   };
 
   // ---------------------------------------------------------------------------
@@ -1150,6 +1407,38 @@ export default function PublicBuilder() {
     }
   };
 
+  // Phase 9D: Save Tailored Resume Version to User Account
+  const handleSaveTailoredVersion = async () => {
+    if (!resume) return;
+    if (!user) {
+      setRestoredDraftToast('Please sign in or create an account to save tailored versions.');
+      return;
+    }
+    setIsSavingTailored(true);
+    try {
+      const title = activeTargetRole
+        ? `${activeTargetRole} Resume`
+        : `${resume.personal.fullName || 'Tailored'} Resume`;
+      const res = await api.post<{ ok: boolean; resume: { id: string } }>('/resumes/tailored', {
+        title,
+        targetRole: activeTargetRole,
+        targetCompany: coverCompany || '',
+        jobDescription: activeJobText,
+        resume,
+        atsScore: ats?.overallScore,
+        atsBreakdown: ats,
+        truthGuardResult: truth,
+      });
+      setSavedTailoredId(res.resume.id);
+      setRestoredDraftToast(`Saved as tailored version "${title}".`);
+    } catch (err: unknown) {
+      const apiErr = err as { message?: string };
+      setErrorMessage(apiErr.message || 'Failed to save tailored resume version.');
+    } finally {
+      setIsSavingTailored(false);
+    }
+  };
+
   const truthBadge = getTruthBadgeInfo(truth);
 
   return (
@@ -1162,16 +1451,93 @@ export default function PublicBuilder() {
               <Logo />
             </Link>
             <span className="hidden sm:inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700 border border-slate-200">
-              No Login Required
+              {user ? `Account: ${user.name || user.email}` : 'No Login Required'}
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Phase 9B: Draft Saving Status Indicator */}
+            {saveStatus === 'saving' && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200 shadow-2xs">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                <span className="hidden sm:inline">Saving Draft...</span>
+                <span className="sm:hidden">Saving...</span>
+              </span>
+            )}
+            {saveStatus === 'saved' && (
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200 shadow-2xs"
+                title="Your draft is automatically saved locally in this browser."
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3 text-emerald-600">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                <span className="hidden sm:inline">Draft Saved Locally</span>
+                <span className="sm:hidden">Saved</span>
+              </span>
+            )}
+            {saveStatus === 'error' && (
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 border border-rose-200 shadow-2xs"
+                title="Local storage quota reached or unavailable. Edits remain in memory."
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                <span className="hidden sm:inline">Save Failed (Storage Full)</span>
+                <span className="sm:hidden">Unsaved</span>
+              </span>
+            )}
+
+            {/* Phase 9D: Cloud Sync Status Indicator (for Authenticated Users) */}
+            {user && cloudStatus === 'saving' && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-200 shadow-2xs">
+                <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                <span className="hidden sm:inline">Syncing to Cloud...</span>
+                <span className="sm:hidden">Syncing...</span>
+              </span>
+            )}
+            {user && cloudStatus === 'synced' && (
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-700 border border-teal-200 shadow-2xs"
+                title={`Master CV rev ${serverRevision || 1} backed up in Cloud.`}
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3 text-teal-600">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                <span className="hidden sm:inline">Cloud Synced</span>
+                <span className="sm:hidden">Synced</span>
+              </span>
+            )}
+            {user && cloudStatus === 'conflict' && (
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 border border-rose-200 shadow-2xs"
+                title="Concurrency Conflict: Another session updated your Master CV."
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                <span className="hidden sm:inline">Cloud Conflict</span>
+                <span className="sm:hidden">Conflict</span>
+              </span>
+            )}
+
+            {/* Phase 9B / 9C: Clear Saved Draft Button */}
+            {(step === 'ready' || resume !== null || hasStoredDraft(userId)) && (
+              <button
+                type="button"
+                onClick={() => setShowClearConfirmModal(true)}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 shadow-2xs transition hover:text-rose-600 hover:border-rose-300 active:scale-95 cursor-pointer"
+                title="Clear your locally saved draft from this browser"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-slate-400">
+                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <span className="hidden sm:inline">Clear Draft</span>
+              </button>
+            )}
+
             {step === 'ready' && (
               <button
                 type="button"
                 onClick={handleStartOverPrompt}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50 active:scale-95"
               >
                 <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-slate-500">
                   <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
@@ -1179,6 +1545,18 @@ export default function PublicBuilder() {
                 Start Over
               </button>
             )}
+            <Link
+              to="/jobs"
+              className="text-xs sm:text-sm font-medium text-slate-600 hover:text-teal-700 transition"
+            >
+              Find Jobs
+            </Link>
+            <Link
+              to="/applications"
+              className="text-xs sm:text-sm font-medium text-slate-600 hover:text-teal-700 transition"
+            >
+              Tracker
+            </Link>
             <Link
               to="/"
               onClick={handleNavHome}
@@ -1189,6 +1567,88 @@ export default function PublicBuilder() {
           </div>
         </div>
       </header>
+
+      {/* Phase 9C: Unsaved Anonymous Draft Import Banner */}
+      {showImportPrompt && user && hasAnonymousDraft() && (
+        <aside aria-label="Import Anonymous Draft Banner" className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 text-xs font-medium text-amber-900 flex items-center justify-between">
+          <div className="flex items-center gap-2 max-w-7xl mx-auto w-full flex-wrap sm:flex-nowrap">
+            <span className="text-sm">📂</span>
+            <span>
+              <strong>Unsaved draft found:</strong> You have a resume draft created before signing in. Would you like to import it to your account (<strong>{user.email}</strong>)?
+            </span>
+            <div className="flex items-center gap-2 ml-auto shrink-0 mt-1 sm:mt-0">
+              <button
+                type="button"
+                onClick={() => {
+                  const res = importAnonymousDraftToAccount(user.id);
+                  if (res.success && res.draft) {
+                    if (res.draft.resume) {
+                      setResume(res.draft.resume);
+                      setStep(res.draft.step);
+                      setMode(res.draft.mode);
+                      if (res.draft.ats) setAts(res.draft.ats);
+                      if (res.draft.truth) setTruth(res.draft.truth);
+                      if (res.draft.changeLog) setChangeLog(res.draft.changeLog);
+                      if (res.draft.match) setMatch(res.draft.match);
+                      if (res.draft.coverLetter) setCoverLetter(res.draft.coverLetter);
+                    }
+                    setRestoredDraftToast('Imported your anonymous draft to your account.');
+                  }
+                  setShowImportPrompt(false);
+                }}
+                className="rounded bg-amber-600 px-2.5 py-1 text-xs font-semibold text-white shadow-xs hover:bg-amber-700 cursor-pointer"
+              >
+                Import to My Account
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  discardAnonymousDraft();
+                  setShowImportPrompt(false);
+                }}
+                className="rounded border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100 cursor-pointer"
+              >
+                Discard
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowImportPrompt(false)}
+                className="text-amber-700 hover:text-amber-950 font-bold ml-2 p-1 cursor-pointer"
+                title="Dismiss notice"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </aside>
+      )}
+
+      {/* Phase 9B: Restored Draft Toast Banner */}
+      {restoredDraftToast && (
+        <aside aria-label="Restored Draft Banner" className="bg-teal-50 border-b border-teal-200 px-4 py-2.5 text-xs font-medium text-teal-900 flex items-center justify-between">
+          <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
+            <span className="text-sm">🔒</span>
+            <span>
+              <strong>Draft Restored:</strong> {restoredDraftToast} Your work is stored locally on this device only.
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowClearConfirmModal(true)}
+              className="underline text-teal-800 hover:text-teal-950 font-semibold ml-2 cursor-pointer"
+            >
+              Clear saved draft
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setRestoredDraftToast(null)}
+            className="text-teal-700 hover:text-teal-950 font-bold ml-4 p-1 cursor-pointer"
+            title="Dismiss notice"
+          >
+            ✕
+          </button>
+        </aside>
+      )}
 
       {/* Main Content Area */}
       <main className="flex-1 pb-16">
@@ -2181,6 +2641,29 @@ export default function PublicBuilder() {
                   >
                     <span className="text-amber-500 font-bold">⚡</span> Tailor to Job
                   </button>
+
+                  {mode === 'improve' && (
+                    <button
+                      type="button"
+                      onClick={handleSaveTailoredVersion}
+                      disabled={isSavingTailored}
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl border border-teal-600 bg-teal-50 px-4 py-2.5 text-xs font-bold text-teal-800 shadow-sm transition hover:bg-teal-100 active:scale-95"
+                    >
+                      {isSavingTailored ? (
+                        <>
+                          <Spinner className="h-3.5 w-3.5" /> Saving...
+                        </>
+                      ) : savedTailoredId ? (
+                        <>
+                          <span>✓</span> Saved Version
+                        </>
+                      ) : (
+                        <>
+                          <span>💾</span> Save Tailored Version
+                        </>
+                      )}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={handleDownloadPdf}
@@ -2200,8 +2683,29 @@ export default function PublicBuilder() {
                       </>
                     )}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEmailModalOpen(true)}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-xs transition hover:bg-slate-50 cursor-pointer"
+                    title="Send a private copy of this CV to your email address"
+                  >
+                    <span>✉️</span> Email CV to Me
+                  </button>
                 </div>
               </div>
+
+              {/* Email CV Modal (Phase 9K) */}
+              <EmailModal
+                isOpen={isEmailModalOpen}
+                onClose={() => setIsEmailModalOpen(false)}
+                title="Email My CV to Me"
+                type="resume"
+                payload={{
+                  candidateName: resume?.personal?.fullName,
+                  resumeSummary: `Candidate: ${resume?.personal?.fullName || 'Anonymous'}\nTarget: ${resume?.personal?.headline || 'Professional'}\n\nSummary:\n${resume?.summary || 'N/A'}\n\nTop Skills:\n${resume?.skills?.technical?.slice(0, 15).join(', ') || 'N/A'}`,
+                }}
+                onSuccess={(msg) => setStatusMessage(msg)}
+              />
 
               {/* Workspace Navigation Tabs */}
               <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
@@ -3844,6 +4348,39 @@ export default function PublicBuilder() {
         </div>
       </main>
 
+      {/* Phase 9B: Clear Draft Confirmation Modal */}
+      {showClearConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-slate-200">
+            <div className="flex items-center gap-3 text-rose-600 mb-2">
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-6 w-6">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <h3 className="text-lg font-bold text-slate-900">Clear Saved Draft?</h3>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">
+              This will permanently delete your locally saved resume draft, job description, and cover letter from this browser. This action cannot be undone.
+            </p>
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowClearConfirmModal(false)}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleClearDraft}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 transition cursor-pointer"
+              >
+                Yes, Clear Draft
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-white py-6 mt-auto">
         <div className="mx-auto flex max-w-7xl flex-col sm:flex-row items-center justify-between gap-4 px-4 sm:px-6 text-xs text-slate-500">
@@ -3852,6 +4389,9 @@ export default function PublicBuilder() {
             <span>— 100% In-Memory ATS Resume Platform</span>
           </div>
           <p>© {new Date().getFullYear()} Curevo AI. Zero Database Storage.</p>
+        </div>
+        <div className="mx-auto mt-2 max-w-7xl px-4 sm:px-6 text-center text-xs text-slate-400">
+          🔒 Local Device Storage: Draft data is automatically saved only in this browser's local storage and is never uploaded to remote servers without your action.
         </div>
       </footer>
     </div>

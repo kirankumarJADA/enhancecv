@@ -1,8 +1,13 @@
+// Curevo AI — Master CV Routes
+//
+// Invariant: The Master CV is the user's permanent career source of truth.
+// AI modifications and tailored versions are completely separate.
+
 import { Router } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
-import type { PoolClient } from 'pg';
-import { getDb, newId, withTransaction, type Queryable, TS_TEXT } from '../db/db';
+import { getDb, type Queryable, TS_TEXT } from '../db/db';
+import { MasterCvRepository } from '../db/masterCvRepository';
 import { requireAuth } from '../middleware/auth';
 import { AppError } from '../middleware/errors';
 import { rateLimit } from '../middleware/rateLimit';
@@ -24,8 +29,11 @@ const upload = multer({
 
 // ---------- helpers ----------
 
-export function resumeRowToData(row: { content: string }): ResumeData {
-  return JSON.parse(row.content) as ResumeData;
+export function resumeRowToData(row: { content: string | ResumeData }): ResumeData {
+  if (typeof row.content === 'object' && row.content !== null) {
+    return row.content as ResumeData;
+  }
+  return JSON.parse(row.content as string) as ResumeData;
 }
 
 export interface MasterRow {
@@ -41,11 +49,11 @@ export interface MasterRow {
 
 export async function getMasterRow(db: Queryable, userId: string): Promise<MasterRow | undefined> {
   const result = await db.query(
-    `SELECT id, user_id, kind, title, content, ats_score,
+    `SELECT id, user_id, 'master' AS kind, title, content::text AS content, ats_score,
             ${TS_TEXT('created_at')} AS created_at,
             ${TS_TEXT('updated_at')} AS updated_at
-     FROM resumes
-     WHERE user_id = $1 AND kind = 'master'
+     FROM master_cvs
+     WHERE user_id = $1
      LIMIT 1`,
     [userId],
   );
@@ -116,7 +124,6 @@ export function sanitizeResumeData(input: unknown): ResumeData {
       title: z.string().min(1).max(80),
       bullets: z.array(z.string().max(500)).max(20).default([]),
     })).max(10).default([]),
-    // sectionOrder may contain core keys and 'custom_*' ids.
     sectionOrder: z.array(z.string().max(48)).default([...DEFAULT_SECTION_ORDER]),
     hiddenSections: z.array(z.string().max(48)).default([]),
   });
@@ -135,7 +142,6 @@ export function sanitizeResumeData(input: unknown): ResumeData {
     if (!c.id || !c.id.startsWith('custom_')) c.id = `custom_${i + 1}_${Math.random().toString(36).slice(2, 8)}`;
     if (!parsed.sectionOrder.includes(c.id)) parsed.sectionOrder.push(c.id);
   });
-  // validate section order covers core sections and only references known ids
   for (const s of ALL_SECTIONS) if (!parsed.sectionOrder.includes(s)) parsed.sectionOrder.push(s);
   const known = new Set([...ALL_SECTIONS, ...parsed.customSections.map((c) => c.id)]);
   parsed.sectionOrder = parsed.sectionOrder.filter((s) => known.has(s));
@@ -146,22 +152,22 @@ export function sanitizeResumeData(input: unknown): ResumeData {
 export function computeCompleteness(resume: ResumeData): number {
   let score = 0;
   const checks: boolean[] = [
-    !!resume.personal.fullName,
-    !!resume.personal.email,
-    !!resume.personal.phone,
-    !!resume.personal.location,
-    !!(resume.personal.linkedin || resume.personal.github || resume.personal.portfolio),
-    resume.summary.trim().length > 60,
-    resume.experience.length > 0,
-    resume.experience.some((e) => e.bullets.length >= 2),
-    resume.experience.some((e) => e.bullets.some((b) => /\d/.test(b))),
-    resume.education.length > 0,
-    resume.skills.technical.length >= 5,
-    resume.skills.soft.length >= 3,
-    resume.certifications.length > 0,
-    resume.languages.length > 0,
-    resume.achievements.length > 0,
-    resume.projects.length > 0,
+    !!resume.personal?.fullName,
+    !!resume.personal?.email,
+    !!resume.personal?.phone,
+    !!resume.personal?.location,
+    !!(resume.personal?.linkedin || resume.personal?.github || resume.personal?.portfolio),
+    (resume.summary || '').trim().length > 60,
+    resume.experience?.length > 0,
+    resume.experience?.some((e) => e.bullets && e.bullets.length >= 2),
+    resume.experience?.some((e) => e.bullets && e.bullets.some((b) => /\d/.test(b))),
+    resume.education?.length > 0,
+    (resume.skills?.technical || []).length >= 5,
+    (resume.skills?.soft || []).length >= 3,
+    (resume.certifications || []).length > 0,
+    (resume.languages || []).length > 0,
+    (resume.achievements || []).length > 0,
+    (resume.projects || []).length > 0,
   ];
   score = checks.filter(Boolean).length;
   return Math.round((score / checks.length) * 100);
@@ -180,73 +186,200 @@ router.post('/parse-upload', requireAuth, rateLimit({ windowMs: 60_000, max: 10 
   });
 });
 
-/** Get the user's Master CV (creates nothing — returns null if absent). */
+/** Get the user's Master CV (returns null if absent). */
 router.get('/', requireAuth, async (req, res) => {
-  const db = getDb();
-  const row = await getMasterRow(db, req.user!.uid);
-  if (!row) {
+  const master = await MasterCvRepository.get(req.user!.uid);
+  if (!master) {
     res.json({ master: null });
     return;
   }
-  const resume = resumeRowToData(row);
   res.json({
     master: {
-      id: row.id,
-      title: row.title,
-      content: resume,
-      atsScore: row.ats_score,
-      completeness: computeCompleteness(resume),
-      updatedAt: row.updated_at,
+      id: master.id,
+      title: master.title,
+      targetRole: master.targetRole,
+      content: master.content,
+      revision: master.revision,
+      atsScore: master.atsScore,
+      atsBreakdown: master.atsBreakdown,
+      completeness: computeCompleteness(master.content),
+      createdAt: master.createdAt,
+      updatedAt: master.updatedAt,
     },
   });
 });
 
-/** Create or update the Master CV. */
-router.put('/', requireAuth, rateLimit({ windowMs: 60_000, max: 30 }), async (req, res) => {
-  const body = z.object({ resume: z.unknown(), title: z.string().max(120).optional() }).parse(req.body);
+/** Create or update the Master CV with optimistic revision control. */
+router.put('/', requireAuth, rateLimit({ windowMs: 60_000, max: 60 }), async (req, res) => {
+  const body = z.object({
+    resume: z.unknown(),
+    title: z.string().max(120).optional(),
+    targetRole: z.string().max(120).optional(),
+    expectedRevision: z.number().int().positive().optional(),
+    createSnapshot: z.boolean().optional(),
+    versionLabel: z.string().max(120).optional(),
+  }).parse(req.body);
+
   const resume = sanitizeResumeData(body.resume);
-  const db = getDb();
-  const content = JSON.stringify(resume);
   const ats = analyseATS(resume);
-  const existing = await getMasterRow(db, req.user!.uid);
 
-  let id: string;
-  if (existing) {
-    id = existing.id;
-    await db.query(
-      `UPDATE resumes
-       SET content = $1, title = $2, ats_score = $3, updated_at = NOW()
-       WHERE id = $4`,
-      [content, body.title || 'Master CV', ats.overallScore, existing.id],
-    );
-    track(req.user!.uid, 'master_cv_updated', { atsScore: ats.overallScore });
-  } else {
-    id = newId('res');
-    // Creating the Master CV also marks onboarding complete — one transaction.
-    await withTransaction(async (client: PoolClient) => {
-      await client.query(
-        `INSERT INTO resumes (id, user_id, kind, title, content, ats_score)
-         VALUES ($1, $2, 'master', $3, $4, $5)`,
-        [id, req.user!.uid, body.title || 'Master CV', content, ats.overallScore],
-      );
-      await client.query('UPDATE users SET onboarded = TRUE WHERE id = $1', [req.user!.uid]);
-    });
-    track(req.user!.uid, 'master_cv_created', { atsScore: ats.overallScore });
-    track(req.user!.uid, 'onboarding_completed', {});
-  }
+  const { masterCv, version } = await MasterCvRepository.save(req.user!.uid, resume, {
+    title: body.title,
+    targetRole: body.targetRole,
+    expectedRevision: body.expectedRevision,
+    createSnapshot: body.createSnapshot,
+    versionLabel: body.versionLabel,
+    atsScore: ats.overallScore,
+    atsBreakdown: ats,
+    source: 'manual',
+  });
 
-  res.status(existing ? 200 : 201).json({ id, atsScore: ats.overallScore, completeness: computeCompleteness(resume) });
+  track(req.user!.uid, 'master_cv_saved', { revision: masterCv.revision, atsScore: ats.overallScore });
+
+  res.status(masterCv.revision === 1 ? 201 : 200).json({
+    id: masterCv.id,
+    revision: masterCv.revision,
+    atsScore: masterCv.atsScore,
+    completeness: computeCompleteness(masterCv.content),
+    version: version
+      ? {
+          id: version.id,
+          versionNumber: version.versionNumber,
+          versionLabel: version.versionLabel,
+          createdAt: version.createdAt,
+        }
+      : undefined,
+  });
 });
 
-/** Compute (and cache) the ATS analysis for the Master CV. */
+/** Delete the Master CV and all its history. */
+router.delete('/', requireAuth, async (req, res) => {
+  const deleted = await MasterCvRepository.delete(req.user!.uid);
+  if (!deleted) {
+    throw new AppError('NO_MASTER_CV', 'No Master CV found to delete.', 404);
+  }
+  track(req.user!.uid, 'master_cv_deleted', {});
+  res.json({ ok: true });
+});
+
+/** Import an anonymous / client draft into the authenticated account's Master CV. */
+router.post('/import-draft', requireAuth, rateLimit({ windowMs: 60_000, max: 20 }), async (req, res) => {
+  const body = z.object({
+    draft: z.unknown(),
+    overwrite: z.boolean().optional().default(false),
+  }).parse(req.body);
+
+  const existing = await MasterCvRepository.get(req.user!.uid);
+  if (existing && !body.overwrite) {
+    throw new AppError(
+      'MASTER_CV_EXISTS',
+      'A Master CV already exists on your account. Confirm overwrite to replace your existing profile with this draft.',
+      409
+    );
+  }
+
+  // Extract resume payload
+  const rawResume =
+    typeof body.draft === 'object' && body.draft !== null && 'resume' in body.draft
+      ? (body.draft as { resume: unknown }).resume
+      : body.draft;
+
+  const resume = sanitizeResumeData(rawResume);
+  const ats = analyseATS(resume);
+
+  const { masterCv, version } = await MasterCvRepository.save(req.user!.uid, resume, {
+    title: 'Master CV (Imported)',
+    createSnapshot: true,
+    versionLabel: 'Imported from browser draft',
+    source: 'import',
+    atsScore: ats.overallScore,
+    atsBreakdown: ats,
+  });
+
+  track(req.user!.uid, 'master_cv_imported', { atsScore: ats.overallScore });
+
+  res.json({
+    ok: true,
+    id: masterCv.id,
+    revision: masterCv.revision,
+    atsScore: masterCv.atsScore,
+    completeness: computeCompleteness(masterCv.content),
+    version: version
+      ? {
+          id: version.id,
+          versionNumber: version.versionNumber,
+          versionLabel: version.versionLabel,
+          createdAt: version.createdAt,
+        }
+      : undefined,
+  });
+});
+
+/** List all version snapshots for the current user's Master CV. */
+router.get('/versions', requireAuth, async (req, res) => {
+  const versions = await MasterCvRepository.listVersions(req.user!.uid);
+  res.json({ versions });
+});
+
+/** Create a named snapshot of the current Master CV. */
+router.post('/versions', requireAuth, rateLimit({ windowMs: 60_000, max: 30 }), async (req, res) => {
+  const body = z.object({
+    label: z.string().max(120).optional(),
+  }).parse(req.body || {});
+
+  const version = await MasterCvRepository.createSnapshot(req.user!.uid, body.label || '');
+  track(req.user!.uid, 'master_cv_version_created', { versionNumber: version.versionNumber });
+
+  res.status(201).json({ version });
+});
+
+/** Get a specific version snapshot. */
+router.get('/versions/:versionId', requireAuth, async (req, res) => {
+  const version = await MasterCvRepository.getVersion(req.user!.uid, req.params.versionId);
+  if (!version) {
+    throw new AppError('NOT_FOUND', 'Version snapshot not found.', 404);
+  }
+  res.json({ version });
+});
+
+/** Restore a historical version snapshot as a new revision and snapshot. */
+router.post('/versions/:versionId/restore', requireAuth, rateLimit({ windowMs: 60_000, max: 20 }), async (req, res) => {
+  const { masterCv, restoredVersion } = await MasterCvRepository.restoreVersion(req.user!.uid, req.params.versionId);
+  track(req.user!.uid, 'master_cv_version_restored', {
+    newRevision: masterCv.revision,
+    restoredFrom: req.params.versionId,
+  });
+
+  res.json({
+    master: {
+      id: masterCv.id,
+      title: masterCv.title,
+      targetRole: masterCv.targetRole,
+      content: masterCv.content,
+      revision: masterCv.revision,
+      atsScore: masterCv.atsScore,
+      completeness: computeCompleteness(masterCv.content),
+      updatedAt: masterCv.updatedAt,
+    },
+    version: restoredVersion,
+  });
+});
+
+/** Compute ATS analysis for current Master CV. */
 router.get('/ats', requireAuth, async (req, res) => {
+  const master = await MasterCvRepository.get(req.user!.uid);
+  if (!master) {
+    throw new AppError('NO_MASTER_CV', 'Create your Master CV first.', 400);
+  }
+  const analysis = analyseATS(master.content);
+  // Update cached ats_score
   const db = getDb();
-  const row = await getMasterRow(db, req.user!.uid);
-  if (!row) throw new AppError('NO_MASTER_CV', 'Create your Master CV first.', 400);
-  const resume = resumeRowToData(row);
-  const analysis = analyseATS(resume);
-  await db.query('UPDATE resumes SET ats_score = $1 WHERE id = $2', [analysis.overallScore, row.id]);
-  res.json({ analysis, completeness: computeCompleteness(resume) });
+  await db.query('UPDATE master_cvs SET ats_score = $1, ats_breakdown = $2 WHERE id = $3', [
+    analysis.overallScore,
+    JSON.stringify(analysis),
+    master.id,
+  ]);
+  res.json({ analysis, completeness: computeCompleteness(master.content) });
 });
 
 export default router;
