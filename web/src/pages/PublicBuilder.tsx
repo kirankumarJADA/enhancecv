@@ -32,6 +32,7 @@ import type {
   CoverLetterResponse,
 } from '../types';
 import EmailModal from '../components/EmailModal';
+import DataPrivacyModal from '../components/DataPrivacyModal';
 
 type Mode = 'improve' | 'create' | 'ats';
 type Step = 'idle' | 'processing' | 'ready';
@@ -204,6 +205,33 @@ export default function PublicBuilder() {
   const [processingStage, setProcessingStage] = useState<number>(1);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<{ code?: string; fallbackResume?: ResumeData; fallbackAts?: ATSAnalysis } | null>(null);
+
+  // Mobile Navigation Drawer and Privacy State
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
+
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileMenuOpen]);
+
+  // Close mobile menu on Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && mobileMenuOpen) {
+        setMobileMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileMenuOpen]);
 
   // Resume and evaluation state (100% in React memory)
   const [resume, setResume] = useState<ResumeData | null>(null);
@@ -524,7 +552,7 @@ export default function PublicBuilder() {
     setTailorError(null);
     setTailoringElapsedSeconds(0);
     setTailoringStageText(
-      'Processing AI tailoring request with NVIDIA Nemotron. The backend server is evaluating requirements, generating proposed rewrites, and checking claims against your CV evidence.'
+      'Processing AI tailoring request with our AI Engine. The backend server is evaluating requirements, generating proposed rewrites, and checking claims against your CV evidence.'
     );
 
     const startTime = Date.now();
@@ -575,9 +603,9 @@ export default function PublicBuilder() {
       const apiErr = err as { code?: string; message?: string; status?: number };
       let msg = apiErr.message || 'AI tailoring encountered an issue. Please try again.';
       if (apiErr.code === 'AI_NOT_CONFIGURED' || apiErr.status === 503) {
-        msg = 'NVIDIA Nemotron AI is not configured on the backend server. Manual editing remains active.';
+        msg = 'The AI Engine is not configured on the backend server. Manual editing remains active.';
       } else if (apiErr.code === 'AI_TIMEOUT' || apiErr.status === 504) {
-        msg = 'The NVIDIA AI service timed out while tailoring your resume. Please try again with a shorter job summary.';
+        msg = 'The AI Engine service timed out while tailoring your resume. Please try again with a shorter job summary.';
       } else if (apiErr.code === 'AI_MALFORMED' || apiErr.status === 502) {
         msg = 'The AI service encountered an issue formatting the tailored response. You can try again or continue with manual editing.';
       } else if (apiErr.code === 'CONCURRENCY_LIMIT' || apiErr.status === 429) {
@@ -1164,9 +1192,9 @@ export default function PublicBuilder() {
       const parsedResume = parseRes.resume;
       const parsedAts = parseRes.ats;
 
-      // 2. Automatically rebuild with NVIDIA Nemotron
+      // 2. Automatically rebuild with AI Engine
       setProcessingStage(2);
-      setStatusMessage('Restructuring achievements with NVIDIA Nemotron AI (Google XYZ format)...');
+      setStatusMessage('Restructuring achievements with our AI Engine (Google XYZ format)...');
 
       try {
         const improveRes = await api.post<{
@@ -1205,9 +1233,9 @@ export default function PublicBuilder() {
         const apiErr = err as { code?: string; message?: string; status?: number };
         let userMsg = apiErr.message || 'AI resume rebuild failed.';
         if (apiErr.code === 'AI_NOT_CONFIGURED' || apiErr.status === 503) {
-          userMsg = 'NVIDIA Nemotron AI is not configured on the backend server. You can still preview your parsed CV, view ATS scores, and download your PDF.';
+          userMsg = 'The AI Engine is not configured on the backend server. You can still preview your parsed CV, view ATS scores, and download your PDF.';
         } else if (apiErr.code === 'AI_TIMEOUT' || apiErr.status === 504) {
-          userMsg = 'The NVIDIA AI service timed out while rebuilding your resume. Please try again.';
+          userMsg = 'The AI Engine service timed out while rebuilding your resume. Please try again.';
         } else if (apiErr.code === 'AI_MALFORMED' || apiErr.status === 502) {
           userMsg = 'The AI service encountered an issue formatting the response. You can still preview your parsed CV, view ATS scores, and download your PDF.';
         } else if (apiErr.code === 'CONCURRENCY_LIMIT' || apiErr.status === 429) {
@@ -1279,7 +1307,7 @@ export default function PublicBuilder() {
     setErrorMessage(null);
     setStep('processing');
     setProcessingStage(2);
-    setStatusMessage('Generating professional resume with NVIDIA Nemotron AI...');
+    setStatusMessage('Generating professional resume with our AI Engine...');
 
     const payloadDetails = {
       personal: {
@@ -1374,7 +1402,7 @@ export default function PublicBuilder() {
       const apiErr = err as { code?: string; message?: string; status?: number };
       let msg = apiErr.message || 'Failed to create resume with AI.';
       if (apiErr.code === 'AI_NOT_CONFIGURED' || apiErr.status === 503) {
-        msg = 'NVIDIA Nemotron AI is not configured on the backend server. Please configure server API credentials.';
+        msg = 'The AI Engine is not configured on the backend server. Please configure server API credentials.';
       }
       setErrorMessage(msg);
       setStep('idle');
@@ -1545,39 +1573,182 @@ export default function PublicBuilder() {
                 Start Over
               </button>
             )}
+            {/* Desktop Navigation Links (hidden < lg) */}
             <Link
               to="/prepare-application"
-              className="hidden lg:inline-block text-xs sm:text-sm font-semibold text-brand-700 bg-brand-50 px-2 py-1 rounded-md border border-brand-200 hover:bg-brand-100 transition"
+              className="hidden lg:inline-flex items-center gap-1 text-xs sm:text-sm font-semibold text-brand-700 bg-brand-50 px-2.5 py-1.5 rounded-lg border border-brand-200 hover:bg-brand-100 transition"
             >
               🚀 Prepare App
             </Link>
             <Link
               to="/interview"
-              className="hidden md:inline-block text-xs sm:text-sm font-medium text-slate-600 hover:text-brand-700 transition"
+              className="hidden lg:inline-block text-xs sm:text-sm font-medium text-slate-600 hover:text-brand-700 transition px-2 py-1.5"
             >
               Interview Coach
             </Link>
             <Link
               to="/jobs"
-              className="text-xs sm:text-sm font-medium text-slate-600 hover:text-brand-700 transition"
+              className="hidden lg:inline-block text-xs sm:text-sm font-medium text-slate-600 hover:text-brand-700 transition px-2 py-1.5"
             >
               Find Jobs
             </Link>
             <Link
               to="/applications"
-              className="text-xs sm:text-sm font-medium text-slate-600 hover:text-brand-700 transition"
+              className="hidden lg:inline-block text-xs sm:text-sm font-medium text-slate-600 hover:text-brand-700 transition px-2 py-1.5"
             >
               Tracker
             </Link>
             <Link
               to="/"
               onClick={handleNavHome}
-              className="text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition"
+              className="hidden lg:inline-block text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition px-2 py-1.5"
             >
               Home
             </Link>
+
+            {/* Mobile Hamburger Toggle Button (< lg) */}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-2 text-slate-700 shadow-2xs hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-brand-500 lg:hidden"
+              aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={mobileMenuOpen}
+            >
+              {mobileMenuOpen ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Navigation Drawer Overlay (< lg) */}
+        {mobileMenuOpen && (
+          <div
+            role="dialog"
+            aria-modal="false"
+            aria-label="Mobile Navigation"
+            className="lg:hidden border-b border-slate-200 bg-white shadow-xl animate-fade-in"
+          >
+            <div className="max-h-[calc(100vh-4rem)] overflow-y-auto px-4 py-4 space-y-4 divide-y divide-slate-100">
+              {/* Flagship Callout */}
+              <div className="pt-1">
+                <Link
+                  to="/prepare-application"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-between rounded-xl bg-brand-50 border border-brand-200 p-3 text-brand-900 font-bold transition hover:bg-brand-100"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xl">🚀</span>
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">Prepare My Application</div>
+                      <div className="text-xs font-normal text-brand-700">5-step guided orchestrator</div>
+                    </div>
+                  </div>
+                  <span className="text-brand-600 font-bold">&rarr;</span>
+                </Link>
+              </div>
+
+              {/* Primary Tools */}
+              <div className="pt-3 space-y-1">
+                <div className="px-2 pb-1 text-[11px] font-bold tracking-wider text-slate-400 uppercase">
+                  Career Tools
+                </div>
+
+                <Link
+                  to="/jobs"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>🔍</span> Find Jobs
+                  </span>
+                  <span className="text-xs text-slate-400">Market Match</span>
+                </Link>
+
+                <Link
+                  to="/applications"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>📊</span> Application Tracker
+                  </span>
+                  <span className="text-xs text-slate-400">Kanban</span>
+                </Link>
+
+                <Link
+                  to="/interview"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>🎙️</span> AI Interview Coach
+                  </span>
+                  <span className="text-xs text-brand-600 font-bold">STAR &amp; Voice</span>
+                </Link>
+
+                <Link
+                  to="/linkedin"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>🌐</span> LinkedIn Optimizer
+                  </span>
+                  <span className="text-xs text-slate-400">Profile Boost</span>
+                </Link>
+
+                <Link
+                  to="/"
+                  onClick={(e) => {
+                    setMobileMenuOpen(false);
+                    handleNavHome(e);
+                  }}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>🏠</span> Home
+                  </span>
+                </Link>
+              </div>
+
+              {/* Utility Actions */}
+              <div className="pt-3 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setPrivacyModalOpen(true);
+                  }}
+                  className="flex w-full items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>🛡️</span> Data Privacy &amp; Backup
+                  </span>
+                  <span className="text-xs text-brand-600 font-semibold">JSON Export</span>
+                </button>
+
+                <a
+                  href="/curevo-ai-extension.zip"
+                  download
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex w-full items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>🧩</span> Chrome Job Saver Extension
+                  </span>
+                  <span className="text-xs text-slate-400">.zip</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Phase 9C: Unsaved Anonymous Draft Import Banner */}
@@ -1676,7 +1847,7 @@ export default function PublicBuilder() {
                 Curevo AI Resume Builder
               </h1>
               <p className="mt-2 text-base text-slate-600 max-w-xl mx-auto">
-                Powered by NVIDIA Nemotron AI with strict Truth Guard™ verification. Choose an option below to begin.
+                Powered by our AI Engine with strict Truth Guard™ verification. Choose an option below to begin.
               </p>
 
               {/* Mode Toggle Tabs */}
@@ -1778,7 +1949,7 @@ export default function PublicBuilder() {
                   ) : (
                     <span className="h-1.5 w-1.5 rounded-full bg-slate-400 mx-1" aria-hidden="true" />
                   )}
-                  <span>2. NVIDIA Nemotron AI accomplishment rewriting</span>
+                  <span>2. AI Engine accomplishment rewriting</span>
                 </div>
                 <div className={`flex items-center gap-2 ${processingStage >= 3 ? 'text-brand-700 font-semibold' : 'text-slate-400'}`}>
                   {processingStage >= 3 ? (
@@ -4187,7 +4358,7 @@ export default function PublicBuilder() {
               {activeTab === 'changelog' && changeLog.length > 0 && (
                 <div className="card p-6 bg-white border-slate-200 space-y-4">
                   <h3 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2">
-                    NVIDIA Nemotron AI Transformation Log
+                    AI Engine Transformation Log
                   </h3>
                   <div className="space-y-3">
                     {changeLog.map((log, i) => (
@@ -4312,7 +4483,7 @@ export default function PublicBuilder() {
                     {isTailoring && (
                       <div className="p-4 rounded-xl bg-slate-900 text-white space-y-3 animate-in fade-in">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-brand-400">⚡ NVIDIA Nemotron Deep Reasoning in Progress</span>
+                          <span className="font-semibold text-brand-400">⚡ AI Engine Deep Reasoning in Progress</span>
                           <span className="text-slate-400 font-mono">{tailoringElapsedSeconds}s elapsed</span>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-slate-200">
@@ -4345,7 +4516,7 @@ export default function PublicBuilder() {
                       >
                         {isTailoring ? (
                           <>
-                            <Spinner className="h-4 w-4" /> Tailoring with Nemotron AI...
+                            <Spinner className="h-4 w-4" /> Tailoring with AI Engine...
                           </>
                         ) : (
                           <>⚡ Run AI Tailoring</>
@@ -4406,6 +4577,11 @@ export default function PublicBuilder() {
           🔒 Local Device Storage: Draft data is automatically saved only in this browser's local storage and is never uploaded to remote servers without your action.
         </div>
       </footer>
+      {/* Data Privacy & Backup Modal */}
+      <DataPrivacyModal
+        isOpen={privacyModalOpen}
+        onClose={() => setPrivacyModalOpen(false)}
+      />
     </div>
   );
 }
