@@ -58,27 +58,27 @@ export default function DataPrivacyModal({
   const handleClear = () => {
     clearAllCurevoData();
     setConfirmClear(false);
-    setStatusMessage({ text: 'All local Curevo data has been completely erased.', kind: 'ok' });
+    setStatusMessage({ text: 'All local Curevo AI data has been completely erased.', kind: 'ok' });
     onDataChanged?.();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fade-in">
-      <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-200">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/50 backdrop-blur-xs p-4 animate-fade-in">
+      <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-lift border border-ink-100">
+        <div className="flex items-center justify-between border-b border-ink-100 pb-3 mb-4">
           <div className="flex items-center gap-2">
             <span className="text-xl">🛡️</span>
-            <h3 className="text-base font-bold text-slate-900">Your Privacy & Data Portability</h3>
+            <h3 className="text-base font-bold text-ink-900">Your Privacy &amp; Data Portability</h3>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 text-lg cursor-pointer p-1"
+            className="text-ink-400 hover:text-ink-700 text-lg cursor-pointer p-1"
           >
             ✕
           </button>
         </div>
 
-        <p className="text-xs text-slate-600 leading-relaxed mb-5">
+        <p className="text-xs text-ink-600 leading-relaxed mb-5">
           Curevo AI is 100% public and private. Your resumes, applications, interview answers, and search history reside exclusively in your browser’s localStorage.
         </p>
 
@@ -96,28 +96,28 @@ export default function DataPrivacyModal({
 
         <div className="space-y-4">
           {/* Action 1: Export */}
-          <div className="rounded-xl border border-slate-200 p-4 bg-slate-50 flex items-center justify-between">
+          <div className="rounded-xl border border-ink-100 p-4 bg-ink-50/60 flex items-center justify-between">
             <div>
-              <h4 className="text-xs font-bold text-slate-900">Export All Data (JSON)</h4>
-              <p className="text-2xs text-slate-500">
+              <h4 className="text-xs font-bold text-ink-900">Export All Data (JSON)</h4>
+              <p className="text-2xs text-ink-500">
                 Downloads a unified file containing your resume drafts, saved jobs, applications, and interview records.
               </p>
             </div>
             <button
               type="button"
               onClick={handleDownload}
-              className="rounded-lg bg-teal-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 transition cursor-pointer whitespace-nowrap"
+              className="rounded-lg bg-brand-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 transition cursor-pointer whitespace-nowrap shadow-xs"
             >
               Export JSON
             </button>
           </div>
 
           {/* Action 2: Import */}
-          <div className="rounded-xl border border-slate-200 p-4 bg-slate-50 flex items-center justify-between">
+          <div className="rounded-xl border border-ink-100 p-4 bg-ink-50/60 flex items-center justify-between">
             <div>
-              <h4 className="text-xs font-bold text-slate-900">Restore from Backup</h4>
-              <p className="text-2xs text-slate-500">
-                Restore previously exported Curevo JSON backup files into your current browser.
+              <h4 className="text-xs font-bold text-ink-900">Restore from Backup</h4>
+              <p className="text-2xs text-ink-500">
+                Restore previously exported Curevo AI JSON backup files into your current browser.
               </p>
             </div>
             <div>
@@ -132,7 +132,7 @@ export default function DataPrivacyModal({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer whitespace-nowrap"
+                className="rounded-lg border border-ink-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50 transition cursor-pointer whitespace-nowrap shadow-xs"
               >
                 Import JSON
               </button>

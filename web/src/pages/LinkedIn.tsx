@@ -202,14 +202,14 @@ export default function LinkedIn() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-teal-100 selection:text-teal-900">
+    <div className="min-h-screen bg-ink-50/40 text-ink-900 flex flex-col font-sans selection:bg-brand-100 selection:text-brand-900">
       {/* Header */}
       <Navbar ctaText="Prepare App" ctaLink="/prepare-application" />
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white shadow-xl flex items-center gap-2 border border-slate-800">
-          <span className="text-teal-400">✓</span>
+        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-ink-900 px-4 py-3 text-sm font-medium text-white shadow-xl flex items-center gap-2 border border-ink-800">
+          <span className="text-brand-400">✓</span>
           <span>{toastMessage}</span>
         </div>
       )}
@@ -379,7 +379,7 @@ export default function LinkedIn() {
                   {[
                     { label: 'Overall', score: optimization.scores.overallScore, color: 'text-blue-600' },
                     { label: 'Headline', score: optimization.scores.headlineScore, color: 'text-emerald-600' },
-                    { label: 'About', score: optimization.scores.aboutScore, color: 'text-teal-600' },
+                    { label: 'About', score: optimization.scores.aboutScore, color: 'text-brand-600' },
                     { label: 'Experience', score: optimization.scores.experienceScore, color: 'text-indigo-600' },
                     { label: 'Skills', score: optimization.scores.skillsScore, color: 'text-violet-600' },
                     { label: 'Searchability', score: optimization.scores.searchabilityScore, color: 'text-amber-600' },

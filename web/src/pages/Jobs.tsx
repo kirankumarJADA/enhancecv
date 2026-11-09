@@ -324,14 +324,14 @@ export default function Jobs() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-teal-100 selection:text-teal-900">
+    <div className="min-h-screen bg-ink-50/40 text-ink-900 flex flex-col font-sans selection:bg-brand-100 selection:text-brand-900">
       {/* Top Header */}
       <Navbar ctaText="Build Resume" ctaLink="/builder" />
 
       {/* Notification Toast */}
       {actionSuccessMessage && (
-        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white shadow-xl flex items-center gap-2 border border-slate-800 animate-fade-in">
-          <span className="text-teal-400">✓</span>
+        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-ink-900 px-4 py-3 text-sm font-medium text-white shadow-xl flex items-center gap-2 border border-ink-800 animate-fade-in">
+          <span className="text-brand-400">✓</span>
           <span>{actionSuccessMessage}</span>
         </div>
       )}
@@ -339,16 +339,16 @@ export default function Jobs() {
       {/* Main Content Area */}
       <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 flex-1">
         {/* Banner with Active Resume Context */}
-        <div className="mb-6 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 p-6 text-white shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="mb-6 rounded-2xl bg-gradient-to-r from-ink-900 to-ink-800 p-6 text-white shadow-card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="inline-flex h-2 w-2 rounded-full bg-teal-400 animate-pulse" />
-              <span className="text-xs font-semibold tracking-wide uppercase text-teal-300">
+              <span className="inline-flex h-2 w-2 rounded-full bg-brand-400 animate-pulse" />
+              <span className="text-xs font-semibold tracking-wide uppercase text-brand-300">
                 Transparent ATS Matching Active
               </span>
             </div>
             <h1 className="mt-1 text-2xl font-bold tracking-tight">Job Discovery & Fit Analysis</h1>
-            <p className="mt-1 text-sm text-slate-300">
+            <p className="mt-1 text-sm text-ink-300">
               Matching roles directly against: <strong className="text-white">{activeResumeTitle}</strong>.
             </p>
           </div>
@@ -362,7 +362,7 @@ export default function Jobs() {
             </Link>
             <Link
               to="/applications"
-              className="rounded-lg bg-teal-500 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-teal-400 transition"
+              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 transition shadow-xs"
             >
               View Kanban Board ({savedJobs.length} Saved)
             </Link>
@@ -370,7 +370,7 @@ export default function Jobs() {
         </div>
 
         {/* Status notice */}
-        <div className="mb-6 flex items-center justify-between flex-wrap gap-2 text-xs text-slate-500 bg-white p-3 rounded-xl border border-slate-200">
+        <div className="mb-6 flex items-center justify-between flex-wrap gap-2 text-xs text-ink-500 bg-white p-3 rounded-xl border border-ink-200">
           <div className="flex items-center gap-2">
             <span className={`h-2 w-2 rounded-full ${providerConfigured ? 'bg-emerald-500' : 'bg-amber-500'}`} />
             <span>
@@ -380,11 +380,11 @@ export default function Jobs() {
                 : 'Curated Benchmark Roles (Live Search API not configured — showing realistic industry benchmark roles)'}
             </span>
           </div>
-          <span className="text-slate-400">All data saved locally in browser • No account required</span>
+          <span className="text-ink-400">All data saved locally in browser • No account required</span>
         </div>
 
         {/* Tab Navigation */}
-        <div className="mb-6 flex gap-2 border-b border-slate-200 pb-2 overflow-x-auto" role="tablist">
+        <div className="mb-6 flex gap-2 border-b border-ink-200 pb-2 overflow-x-auto" role="tablist">
           <button
             type="button"
             role="tab"
@@ -392,8 +392,8 @@ export default function Jobs() {
             onClick={() => setTab('browse')}
             className={`rounded-lg px-4 py-2 text-sm font-semibold transition cursor-pointer ${
               tab === 'browse'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                ? 'bg-brand-600 text-white shadow-xs'
+                : 'bg-white text-ink-700 hover:bg-ink-100 border border-ink-200'
             }`}
           >
             Browse Roles ({filteredJobs.length})
@@ -405,12 +405,12 @@ export default function Jobs() {
             onClick={() => setTab('saved')}
             className={`rounded-lg px-4 py-2 text-sm font-semibold transition cursor-pointer flex items-center gap-2 ${
               tab === 'saved'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                ? 'bg-brand-600 text-white shadow-xs'
+                : 'bg-white text-ink-700 hover:bg-ink-100 border border-ink-200'
             }`}
           >
             <span>Saved Jobs</span>
-            <span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-bold text-teal-800">
+            <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-bold text-brand-700 border border-brand-200">
               {savedJobs.length}
             </span>
           </button>
@@ -421,8 +421,8 @@ export default function Jobs() {
             onClick={() => setTab('import')}
             className={`rounded-lg px-4 py-2 text-sm font-semibold transition cursor-pointer ${
               tab === 'import'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                ? 'bg-brand-600 text-white shadow-xs'
+                : 'bg-white text-ink-700 hover:bg-ink-100 border border-ink-200'
             }`}
           >
             + Paste / Import Job
@@ -433,11 +433,11 @@ export default function Jobs() {
         {tab === 'browse' && (
           <div className="space-y-6">
             {/* Search & Filters Card */}
-            <div className="rounded-2xl bg-white p-5 shadow-xs border border-slate-200 space-y-4">
+            <div className="card p-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {/* Title / Keyword Search */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-bold text-ink-700 uppercase tracking-wider mb-1">
                     Role or Keyword
                   </label>
                   <input
@@ -445,13 +445,13 @@ export default function Jobs() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="e.g. Full-Stack, React, Python..."
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-800 placeholder:text-ink-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                   />
                 </div>
 
                 {/* Location Search */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-bold text-ink-700 uppercase tracking-wider mb-1">
                     Location
                   </label>
                   <input
@@ -459,19 +459,19 @@ export default function Jobs() {
                     value={locationQuery}
                     onChange={(e) => setLocationQuery(e.target.value)}
                     placeholder="e.g. London, Remote, New York..."
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-800 placeholder:text-ink-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                   />
                 </div>
 
                 {/* Remote Type */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-bold text-ink-700 uppercase tracking-wider mb-1">
                     Workplace Type
                   </label>
                   <select
                     value={remoteFilter}
                     onChange={(e) => setRemoteFilter(e.target.value as any)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none bg-white"
+                    className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 bg-white"
                   >
                     <option value="all">All Workplace Types</option>
                     <option value="remote">Remote Only</option>
@@ -482,13 +482,13 @@ export default function Jobs() {
 
                 {/* Employment Type */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-bold text-ink-700 uppercase tracking-wider mb-1">
                     Employment
                   </label>
                   <select
                     value={employmentFilter}
                     onChange={(e) => setEmploymentFilter(e.target.value as any)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none bg-white"
+                    className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 bg-white"
                   >
                     <option value="all">All Employment Types</option>
                     <option value="Full-time">Full-time</option>
@@ -499,8 +499,8 @@ export default function Jobs() {
               </div>
 
               {(searchQuery || locationQuery || remoteFilter !== 'all' || employmentFilter !== 'all') && (
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-                  <span className="text-slate-500">
+                <div className="flex items-center justify-between pt-2 border-t border-ink-100 text-xs">
+                  <span className="text-ink-500">
                     Showing {filteredJobs.length} matching {filteredJobs.length === 1 ? 'role' : 'roles'}
                   </span>
                   <button
@@ -511,7 +511,7 @@ export default function Jobs() {
                       setRemoteFilter('all');
                       setEmploymentFilter('all');
                     }}
-                    className="text-teal-700 font-semibold hover:underline cursor-pointer"
+                    className="text-brand-600 font-semibold hover:underline cursor-pointer"
                   >
                     Reset all filters
                   </button>
@@ -521,14 +521,14 @@ export default function Jobs() {
 
             {/* Job Listings Grid */}
             {loading ? (
-              <div className="py-16 text-center text-slate-400">
-                <Spinner className="mx-auto h-8 w-8 text-teal-600 mb-2" />
+              <div className="py-16 text-center text-ink-400">
+                <Spinner className="mx-auto h-8 w-8 text-brand-600 mb-2" />
                 <p className="text-sm">Fetching and indexing job roles...</p>
               </div>
             ) : filteredJobs.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 p-12 text-center bg-white">
-                <h3 className="text-base font-semibold text-slate-900">No roles matched your search</h3>
-                <p className="mt-1 text-sm text-slate-500 max-w-md mx-auto">
+              <div className="card border-dashed p-12 text-center bg-white">
+                <h3 className="text-base font-semibold text-ink-900">No roles matched your search</h3>
+                <p className="mt-1 text-sm text-ink-500 max-w-md mx-auto">
                   Try adjusting your search keywords, clearing workplace filters, or paste a custom job description.
                 </p>
                 <button
@@ -538,7 +538,7 @@ export default function Jobs() {
                     setLocationQuery('');
                     setRemoteFilter('all');
                   }}
-                  className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                  className="mt-4 btn-primary"
                 >
                   Show all roles
                 </button>
@@ -552,17 +552,17 @@ export default function Jobs() {
                   return (
                     <div
                       key={job.id}
-                      className="rounded-2xl bg-white p-5 shadow-xs border border-slate-200 flex flex-col justify-between hover:border-slate-300 transition"
+                      className="card p-5 flex flex-col justify-between hover:border-ink-300 transition"
                     >
                       <div>
                         {/* Top Meta */}
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <span className="text-xs font-semibold text-teal-700 uppercase tracking-wide">
+                            <span className="text-xs font-semibold text-brand-600 uppercase tracking-wide">
                               {job.company}
                             </span>
-                            <h2 className="text-base font-bold text-slate-900 mt-0.5">{job.title}</h2>
-                            <p className="text-xs text-slate-500 mt-1">
+                            <h2 className="text-base font-bold text-ink-900 mt-0.5">{job.title}</h2>
+                            <p className="text-xs text-ink-500 mt-1">
                               {[job.location, job.salary, job.remote_type, job.posted_at].filter(Boolean).join(' • ')}
                             </p>
                           </div>
@@ -587,7 +587,7 @@ export default function Jobs() {
                               type="button"
                               onClick={() => handleMatchWithResume(job)}
                               disabled={matchingJobId === job.id}
-                              className="shrink-0 rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800 hover:bg-teal-100 transition cursor-pointer"
+                              className="shrink-0 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition cursor-pointer"
                               title="Compare this job requirements with your active CV"
                             >
                               {matchingJobId === job.id ? 'Scoring...' : '⚡ Match CV'}
@@ -597,13 +597,13 @@ export default function Jobs() {
 
                         {/* Match Breakdown preview if scored */}
                         {match && (
-                          <div className="mt-3 rounded-xl bg-slate-50 p-2.5 text-xs border border-slate-100 space-y-1">
-                            <div className="flex items-center justify-between text-slate-700 font-medium">
+                          <div className="mt-3 rounded-xl bg-ink-50 p-2.5 text-xs border border-ink-100 space-y-1">
+                            <div className="flex items-center justify-between text-ink-700 font-medium">
                               <span>Matched skills ({match.matched.length})</span>
                               <span className="text-emerald-700 font-semibold">{match.matched.slice(0, 3).join(', ')}</span>
                             </div>
                             {match.missing.length > 0 && (
-                              <div className="flex items-center justify-between text-slate-500">
+                              <div className="flex items-center justify-between text-ink-500">
                                 <span>Skill gaps ({match.missing.length})</span>
                                 <span className="text-rose-600">{match.missing.slice(0, 3).join(', ')}</span>
                               </div>
@@ -612,7 +612,7 @@ export default function Jobs() {
                         )}
 
                         {/* Description Preview */}
-                        <p className="mt-3 text-xs leading-relaxed text-slate-600 line-clamp-3">
+                        <p className="mt-3 text-xs leading-relaxed text-ink-600 line-clamp-3">
                           {job.description}
                         </p>
 
@@ -622,13 +622,13 @@ export default function Jobs() {
                             {job.technologies.slice(0, 5).map((t) => (
                               <span
                                 key={t}
-                                className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700"
+                                className="rounded-md bg-ink-100 px-2 py-0.5 text-[11px] font-medium text-ink-700"
                               >
                                 {t}
                               </span>
                             ))}
                             {job.technologies.length > 5 && (
-                              <span className="rounded-md bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-400">
+                              <span className="rounded-md bg-ink-50 px-1.5 py-0.5 text-[10px] text-ink-400">
                                 +{job.technologies.length - 5}
                               </span>
                             )}
@@ -637,7 +637,7 @@ export default function Jobs() {
                       </div>
 
                       {/* Card Action Buttons */}
-                      <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                      <div className="mt-4 pt-3 border-t border-ink-100 flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
@@ -645,7 +645,7 @@ export default function Jobs() {
                             className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition cursor-pointer border ${
                               saved
                                 ? 'bg-amber-50 text-amber-800 border-amber-300'
-                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                                : 'bg-white text-ink-700 border-ink-200 hover:bg-ink-50'
                             }`}
                           >
                             {saved ? '★ Saved' : '☆ Save Job'}
@@ -654,7 +654,7 @@ export default function Jobs() {
                           <button
                             type="button"
                             onClick={() => handleTrackApplication(job)}
-                            className="rounded-lg bg-white border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                            className="rounded-lg bg-white border border-ink-200 px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50 transition cursor-pointer"
                           >
                             + Track Application
                           </button>
@@ -664,7 +664,7 @@ export default function Jobs() {
                           <button
                             type="button"
                             onClick={() => setSelectedJob(job)}
-                            className="text-xs font-medium text-slate-600 hover:text-slate-900 cursor-pointer"
+                            className="text-xs font-medium text-ink-600 hover:text-ink-900 cursor-pointer"
                           >
                             View Details
                           </button>
@@ -672,7 +672,7 @@ export default function Jobs() {
                           <button
                             type="button"
                             onClick={() => handleTailorForJob(job)}
-                            className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 transition cursor-pointer"
+                            className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 transition cursor-pointer shadow-xs"
                           >
                             Tailor CV →
                           </button>
@@ -690,15 +690,15 @@ export default function Jobs() {
         {tab === 'saved' && (
           <div className="space-y-4">
             {savedJobs.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 p-12 text-center bg-white">
-                <h3 className="text-base font-semibold text-slate-900">No saved jobs yet</h3>
-                <p className="mt-1 text-sm text-slate-500 max-w-md mx-auto">
+              <div className="card border-dashed p-12 text-center bg-white">
+                <h3 className="text-base font-semibold text-ink-900">No saved jobs yet</h3>
+                <p className="mt-1 text-sm text-ink-500 max-w-md mx-auto">
                   Browse roles and click &quot;Save Job&quot;, or paste a custom job posting to track it locally in your browser.
                 </p>
                 <button
                   type="button"
                   onClick={() => setTab('browse')}
-                  className="mt-4 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white"
+                  className="mt-4 btn-primary"
                 >
                   Explore Benchmark Roles
                 </button>
@@ -708,16 +708,16 @@ export default function Jobs() {
                 {savedJobs.map((job) => (
                   <div
                     key={job.id}
-                    className="rounded-2xl bg-white p-5 shadow-xs border border-slate-200 flex flex-col justify-between"
+                    className="card p-5 flex flex-col justify-between"
                   >
                     <div>
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <span className="text-xs font-semibold text-teal-700 uppercase tracking-wide">
+                          <span className="text-xs font-semibold text-brand-600 uppercase tracking-wide">
                             {job.company}
                           </span>
-                          <h2 className="text-base font-bold text-slate-900 mt-0.5">{job.title}</h2>
-                          <p className="text-xs text-slate-500 mt-1">
+                          <h2 className="text-base font-bold text-ink-900 mt-0.5">{job.title}</h2>
+                          <p className="text-xs text-ink-500 mt-1">
                             {[job.location, job.salary, job.remote_type].filter(Boolean).join(' • ')}
                           </p>
                         </div>
@@ -730,19 +730,19 @@ export default function Jobs() {
                           <button
                             type="button"
                             onClick={() => handleMatchWithResume(job)}
-                            className="rounded-lg border border-teal-200 bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-800"
+                            className="rounded-lg border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-700"
                           >
                             ⚡ Score Match
                           </button>
                         )}
                       </div>
 
-                      <p className="mt-3 text-xs leading-relaxed text-slate-600 line-clamp-3">
+                      <p className="mt-3 text-xs leading-relaxed text-ink-600 line-clamp-3">
                         {job.description}
                       </p>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <div className="mt-4 pt-3 border-t border-ink-100 flex items-center justify-between gap-2">
                       <button
                         type="button"
                         onClick={() => handleToggleSave(job)}
@@ -755,14 +755,14 @@ export default function Jobs() {
                         <button
                           type="button"
                           onClick={() => handleTrackApplication(job)}
-                          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          className="rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50"
                         >
                           + Track Application
                         </button>
                         <button
                           type="button"
                           onClick={() => handleTailorForJob(job)}
-                          className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700"
+                          className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 shadow-xs"
                         >
                           Tailor CV →
                         </button>
@@ -777,68 +777,68 @@ export default function Jobs() {
 
         {/* TAB 3: IMPORT / PASTE JOB */}
         {tab === 'import' && (
-          <div className="max-w-2xl mx-auto rounded-2xl bg-white p-6 shadow-xs border border-slate-200">
-            <h2 className="text-lg font-bold text-slate-900">Paste Custom Job Description</h2>
-            <p className="text-xs text-slate-500 mt-1">
+          <div className="max-w-2xl mx-auto card p-6">
+            <h2 className="text-lg font-bold text-ink-900">Paste Custom Job Description</h2>
+            <p className="text-xs text-ink-500 mt-1">
               Add any job posting from LinkedIn, Indeed, or company career pages. It will be saved locally and scored against your resume.
             </p>
 
             <form onSubmit={handleImportSubmit} className="mt-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Company *</label>
+                  <label className="block text-xs font-bold text-ink-700 uppercase mb-1">Company *</label>
                   <input
                     type="text"
                     required
                     value={importCompany}
                     onChange={(e) => setImportCompany(e.target.value)}
                     placeholder="e.g. Stripe, Acme Corp"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Job Title *</label>
+                  <label className="block text-xs font-bold text-ink-700 uppercase mb-1">Job Title *</label>
                   <input
                     type="text"
                     required
                     value={importTitle}
                     onChange={(e) => setImportTitle(e.target.value)}
                     placeholder="e.g. Senior Frontend Engineer"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Location</label>
+                  <label className="block text-xs font-bold text-ink-700 uppercase mb-1">Location</label>
                   <input
                     type="text"
                     value={importLocation}
                     onChange={(e) => setImportLocation(e.target.value)}
                     placeholder="e.g. London / Remote"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Salary (optional)</label>
+                  <label className="block text-xs font-bold text-ink-700 uppercase mb-1">Salary (optional)</label>
                   <input
                     type="text"
                     value={importSalary}
                     onChange={(e) => setImportSalary(e.target.value)}
                     placeholder="e.g. £80k - £95k"
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Workplace</label>
+                  <label className="block text-xs font-bold text-ink-700 uppercase mb-1">Workplace</label>
                   <select
                     value={importRemote}
                     onChange={(e) => setImportRemote(e.target.value as any)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none bg-white"
+                    className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 bg-white"
                   >
                     <option value="remote">Remote</option>
                     <option value="hybrid">Hybrid</option>
@@ -848,7 +848,7 @@ export default function Jobs() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                <label className="block text-xs font-bold text-ink-700 uppercase mb-1">
                   Job Description & Requirements *
                 </label>
                 <textarea
@@ -857,14 +857,14 @@ export default function Jobs() {
                   value={importDescription}
                   onChange={(e) => setImportDescription(e.target.value)}
                   placeholder="Paste the full job posting requirements, role overview, and qualifications..."
-                  className="w-full rounded-lg border border-slate-300 p-3 text-xs leading-relaxed focus:border-teal-500 focus:outline-none font-mono"
+                  className="w-full rounded-lg border border-ink-200 p-3 text-xs leading-relaxed focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 font-mono text-ink-800"
                 />
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="submit"
-                  className="rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition cursor-pointer"
+                  className="btn-primary"
                 >
                   Save & Analyze Match
                 </button>
@@ -876,16 +876,16 @@ export default function Jobs() {
         {/* Modal: Job Details & Complete Requirements */}
         {selectedJob && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-900/50 backdrop-blur-xs"
             role="dialog"
             aria-modal="true"
           >
-            <div className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl border border-slate-200">
-              <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
+            <div className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl border border-ink-200">
+              <div className="flex items-start justify-between gap-3 border-b border-ink-100 pb-4">
                 <div>
-                  <span className="text-xs font-bold text-teal-700 uppercase">{selectedJob.company}</span>
-                  <h2 className="text-xl font-bold text-slate-900">{selectedJob.title}</h2>
-                  <p className="text-xs text-slate-500 mt-1">
+                  <span className="text-xs font-bold text-brand-600 uppercase">{selectedJob.company}</span>
+                  <h2 className="text-xl font-bold text-ink-900">{selectedJob.title}</h2>
+                  <p className="text-xs text-ink-500 mt-1">
                     {[selectedJob.location, selectedJob.salary, selectedJob.remote_type, selectedJob.employment_type]
                       .filter(Boolean)
                       .join(' • ')}
@@ -894,31 +894,31 @@ export default function Jobs() {
                 <button
                   type="button"
                   onClick={() => setSelectedJob(null)}
-                  className="rounded-lg p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+                  className="rounded-lg p-1 text-ink-400 hover:text-ink-700 hover:bg-ink-100 cursor-pointer"
                 >
                   ✕
                 </button>
               </div>
 
-              <div className="mt-4 space-y-4 text-xs text-slate-700">
+              <div className="mt-4 space-y-4 text-xs text-ink-700">
                 <div>
-                  <h3 className="font-bold text-slate-900 uppercase tracking-wider mb-1">Role Overview</h3>
+                  <h3 className="font-bold text-ink-900 uppercase tracking-wider mb-1">Role Overview</h3>
                   <p className="leading-relaxed whitespace-pre-line">{selectedJob.description}</p>
                 </div>
 
                 {selectedJob.requirements && (
                   <div>
-                    <h3 className="font-bold text-slate-900 uppercase tracking-wider mb-1">Requirements</h3>
+                    <h3 className="font-bold text-ink-900 uppercase tracking-wider mb-1">Requirements</h3>
                     <p className="leading-relaxed whitespace-pre-line">{selectedJob.requirements}</p>
                   </div>
                 )}
 
                 {selectedJob.technologies && selectedJob.technologies.length > 0 && (
                   <div>
-                    <h3 className="font-bold text-slate-900 uppercase tracking-wider mb-1">Technologies</h3>
+                    <h3 className="font-bold text-ink-900 uppercase tracking-wider mb-1">Technologies</h3>
                     <div className="flex flex-wrap gap-1.5 mt-1">
                       {selectedJob.technologies.map((t) => (
-                        <span key={t} className="rounded-md bg-slate-100 px-2 py-1 text-slate-800 font-medium">
+                        <span key={t} className="rounded-md bg-ink-100 px-2 py-1 text-ink-800 font-medium">
                           {t}
                         </span>
                       ))}
@@ -927,14 +927,14 @@ export default function Jobs() {
                 )}
               </div>
 
-              <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+              <div className="mt-6 pt-4 border-t border-ink-100 flex items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={() => {
                     handleToggleSave(selectedJob);
                     setSelectedJob(null);
                   }}
-                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  className="rounded-lg border border-ink-300 px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50 cursor-pointer"
                 >
                   {isJobSaved(selectedJob.id) ? 'Remove from Saved' : 'Save Job Locally'}
                 </button>
@@ -946,7 +946,7 @@ export default function Jobs() {
                       handleTrackApplication(selectedJob);
                       setSelectedJob(null);
                     }}
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                    className="rounded-lg border border-ink-300 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50 cursor-pointer"
                   >
                     + Track Application
                   </button>
@@ -955,7 +955,7 @@ export default function Jobs() {
                     onClick={() => {
                       setResearchModalCompany(selectedJob.company);
                     }}
-                    className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 hover:bg-blue-100 cursor-pointer"
+                    className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100 cursor-pointer"
                   >
                     🏢 Research Company
                   </button>
@@ -964,7 +964,7 @@ export default function Jobs() {
                     onClick={() => {
                       handlePrepareInterview(selectedJob);
                     }}
-                    className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-800 hover:bg-teal-100 cursor-pointer"
+                    className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100 cursor-pointer"
                   >
                     Interview Prep →
                   </button>
@@ -973,7 +973,7 @@ export default function Jobs() {
                     onClick={() => {
                       handleTailorForJob(selectedJob);
                     }}
-                    className="rounded-lg bg-teal-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 cursor-pointer"
+                    className="btn-primary !px-4 !py-1.5 !text-xs cursor-pointer shadow-xs"
                   >
                     Tailor Resume →
                   </button>

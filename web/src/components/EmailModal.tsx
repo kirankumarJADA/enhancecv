@@ -139,7 +139,7 @@ export default function EmailModal({
                   type="checkbox"
                   checked={consent}
                   onChange={(e) => setConsent(e.target.checked)}
-                  className="mt-0.5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                  className="mt-0.5 rounded border-ink-200 text-brand-600 focus:ring-brand-500 cursor-pointer"
                 />
                 <span className="leading-tight">
                   I explicitly request and consent to receiving this one-time email from Curevo AI.

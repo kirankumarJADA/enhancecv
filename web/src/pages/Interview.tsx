@@ -99,14 +99,14 @@ export default function Interview() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-teal-100 selection:text-teal-900">
+    <div className="min-h-screen bg-ink-50/40 text-ink-900 flex flex-col font-sans selection:bg-brand-100 selection:text-brand-900">
       {/* Top Header */}
       <Navbar ctaText="Prepare App" ctaLink="/prepare-application" />
 
       {/* Global Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white shadow-xl flex items-center gap-2 border border-slate-800">
-          <span className="text-teal-400">✓</span>
+        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-ink-900 px-4 py-3 text-sm font-medium text-white shadow-xl flex items-center gap-2 border border-ink-800">
+          <span className="text-brand-400">✓</span>
           <span>{toastMessage}</span>
         </div>
       )}
@@ -114,16 +114,16 @@ export default function Interview() {
       {/* Main Workspace */}
       <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 flex-1">
         {/* Banner with Active Resume Context */}
-        <div className="mb-6 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 p-6 text-white shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="mb-6 rounded-2xl bg-gradient-to-r from-ink-900 to-ink-800 p-6 text-white shadow-card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="inline-flex h-2 w-2 rounded-full bg-teal-400 animate-pulse" />
-              <span className="text-xs font-semibold tracking-wide uppercase text-teal-300">
+              <span className="inline-flex h-2 w-2 rounded-full bg-brand-400 animate-pulse" />
+              <span className="text-xs font-semibold tracking-wide uppercase text-brand-300">
                 Truth Guard™ Grounded Coaching
               </span>
             </div>
             <h1 className="mt-1 text-2xl font-bold tracking-tight">AI Interview Preparation & Mock Coach</h1>
-            <p className="mt-1 text-sm text-slate-300">
+            <p className="mt-1 text-sm text-ink-300">
               {activeResume ? (
                 <>
                   Grounding answers in:{' '}
@@ -139,12 +139,12 @@ export default function Interview() {
           </div>
 
           {activeResume && (
-            <label className="flex items-center gap-2 text-xs font-medium bg-slate-800/80 px-3.5 py-2 rounded-xl border border-slate-700 cursor-pointer hover:bg-slate-700/80 transition">
+            <label className="flex items-center gap-2 text-xs font-medium bg-ink-800/80 px-3.5 py-2 rounded-xl border border-ink-700 cursor-pointer hover:bg-ink-700/80 transition">
               <input
                 type="checkbox"
                 checked={useResumeContext}
                 onChange={(e) => setUseResumeContext(e.target.checked)}
-                className="rounded border-slate-600 text-teal-500 focus:ring-teal-400"
+                className="rounded border-ink-600 text-brand-600 focus:ring-brand-400"
               />
               <span>Use CV Evidence</span>
             </label>
@@ -152,7 +152,7 @@ export default function Interview() {
         </div>
 
         {/* Tab Selector */}
-        <div className="flex items-center gap-2 border-b border-slate-200 pb-2 mb-6 overflow-x-auto">
+        <div className="flex items-center gap-2 border-b border-ink-200 pb-2 mb-6 overflow-x-auto">
           {[
             { id: 'prepare', label: '1. Interview Preparation' },
             { id: 'star', label: '2. STAR Answer Coach' },
@@ -164,8 +164,8 @@ export default function Interview() {
               onClick={() => handleTabChange(tab.id as Tab)}
               className={`rounded-lg px-4 py-2.5 text-sm font-semibold transition whitespace-nowrap cursor-pointer ${
                 activeTab === tab.id
-                  ? 'bg-teal-600 text-white shadow-sm'
-                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                  ? 'bg-brand-600 text-white shadow-xs'
+                  : 'bg-white text-ink-700 border border-ink-200 hover:bg-ink-50'
               }`}
             >
               {tab.label}
@@ -340,7 +340,7 @@ function PrepareTab({
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
                 placeholder="e.g. Senior Backend Engineer"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
               />
             </div>
             <div>
@@ -361,7 +361,7 @@ function PrepareTab({
                 value={company}
                 onChange={(e) => setCompany(e.target.value)}
                 placeholder="e.g. Monolith Financial Technologies"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
               />
             </div>
           </div>
@@ -375,7 +375,7 @@ function PrepareTab({
               value={jdText}
               onChange={(e) => setJdText(e.target.value)}
               placeholder="Paste job posting text or key skills required..."
-              className="w-full rounded-lg border border-slate-300 p-3 text-xs leading-relaxed focus:border-teal-500 focus:outline-none font-mono"
+              className="w-full rounded-lg border border-slate-300 p-3 text-xs leading-relaxed focus:border-brand-500 focus:outline-none font-mono"
             />
           </div>
 
@@ -392,7 +392,7 @@ function PrepareTab({
             <button
               type="submit"
               disabled={loading}
-              className="rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
+              className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
             >
               {loading && <Spinner className="h-4 w-4 text-white" />}
               <span>{loading ? 'Analyzing & Generating...' : 'Generate Interview Questions'}</span>
@@ -443,7 +443,7 @@ function PrepareTab({
                 onClick={() => setCategoryFilter(cat)}
                 className={`rounded-full px-3 py-1 text-xs font-semibold transition cursor-pointer ${
                   categoryFilter === cat
-                    ? 'bg-teal-700 text-white'
+                    ? 'bg-brand-700 text-white'
                     : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
                 }`}
               >
@@ -461,7 +461,7 @@ function PrepareTab({
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-md bg-teal-50 px-2 py-0.5 text-2xs font-bold text-teal-800 uppercase border border-teal-200">
+                    <span className="rounded-md bg-brand-50 px-2 py-0.5 text-2xs font-bold text-brand-800 uppercase border border-brand-200">
                       {q.category}
                     </span>
                     <span className="text-xs text-slate-400">Q{idx + 1}</span>
@@ -469,7 +469,7 @@ function PrepareTab({
                   <button
                     type="button"
                     onClick={() => onSelectQuestionForStar(q)}
-                    className="rounded-lg bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800 hover:bg-teal-100 border border-teal-200 transition cursor-pointer flex items-center gap-1"
+                    className="rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800 hover:bg-brand-100 border border-brand-200 transition cursor-pointer flex items-center gap-1"
                   >
                     <span>Practice in STAR Coach</span>
                     <span>→</span>
@@ -493,11 +493,11 @@ function PrepareTab({
                   </div>
                 </div>
 
-                <div className="mt-3 rounded-lg bg-teal-50/50 p-3 border border-teal-100 text-xs">
-                  <span className="font-bold text-teal-900 uppercase tracking-wider block mb-1">
+                <div className="mt-3 rounded-lg bg-brand-50/50 p-3 border border-brand-100 text-xs">
+                  <span className="font-bold text-brand-900 uppercase tracking-wider block mb-1">
                     Recommended STAR Strategy
                   </span>
-                  <p className="text-teal-950 leading-relaxed">{q.recommended_answer_structure}</p>
+                  <p className="text-brand-950 leading-relaxed">{q.recommended_answer_structure}</p>
                 </div>
 
                 {q.sample_truthful_answer && (
@@ -505,14 +505,14 @@ function PrepareTab({
                     <button
                       type="button"
                       onClick={() => toggleSample(q.id || String(idx))}
-                      className="text-xs font-semibold text-teal-700 hover:text-teal-900 cursor-pointer flex items-center gap-1"
+                      className="text-xs font-semibold text-brand-700 hover:text-brand-900 cursor-pointer flex items-center gap-1"
                     >
                       <span>{openSampleAnswers.has(q.id || String(idx)) ? 'Hide' : 'View'} Grounded Sample Answer</span>
                       <span>{openSampleAnswers.has(q.id || String(idx)) ? '▲' : '▼'}</span>
                     </button>
                     {openSampleAnswers.has(q.id || String(idx)) && (
                       <div className="mt-2 rounded-lg bg-slate-900 text-slate-100 p-4 text-xs leading-relaxed border border-slate-800">
-                        <div className="flex items-center gap-2 mb-2 text-teal-400 font-semibold text-2xs uppercase">
+                        <div className="flex items-center gap-2 mb-2 text-brand-400 font-semibold text-2xs uppercase">
                           <span>✓ Truth Guard Verified</span>
                           <span>•</span>
                           <span>Uses only verified facts from candidate profile</span>
@@ -528,7 +528,7 @@ function PrepareTab({
 
           {/* Actionable Study Plan Checklist */}
           {studyPlan.length > 0 && (
-            <div className="rounded-2xl border border-teal-200 bg-teal-50/40 p-6 shadow-xs">
+            <div className="rounded-2xl border border-brand-200 bg-brand-50/40 p-6 shadow-xs">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <span>📋</span>
                 <span>Actionable Interview Preparation Plan</span>
@@ -543,7 +543,7 @@ function PrepareTab({
                     <label
                       key={idx}
                       className={`flex items-start gap-3 p-3 rounded-xl border transition cursor-pointer ${
-                        isDone ? 'bg-white border-teal-300 text-slate-400 line-through' : 'bg-white border-slate-200 text-slate-800'
+                        isDone ? 'bg-white border-brand-300 text-slate-400 line-through' : 'bg-white border-slate-200 text-slate-800'
                       }`}
                     >
                       <input
@@ -557,7 +557,7 @@ function PrepareTab({
                             return next;
                           });
                         }}
-                        className="mt-0.5 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                        className="mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                       />
                       <span className="text-xs leading-relaxed">{step}</span>
                     </label>
@@ -738,13 +738,13 @@ function StarCoachTab({
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               placeholder="e.g. Tell me about a time you resolved a technical conflict..."
-              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
             />
             <select
               onChange={(e) => {
                 if (e.target.value) setQuestion(e.target.value);
               }}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-xs focus:border-teal-500 focus:outline-none bg-white text-slate-700"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-xs focus:border-brand-500 focus:outline-none bg-white text-slate-700"
             >
               <option value="">Preset Questions...</option>
               {COMMON_QUESTIONS.map((q, idx) => (
@@ -774,7 +774,7 @@ function StarCoachTab({
             {/* Situation */}
             <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-bold text-teal-800 uppercase tracking-wider">
+                <span className="text-xs font-bold text-brand-800 uppercase tracking-wider">
                   S — Situation
                 </span>
                 <div className="flex items-center gap-2">
@@ -797,14 +797,14 @@ function StarCoachTab({
                 value={situation}
                 onChange={(e) => setSituation(e.target.value)}
                 placeholder="Set the scene: What organization or project were you on? What was the business context or problem to solve?"
-                className="w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-teal-500 focus:outline-none bg-white"
+                className="w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-brand-500 focus:outline-none bg-white"
               />
             </div>
 
             {/* Task */}
             <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-bold text-teal-800 uppercase tracking-wider">
+                <span className="text-xs font-bold text-brand-800 uppercase tracking-wider">
                   T — Task
                 </span>
                 <span className="text-2xs text-slate-400">Your Objective</span>
@@ -814,14 +814,14 @@ function StarCoachTab({
                 value={task}
                 onChange={(e) => setTask(e.target.value)}
                 placeholder="What was your specific responsibility? What goal or deliverable were you accountable for?"
-                className="w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-teal-500 focus:outline-none bg-white"
+                className="w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-brand-500 focus:outline-none bg-white"
               />
             </div>
 
             {/* Action */}
             <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-bold text-teal-800 uppercase tracking-wider">
+                <span className="text-xs font-bold text-brand-800 uppercase tracking-wider">
                   A — Action (Most Critical)
                 </span>
                 <div className="flex items-center gap-2">
@@ -844,14 +844,14 @@ function StarCoachTab({
                 value={action}
                 onChange={(e) => setAction(e.target.value)}
                 placeholder="Detail the concrete steps YOU took. Mention tools, architectures, trade-offs, and how you led or collaborated."
-                className="w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-teal-500 focus:outline-none bg-white"
+                className="w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-brand-500 focus:outline-none bg-white"
               />
             </div>
 
             {/* Result */}
             <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-bold text-teal-800 uppercase tracking-wider">
+                <span className="text-xs font-bold text-brand-800 uppercase tracking-wider">
                   R — Result
                 </span>
                 <div className="flex items-center gap-2">
@@ -874,7 +874,7 @@ function StarCoachTab({
                 value={result}
                 onChange={(e) => setResult(e.target.value)}
                 placeholder="Quantify outcomes: Latency reduced? Team velocity increased? Revenue saved? What did you learn?"
-                className="w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-teal-500 focus:outline-none bg-white"
+                className="w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-brand-500 focus:outline-none bg-white"
               />
             </div>
           </div>
@@ -892,7 +892,7 @@ function StarCoachTab({
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 placeholder="Tags (e.g. system design, conflict)"
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs focus:border-teal-500 focus:outline-none"
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs focus:border-brand-500 focus:outline-none"
               />
               <button
                 type="button"
@@ -906,7 +906,7 @@ function StarCoachTab({
             <button
               type="submit"
               disabled={loading}
-              className="rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+              className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {loading && <Spinner className="h-4 w-4 text-white" />}
               <span>{loading ? 'Evaluating Structure & Truth Guard...' : 'Evaluate with STAR Coach'}</span>
@@ -1019,16 +1019,16 @@ function StarCoachTab({
 
           {/* Suggested Refinement */}
           {evaluation.suggestedStarRefinement && (
-            <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 space-y-3">
+            <div className="rounded-xl border border-brand-200 bg-brand-50/50 p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-teal-900 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="text-xs font-bold text-brand-900 uppercase tracking-wider flex items-center gap-1.5">
                   <span>💡</span>
                   <span>Suggested Truth-Grounded Refinement</span>
                 </span>
                 <button
                   type="button"
                   onClick={handleApplyRefinement}
-                  className="rounded-lg bg-teal-600 px-3 py-1 text-xs font-semibold text-white hover:bg-teal-700 transition cursor-pointer"
+                  className="rounded-lg bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700 transition cursor-pointer"
                 >
                   Apply into Editor
                 </button>
@@ -1037,25 +1037,25 @@ function StarCoachTab({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 {evaluation.suggestedStarRefinement.situation && (
                   <div>
-                    <span className="font-bold text-teal-950 uppercase block">Situation:</span>
+                    <span className="font-bold text-brand-950 uppercase block">Situation:</span>
                     <p className="text-slate-700 italic">{evaluation.suggestedStarRefinement.situation}</p>
                   </div>
                 )}
                 {evaluation.suggestedStarRefinement.task && (
                   <div>
-                    <span className="font-bold text-teal-950 uppercase block">Task:</span>
+                    <span className="font-bold text-brand-950 uppercase block">Task:</span>
                     <p className="text-slate-700 italic">{evaluation.suggestedStarRefinement.task}</p>
                   </div>
                 )}
                 {evaluation.suggestedStarRefinement.action && (
                   <div>
-                    <span className="font-bold text-teal-950 uppercase block">Action:</span>
+                    <span className="font-bold text-brand-950 uppercase block">Action:</span>
                     <p className="text-slate-700 italic">{evaluation.suggestedStarRefinement.action}</p>
                   </div>
                 )}
                 {evaluation.suggestedStarRefinement.result && (
                   <div>
-                    <span className="font-bold text-teal-950 uppercase block">Result:</span>
+                    <span className="font-bold text-brand-950 uppercase block">Result:</span>
                     <p className="text-slate-700 italic">{evaluation.suggestedStarRefinement.result}</p>
                   </div>
                 )}
@@ -1326,7 +1326,7 @@ function MockInterviewTab({
                   type="text"
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
                 />
               </div>
               <div>
@@ -1335,7 +1335,7 @@ function MockInterviewTab({
                   type="text"
                   value={company}
                   onChange={(e) => setCompany(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
                 />
               </div>
             </div>
@@ -1346,7 +1346,7 @@ function MockInterviewTab({
                 <select
                   value={difficulty}
                   onChange={(e) => setDifficulty(e.target.value as any)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none bg-white"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none bg-white"
                 >
                   <option value="entry">Entry-Level / Junior</option>
                   <option value="mid">Mid-Level Engineer</option>
@@ -1359,7 +1359,7 @@ function MockInterviewTab({
                 <select
                   value={totalQuestionsCount}
                   onChange={(e) => setTotalQuestionsCount(Number(e.target.value))}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none bg-white"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none bg-white"
                 >
                   <option value={3}>3 Questions (Quick Sprint)</option>
                   <option value={4}>4 Questions (Balanced Round)</option>
@@ -1375,7 +1375,7 @@ function MockInterviewTab({
               <button
                 type="button"
                 onClick={handleStartInterview}
-                className="rounded-lg bg-teal-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition cursor-pointer"
+                className="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 transition cursor-pointer"
               >
                 Start Mock Interview →
               </button>
@@ -1390,7 +1390,7 @@ function MockInterviewTab({
           {/* Progress & Header */}
           <div className="rounded-xl bg-white border border-slate-200 p-4 shadow-xs flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-teal-600 text-white text-xs font-bold">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-600 text-white text-xs font-bold">
                 {activeQuestionIndex + 1}
               </span>
               <div>
@@ -1415,10 +1415,10 @@ function MockInterviewTab({
           </div>
 
           {/* Interviewer Question Box */}
-          <div className="rounded-2xl border-2 border-teal-600 bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border-2 border-brand-600 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <span className="rounded-md bg-teal-100 text-teal-800 text-2xs font-bold px-2 py-0.5 uppercase">
+                <span className="rounded-md bg-brand-100 text-brand-800 text-2xs font-bold px-2 py-0.5 uppercase">
                   {scheduledQuestions[activeQuestionIndex].category}
                 </span>
                 <span className="text-xs text-slate-500">Interviewer Question</span>
@@ -1470,12 +1470,12 @@ function MockInterviewTab({
               value={candidateAnswer}
               onChange={(e) => setCandidateAnswer(e.target.value)}
               placeholder="Structure your answer clearly: start with context, explain your direct action, and highlight measurable outcomes..."
-              className="w-full rounded-xl border border-slate-300 p-3.5 text-sm leading-relaxed focus:border-teal-500 focus:outline-none font-sans"
+              className="w-full rounded-xl border border-slate-300 p-3.5 text-sm leading-relaxed focus:border-brand-500 focus:outline-none font-sans"
               disabled={isSubmitting || activeEvaluation !== null}
             />
 
             {isRecordingAnswer && (
-              <div className="flex items-center justify-between rounded-lg bg-teal-50 border border-teal-200 px-3 py-2 text-xs text-teal-800 animate-fade-in">
+              <div className="flex items-center justify-between rounded-lg bg-brand-50 border border-brand-200 px-3 py-2 text-xs text-brand-800 animate-fade-in">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
                   <span>Microphone active — speaking is transcribed live. Audio is processed locally and never stored.</span>
@@ -1483,7 +1483,7 @@ function MockInterviewTab({
                 <button
                   type="button"
                   onClick={handleToggleRecording}
-                  className="font-bold underline text-teal-900 hover:text-black cursor-pointer"
+                  className="font-bold underline text-brand-900 hover:text-black cursor-pointer"
                 >
                   Done Speaking
                 </button>
@@ -1495,7 +1495,7 @@ function MockInterviewTab({
                 <button
                   type="submit"
                   disabled={isSubmitting || !candidateAnswer.trim()}
-                  className="rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                  className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
                 >
                   {isSubmitting && <Spinner className="h-4 w-4 text-white" />}
                   <span>{isSubmitting ? 'Evaluating Response...' : 'Submit Answer'}</span>
@@ -1546,12 +1546,12 @@ function MockInterviewTab({
 
               {/* Adaptive Follow-Up Question */}
               {activeEvaluation.followUpQuestion && (
-                <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4">
-                  <span className="text-xs font-bold text-teal-900 uppercase tracking-wider block mb-1 flex items-center gap-1.5">
+                <div className="rounded-xl border border-brand-200 bg-brand-50/50 p-4">
+                  <span className="text-xs font-bold text-brand-900 uppercase tracking-wider block mb-1 flex items-center gap-1.5">
                     <span>💬</span>
                     <span>Interviewer Follow-Up Question</span>
                   </span>
-                  <p className="text-xs text-teal-950 font-medium italic">
+                  <p className="text-xs text-brand-950 font-medium italic">
                     "{activeEvaluation.followUpQuestion}"
                   </p>
                 </div>
@@ -1562,7 +1562,7 @@ function MockInterviewTab({
                 <button
                   type="button"
                   onClick={handleNextOrFinish}
-                  className="rounded-lg bg-teal-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition cursor-pointer"
+                  className="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 transition cursor-pointer"
                 >
                   {activeQuestionIndex + 1 < scheduledQuestions.length ? 'Next Question →' : 'Complete & View Final Report →'}
                 </button>
@@ -1577,7 +1577,7 @@ function MockInterviewTab({
         <div className="space-y-6">
           {isGeneratingFinal ? (
             <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-xs">
-              <Spinner className="h-8 w-8 text-teal-600 mx-auto" />
+              <Spinner className="h-8 w-8 text-brand-600 mx-auto" />
               <h2 className="mt-4 text-lg font-bold text-slate-900">Synthesizing Final Performance Report</h2>
               <p className="text-xs text-slate-500 mt-1">
                 Evaluating qualitative competencies, recurring strengths, and actionable next steps...
@@ -1588,7 +1588,7 @@ function MockInterviewTab({
               {/* Header */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 pb-5">
                 <div>
-                  <span className="text-xs font-bold text-teal-700 uppercase">Final Evaluation</span>
+                  <span className="text-xs font-bold text-brand-700 uppercase">Final Evaluation</span>
                   <h2 className="text-2xl font-bold text-slate-900">
                     Interview Simulation Performance Report
                   </h2>
@@ -1604,7 +1604,7 @@ function MockInterviewTab({
                       finalReport.overallRating === 'exceptional'
                         ? 'bg-emerald-100 text-emerald-800'
                         : finalReport.overallRating === 'proficient'
-                        ? 'bg-teal-100 text-teal-800'
+                        ? 'bg-brand-100 text-brand-800'
                         : finalReport.overallRating === 'developing'
                         ? 'bg-amber-100 text-amber-800'
                         : 'bg-rose-100 text-rose-800'
@@ -1632,7 +1632,7 @@ function MockInterviewTab({
                       <div key={idx} className="rounded-xl border border-slate-200 p-4 bg-white">
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-bold text-slate-900">{comp.category}</span>
-                          <span className="text-2xs font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                          <span className="text-2xs font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">
                             {comp.scoreLabel}
                           </span>
                         </div>
@@ -1680,14 +1680,14 @@ function MockInterviewTab({
 
               {/* Recommended Prep Steps */}
               {finalReport.recommendedPreparationSteps && finalReport.recommendedPreparationSteps.length > 0 && (
-                <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 text-xs">
-                  <span className="font-bold text-teal-900 uppercase tracking-wider block mb-2">
+                <div className="rounded-xl border border-brand-200 bg-brand-50/50 p-4 text-xs">
+                  <span className="font-bold text-brand-900 uppercase tracking-wider block mb-2">
                     Recommended Next Steps Before Live Interview
                   </span>
-                  <ul className="space-y-1.5 text-teal-950">
+                  <ul className="space-y-1.5 text-brand-950">
                     {finalReport.recommendedPreparationSteps.map((step, idx) => (
                       <li key={idx} className="flex items-start gap-1.5">
-                        <span className="text-teal-600 font-bold">→</span>
+                        <span className="text-brand-600 font-bold">→</span>
                         <span>{step}</span>
                       </li>
                     ))}
@@ -1709,14 +1709,14 @@ function MockInterviewTab({
                   <button
                     type="button"
                     onClick={() => setEmailModalOpen(true)}
-                    className="rounded-lg border border-teal-600 bg-white px-4 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-50 transition cursor-pointer flex items-center gap-1.5"
+                    className="rounded-lg border border-brand-600 bg-white px-4 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-50 transition cursor-pointer flex items-center gap-1.5"
                   >
                     <span>✉️ Email Report to Me</span>
                   </button>
                   <button
                     type="button"
                     onClick={handleSaveCompletedSession}
-                    className="rounded-lg bg-teal-600 px-4 py-2 text-xs font-semibold text-white hover:bg-teal-700 transition cursor-pointer"
+                    className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white hover:bg-brand-700 transition cursor-pointer"
                   >
                     Save to Session History
                   </button>
@@ -1876,7 +1876,7 @@ function HistoryAndStoryBankTab({ showToast }: { showToast: (msg: string) => voi
                 >
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="rounded-md bg-teal-50 px-2 py-0.5 text-2xs font-bold text-teal-800 uppercase border border-teal-200">
+                      <span className="rounded-md bg-brand-50 px-2 py-0.5 text-2xs font-bold text-brand-800 uppercase border border-brand-200">
                         {s.type}
                       </span>
                       <h4 className="text-sm font-bold text-slate-900">{s.title}</h4>
@@ -1940,19 +1940,19 @@ function HistoryAndStoryBankTab({ showToast }: { showToast: (msg: string) => voi
 
                   <div className="space-y-1.5 text-xs text-slate-700">
                     <div>
-                      <span className="font-bold text-teal-900 text-2xs uppercase block">S:</span>
+                      <span className="font-bold text-brand-900 text-2xs uppercase block">S:</span>
                       <p className="line-clamp-2">{story.situation}</p>
                     </div>
                     <div>
-                      <span className="font-bold text-teal-900 text-2xs uppercase block">T:</span>
+                      <span className="font-bold text-brand-900 text-2xs uppercase block">T:</span>
                       <p className="line-clamp-2">{story.task}</p>
                     </div>
                     <div>
-                      <span className="font-bold text-teal-900 text-2xs uppercase block">A:</span>
+                      <span className="font-bold text-brand-900 text-2xs uppercase block">A:</span>
                       <p className="line-clamp-2">{story.action}</p>
                     </div>
                     <div>
-                      <span className="font-bold text-teal-900 text-2xs uppercase block">R:</span>
+                      <span className="font-bold text-brand-900 text-2xs uppercase block">R:</span>
                       <p className="line-clamp-2">{story.result}</p>
                     </div>
                   </div>

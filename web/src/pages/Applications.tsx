@@ -213,14 +213,14 @@ export default function Applications() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-teal-100 selection:text-teal-900">
+    <div className="min-h-screen bg-ink-50/40 text-ink-900 flex flex-col font-sans selection:bg-brand-100 selection:text-brand-900">
       {/* Top Header */}
       <Navbar ctaText="Find Jobs" ctaLink="/jobs" />
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white shadow-xl flex items-center gap-2 border border-slate-800 animate-fade-in">
-          <span className="text-teal-400">✓</span>
+        <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-ink-900 px-4 py-3 text-sm font-medium text-white shadow-xl flex items-center gap-2 border border-ink-800 animate-fade-in">
+          <span className="text-emerald-400">✓</span>
           <span>{toastMessage}</span>
         </div>
       )}
@@ -231,13 +231,13 @@ export default function Applications() {
         <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="rounded-full bg-teal-100 text-teal-800 text-2xs font-bold px-2 py-0.5 uppercase tracking-wide">
+              <span className="rounded-full bg-brand-50 text-brand-700 text-2xs font-bold px-2.5 py-0.5 uppercase tracking-wide border border-brand-200">
                 Application Tracker
               </span>
-              <span className="text-xs text-slate-500 font-medium">100% Free &amp; Anonymous</span>
+              <span className="text-xs text-ink-500 font-medium">100% Free &amp; Anonymous</span>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 mt-1">Application Kanban Board</h1>
-            <p className="mt-1 text-xs sm:text-sm text-slate-600">
+            <h1 className="text-2xl font-bold tracking-tight text-ink-900 mt-1">Application Kanban Board</h1>
+            <p className="mt-1 text-xs sm:text-sm text-ink-600">
               Track your job pipeline across 5 stages with local persistence, match insights, and CSV/JSON exports.
             </p>
           </div>
@@ -247,7 +247,7 @@ export default function Applications() {
               type="button"
               onClick={exportApplicationsCsv}
               disabled={applications.length === 0}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition cursor-pointer"
+              className="rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50 disabled:opacity-50 transition cursor-pointer shadow-xs"
               title="Download spreadsheet of your applications"
             >
               📥 Export CSV
@@ -256,7 +256,7 @@ export default function Applications() {
               type="button"
               onClick={exportApplicationsJson}
               disabled={applications.length === 0}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition cursor-pointer"
+              className="rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50 disabled:opacity-50 transition cursor-pointer shadow-xs"
               title="Download complete JSON backup"
             >
               Export JSON
@@ -264,7 +264,7 @@ export default function Applications() {
             <button
               type="button"
               onClick={openCreateModal}
-              className="rounded-lg bg-teal-600 px-3.5 py-1.5 text-xs sm:text-sm font-semibold text-white hover:bg-teal-700 shadow-xs transition cursor-pointer"
+              className="rounded-lg bg-brand-600 px-3.5 py-1.5 text-xs sm:text-sm font-semibold text-white hover:bg-brand-700 shadow-xs transition cursor-pointer"
             >
               + Add Application
             </button>
@@ -296,7 +296,7 @@ export default function Applications() {
               value={searchFilter}
               onChange={(e) => setSearchFilter(e.target.value)}
               placeholder="Search by company, role or notes..."
-              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-xs sm:text-sm bg-white focus:border-teal-500 focus:outline-none"
+              className="w-full rounded-lg border border-ink-200 px-3 py-1.5 text-xs sm:text-sm bg-white text-ink-800 placeholder:text-ink-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
           </div>
 
@@ -308,7 +308,7 @@ export default function Applications() {
                 type="button"
                 onClick={() => setActiveMobileStage(s.key)}
                 className={`rounded-lg px-2.5 py-1 text-xs font-semibold whitespace-nowrap cursor-pointer ${
-                  activeMobileStage === s.key ? 'bg-slate-900 text-white' : 'bg-white text-slate-700 border border-slate-200'
+                  activeMobileStage === s.key ? 'bg-brand-600 text-white' : 'bg-white text-ink-700 border border-ink-200'
                 }`}
               >
                 {s.label} ({metrics[s.key]})
@@ -319,25 +319,25 @@ export default function Applications() {
 
         {/* Kanban Board Container */}
         {applications.length === 0 ? (
-          <div className="flex-1 rounded-2xl border border-dashed border-slate-300 p-12 text-center bg-white flex flex-col items-center justify-center">
-            <div className="h-12 w-12 rounded-full bg-teal-50 flex items-center justify-center text-teal-600 text-2xl mb-3">
+          <div className="flex-1 rounded-2xl border border-dashed border-ink-200 p-12 text-center bg-white flex flex-col items-center justify-center shadow-card">
+            <div className="h-12 w-12 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 text-2xl mb-3">
               📋
             </div>
-            <h3 className="text-lg font-bold text-slate-900">Your Application Board is Empty</h3>
-            <p className="mt-1 text-sm text-slate-500 max-w-md">
+            <h3 className="text-lg font-bold text-ink-900">Your Application Board is Empty</h3>
+            <p className="mt-1 text-sm text-ink-500 max-w-md">
               Start tracking your job search! Add applications manually or discover curated benchmark jobs and track them with one click.
             </p>
             <div className="mt-5 flex items-center gap-3">
               <button
                 type="button"
                 onClick={openCreateModal}
-                className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
+                className="btn-primary"
               >
                 + Add First Application
               </button>
               <Link
                 to="/jobs"
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="btn-secondary"
               >
                 Find Jobs to Track
               </Link>
@@ -382,7 +382,7 @@ export default function Applications() {
                           >
                             <div>
                               <div className="flex items-start justify-between gap-1.5">
-                                <span className="text-[11px] font-bold text-teal-700 uppercase line-clamp-1">
+                                <span className="text-[11px] font-bold text-brand-600 uppercase line-clamp-1">
                                   {app.company}
                                 </span>
                                 {app.match_score !== null && app.match_score !== undefined && (
@@ -391,15 +391,15 @@ export default function Applications() {
                                   </span>
                                 )}
                               </div>
-                              <h3 className="text-sm font-bold text-slate-900 mt-0.5 leading-snug">{app.role}</h3>
-                              <p className="text-[11px] text-slate-500 mt-1">
+                              <h3 className="text-sm font-bold text-ink-900 mt-0.5 leading-snug">{app.role}</h3>
+                              <p className="text-[11px] text-ink-500 mt-1">
                                 {[app.location, app.salary].filter(Boolean).join(' • ')}
                               </p>
 
                               {/* Dates indicator */}
-                              <div className="mt-2 text-[10px] text-slate-400 space-y-0.5">
+                              <div className="mt-2 text-[10px] text-ink-400 space-y-0.5">
                                 {app.applied_date && (
-                                  <p>Applied: <span className="text-slate-600">{app.applied_date}</span></p>
+                                  <p>Applied: <span className="text-ink-600">{app.applied_date}</span></p>
                                 )}
                                 {app.interview_date && (
                                   <p className="text-amber-700 font-semibold">
@@ -410,19 +410,19 @@ export default function Applications() {
 
                               {/* Notes snippet */}
                               {app.notes && (
-                                <p className="mt-2 text-[11px] text-slate-600 bg-slate-50 p-1.5 rounded border border-slate-100 line-clamp-2">
+                                <p className="mt-2 text-[11px] text-ink-600 bg-ink-50 p-1.5 rounded border border-ink-100 line-clamp-2">
                                   {app.notes}
                                 </p>
                               )}
                             </div>
 
                             {/* Card Stage Movement Dropdown & Actions */}
-                            <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                            <div className="mt-3 pt-2 border-t border-ink-100 flex items-center justify-between text-xs">
                               {/* Move Stage Selector */}
                               <select
                                 value={app.status}
                                 onChange={(e) => handleStageChange(app.id, e.target.value as ApplicationStage)}
-                                className="text-[11px] bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-slate-700 font-medium focus:outline-none"
+                                className="text-[11px] bg-ink-50 border border-ink-200 rounded px-1.5 py-1 text-ink-700 font-medium focus:outline-none"
                               >
                                 {STAGES.map((s) => (
                                   <option key={s.key} value={s.key}>
@@ -436,7 +436,7 @@ export default function Applications() {
                                 <button
                                   type="button"
                                   onClick={() => setResearchCompany(app.company)}
-                                  className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 p-1"
+                                  className="text-[11px] font-semibold text-brand-600 hover:text-brand-800 p-1"
                                   title="Research company intelligence"
                                 >
                                   Research
@@ -446,7 +446,7 @@ export default function Applications() {
                                   onClick={() => {
                                     navigate(`/interview?role=${encodeURIComponent(app.role)}&company=${encodeURIComponent(app.company)}&jd=${encodeURIComponent(app.job_description || '')}&tab=prepare`);
                                   }}
-                                  className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 p-1"
+                                  className="text-[11px] font-semibold text-brand-600 hover:text-brand-800 p-1"
                                   title="Prepare interview for this application"
                                 >
                                   Interview
@@ -454,7 +454,7 @@ export default function Applications() {
                                 <button
                                   type="button"
                                   onClick={() => handleTailor(app)}
-                                  className="text-[11px] font-semibold text-teal-700 hover:text-teal-900 p-1"
+                                  className="text-[11px] font-semibold text-brand-600 hover:text-brand-800 p-1"
                                   title="Tailor resume for this application"
                                 >
                                   Tailor
@@ -462,7 +462,7 @@ export default function Applications() {
                                 <button
                                   type="button"
                                   onClick={() => openEditModal(app)}
-                                  className="text-[11px] text-slate-500 hover:text-slate-800 p-1"
+                                  className="text-[11px] text-ink-500 hover:text-ink-800 p-1"
                                   title="Edit details"
                                 >
                                   Edit
@@ -491,12 +491,12 @@ export default function Applications() {
               {filteredApps
                 .filter((a) => a.status === activeMobileStage)
                 .map((app) => (
-                  <div key={app.id} className="rounded-xl bg-white p-4 border border-slate-200 shadow-2xs">
+                  <div key={app.id} className="rounded-xl bg-white p-4 border border-ink-200 shadow-2xs">
                     <div className="flex items-start justify-between">
                       <div>
-                        <span className="text-xs font-bold text-teal-700 uppercase">{app.company}</span>
-                        <h3 className="text-base font-bold text-slate-900 mt-0.5">{app.role}</h3>
-                        <p className="text-xs text-slate-500 mt-1">
+                        <span className="text-xs font-bold text-brand-600 uppercase">{app.company}</span>
+                        <h3 className="text-base font-bold text-ink-900 mt-0.5">{app.role}</h3>
+                        <p className="text-xs text-ink-500 mt-1">
                           {[app.location, app.salary, app.applied_date && `Applied: ${app.applied_date}`]
                             .filter(Boolean)
                             .join(' • ')}
@@ -510,14 +510,14 @@ export default function Applications() {
                     </div>
 
                     {app.notes && (
-                      <p className="mt-2 text-xs text-slate-600 bg-slate-50 p-2 rounded">{app.notes}</p>
+                      <p className="mt-2 text-xs text-ink-600 bg-ink-50 p-2 rounded">{app.notes}</p>
                     )}
 
-                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <div className="mt-3 pt-3 border-t border-ink-100 flex items-center justify-between">
                       <select
                         value={app.status}
                         onChange={(e) => handleStageChange(app.id, e.target.value as ApplicationStage)}
-                        className="text-xs bg-slate-100 border border-slate-300 rounded-lg px-2 py-1 font-semibold"
+                        className="text-xs bg-ink-100 border border-ink-200 rounded-lg px-2 py-1 font-semibold text-ink-800"
                       >
                         {STAGES.map((s) => (
                           <option key={s.key} value={s.key}>
@@ -530,21 +530,21 @@ export default function Applications() {
                         <button
                           type="button"
                           onClick={() => setResearchCompany(app.company)}
-                          className="text-xs font-bold text-blue-700"
+                          className="text-xs font-bold text-brand-600"
                         >
                           Research
                         </button>
                         <button
                           type="button"
                           onClick={() => handleTailor(app)}
-                          className="text-xs font-bold text-teal-700"
+                          className="text-xs font-bold text-brand-600"
                         >
                           Tailor CV
                         </button>
                         <button
                           type="button"
                           onClick={() => openEditModal(app)}
-                          className="text-xs text-slate-600"
+                          className="text-xs text-ink-600"
                         >
                           Edit
                         </button>
@@ -595,36 +595,36 @@ export default function Applications() {
               <form onSubmit={handleSaveForm} className="mt-4 space-y-3.5 text-xs">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-bold text-slate-700 uppercase mb-1">Company *</label>
+                    <label className="block font-bold text-ink-700 uppercase mb-1">Company *</label>
                     <input
                       type="text"
                       required
                       value={formCompany}
                       onChange={(e) => setFormCompany(e.target.value)}
                       placeholder="e.g. Google, Datadog"
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                      className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-slate-700 uppercase mb-1">Role Title *</label>
+                    <label className="block font-bold text-ink-700 uppercase mb-1">Role Title *</label>
                     <input
                       type="text"
                       required
                       value={formRole}
                       onChange={(e) => setFormRole(e.target.value)}
                       placeholder="e.g. Senior Software Engineer"
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                      className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-bold text-slate-700 uppercase mb-1">Status Stage</label>
+                    <label className="block font-bold text-ink-700 uppercase mb-1">Status Stage</label>
                     <select
                       value={formStatus}
                       onChange={(e) => setFormStatus(e.target.value as ApplicationStage)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none bg-white font-medium"
+                      className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 bg-white font-medium"
                     >
                       {STAGES.map((s) => (
                         <option key={s.key} value={s.key}>
@@ -634,86 +634,86 @@ export default function Applications() {
                     </select>
                   </div>
                   <div>
-                    <label className="block font-bold text-slate-700 uppercase mb-1">Location</label>
+                    <label className="block font-bold text-ink-700 uppercase mb-1">Location</label>
                     <input
                       type="text"
                       value={formLocation}
                       onChange={(e) => setFormLocation(e.target.value)}
                       placeholder="e.g. London / Remote"
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                      className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-bold text-slate-700 uppercase mb-1">Applied Date</label>
+                    <label className="block font-bold text-ink-700 uppercase mb-1">Applied Date</label>
                     <input
                       type="date"
                       value={formAppliedDate}
                       onChange={(e) => setFormAppliedDate(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                      className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-slate-700 uppercase mb-1">Interview Date (optional)</label>
+                    <label className="block font-bold text-ink-700 uppercase mb-1">Interview Date (optional)</label>
                     <input
                       type="date"
                       value={formInterviewDate}
                       onChange={(e) => setFormInterviewDate(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                      className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-bold text-slate-700 uppercase mb-1">Salary / Compensation</label>
+                    <label className="block font-bold text-ink-700 uppercase mb-1">Salary / Compensation</label>
                     <input
                       type="text"
                       value={formSalary}
                       onChange={(e) => setFormSalary(e.target.value)}
                       placeholder="e.g. £90k - £110k"
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                      className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-slate-700 uppercase mb-1">Job URL</label>
+                    <label className="block font-bold text-ink-700 uppercase mb-1">Job URL</label>
                     <input
                       type="url"
                       value={formJobUrl}
                       onChange={(e) => setFormJobUrl(e.target.value)}
                       placeholder="https://..."
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                      className="w-full rounded-lg border border-ink-200 px-3 py-2 text-sm text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">Notes & Follow-ups</label>
+                  <label className="block font-bold text-ink-700 uppercase mb-1">Notes & Follow-ups</label>
                   <textarea
                     rows={3}
                     value={formNotes}
                     onChange={(e) => setFormNotes(e.target.value)}
                     placeholder="Key contacts, referral info, interview round details, preparation points..."
-                    className="w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-teal-500 focus:outline-none leading-relaxed"
+                    className="w-full rounded-lg border border-ink-200 p-2.5 text-xs text-ink-800 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 leading-relaxed font-sans"
                   />
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-ink-100">
                   <button
                     type="button"
                     onClick={() => {
                       setIsCreating(false);
                       setEditingApp(null);
                     }}
-                    className="rounded-lg border border-slate-300 px-3.5 py-2 font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                    className="rounded-lg border border-ink-200 bg-white px-3.5 py-2 font-semibold text-ink-700 hover:bg-ink-50 cursor-pointer shadow-xs"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="rounded-lg bg-teal-600 px-4 py-2 font-semibold text-white hover:bg-teal-700 transition cursor-pointer"
+                    className="btn-primary"
                   >
                     {editingApp ? 'Save Changes' : 'Create Application'}
                   </button>
