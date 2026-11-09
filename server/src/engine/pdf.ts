@@ -148,6 +148,7 @@ export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): Node
     const bx = margin + 4;
     doc.text('\u2022', margin, doc.y, { continued: false, width: 12 });
     doc.text(clean, bx + 8, doc.y, { width: contentWidth - 12, lineGap: effectiveLineGap });
+    doc.x = margin;
   };
 
   const twoColRow = (left: string, leftBold: boolean, right: string) => {
@@ -158,6 +159,7 @@ export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): Node
     doc.font(style.bodyFont).fontSize(style.bodySize - 0.5).fillColor(COLOR_MUTED);
     doc.text(sanitizePdfText(right), margin + contentWidth * 0.72, y, { width: contentWidth * 0.28, align: 'right' });
     doc.y = Math.max(afterLeft, doc.y);
+    doc.x = margin;
   };
 
   // ---- Header ----
@@ -169,13 +171,13 @@ export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): Node
   if (p.email) contactBits.push(p.email);
   if (p.phone) contactBits.push(p.phone);
   if (p.location) contactBits.push(p.location);
-  doc.font(style.bodyFont).fontSize(style.bodySize).fillColor(COLOR_MUTED).text(sanitizePdfText(contactBits.filter(Boolean).join('  |  ')), {
+  doc.font(style.bodyFont).fontSize(style.bodySize).fillColor(COLOR_MUTED).text(sanitizePdfText(contactBits.filter(Boolean).join('  |  ')), margin, doc.y, {
     width: contentWidth,
   });
   const linkBits = [p.linkedin, p.github, p.portfolio].filter(Boolean) as string[];
   if (linkBits.length > 0) {
     doc.moveDown(0.1);
-    doc.font(style.bodyFont).fontSize(style.bodySize - 0.5).fillColor('#2b6cb0').text(sanitizePdfText(linkBits.join('  |  ')), { width: contentWidth });
+    doc.font(style.bodyFont).fontSize(style.bodySize - 0.5).fillColor('#2b6cb0').text(sanitizePdfText(linkBits.join('  |  ')), margin, doc.y, { width: contentWidth });
   }
 
   // ---- Sections ----
@@ -193,9 +195,12 @@ export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): Node
         for (const e of resume.experience) {
           twoColRow(e.title || e.company, true, formatDateRange(e.startDate, e.endDate, e.current));
           if (e.title && e.company) {
-            doc.font(style.bodyFont).fontSize(style.bodySize).fillColor(COLOR_MUTED).text(`${sanitizePdfText(e.company)}${e.location ? `, ${sanitizePdfText(e.location)}` : ''}`, {
-              width: contentWidth,
-            });
+            doc.font(style.bodyFont).fontSize(style.bodySize).fillColor(COLOR_MUTED).text(
+              `${sanitizePdfText(e.company)}${e.location ? `, ${sanitizePdfText(e.location)}` : ''}`,
+              margin,
+              doc.y,
+              { width: contentWidth }
+            );
           }
           doc.moveDown(0.15);
           for (const b of e.bullets.filter((x) => x.trim())) bullet(b);
@@ -210,7 +215,14 @@ export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): Node
           const tech = pr.tech && pr.tech.length > 0 ? `  |  ${pr.tech.join(', ')}` : '';
           twoColRow(pr.name || 'Project', true, pr.link || '');
           if (pr.description?.trim()) bodyText(pr.description.trim());
-          if (tech) doc.font('Helvetica-Oblique').fontSize(style.bodySize - 0.5).fillColor(COLOR_MUTED).text(sanitizePdfText(tech.trim()), { width: contentWidth });
+          if (tech) {
+            doc.font('Helvetica-Oblique').fontSize(style.bodySize - 0.5).fillColor(COLOR_MUTED).text(
+              sanitizePdfText(tech.trim()),
+              margin,
+              doc.y,
+              { width: contentWidth }
+            );
+          }
           for (const b of pr.bullets.filter((x) => x.trim())) bullet(b);
           doc.moveDown(0.3);
         }
@@ -245,6 +257,8 @@ export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): Node
           twoColRow(`${ed.degree}${ed.field ? `, ${ed.field}` : ''}`, true, formatDateRange(ed.startDate, ed.endDate, false));
           doc.font(style.bodyFont).fontSize(style.bodySize).fillColor(COLOR_MUTED).text(
             sanitizePdfText([ed.institution, ed.grade].filter(Boolean).join('  |  ')),
+            margin,
+            doc.y,
             { width: contentWidth }
           );
           doc.moveDown(0.3);
