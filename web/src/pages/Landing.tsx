@@ -92,47 +92,55 @@ export default function Landing() {
       {/* Top Navigation */}
       <Navbar onOpenPrivacy={() => setPrivacyModalOpen(true)} ctaText="Start Building Free" ctaLink="/builder" />
 
-      {/* Hero Section — Original EnhanceCV Split-Hero Layout */}
-      <section className="relative overflow-hidden border-b border-ink-100 bg-white">
-        {/* Soft Ambient Glows from 503b246 */}
-        <div className="pointer-events-none absolute -top-32 right-0 h-96 w-96 rounded-full bg-brand-50 blur-3xl opacity-80" aria-hidden="true" />
-        <div className="pointer-events-none absolute top-40 -left-24 h-72 w-72 rounded-full bg-brand-100/40 blur-3xl" aria-hidden="true" />
+      {/* Hero Section — Sleek Modern SaaS Split-Hero Layout */}
+      <section className="relative overflow-hidden border-b border-ink-100 bg-gradient-to-b from-brand-50/40 via-white to-white">
+        {/* Ambient Radial Mesh Background */}
+        <div className="pointer-events-none absolute -top-40 right-10 h-[500px] w-[500px] rounded-full bg-brand-200/30 blur-3xl opacity-60" aria-hidden="true" />
+        <div className="pointer-events-none absolute top-48 -left-20 h-80 w-80 rounded-full bg-indigo-100/40 blur-3xl" aria-hidden="true" />
 
         <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:py-24 relative">
           <div>
-            {/* Pill Badge */}
-            <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3.5 py-1 text-xs font-semibold text-brand-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-600" aria-hidden="true" />
-              Curevo AI • 100% In-Memory • Truthful AI Engine
-            </p>
+            {/* Modern Pill Badge */}
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-brand-200/90 bg-white/90 px-3.5 py-1 text-xs font-semibold text-brand-800 shadow-2xs backdrop-blur-sm">
+              <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
+              <span>100% In-Memory • Zero Database • Truthful AI Engine</span>
+            </div>
 
             {/* Main Headline */}
-            <h1 className="text-4xl font-extrabold leading-[1.1] tracking-tight text-ink-900 sm:text-5xl lg:text-[3.4rem]">
-              Build a better CV for every job.
+            <h1 className="text-4xl font-extrabold leading-[1.12] tracking-tight text-ink-900 sm:text-5xl lg:text-[3.35rem]">
+              Build a better CV for <span className="bg-gradient-to-r from-brand-600 via-indigo-600 to-blue-600 bg-clip-text text-transparent">every job</span>.
             </h1>
 
             {/* Subtitle */}
             <p className="mt-5 max-w-xl text-lg leading-relaxed text-ink-600">
-              Upload your CV, let our AI Engine optimize your experience with the Google XYZ formula, and download a verified ATS-compliant resume with zero login and strict Truth Guard™ protection.
+              Upload your CV, let our AI Engine optimize your experience with the Google XYZ formula, and export a verified ATS-compliant resume with zero login and strict Truth Guard™ protection.
             </p>
 
             {/* CTA Buttons */}
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Link to="/builder?mode=ats" className="btn-primary px-6 py-3 text-base">
-                Check ATS Score — Free
+            <div className="mt-8 flex flex-wrap items-center gap-3.5">
+              <Link
+                to="/builder?mode=ats"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-6 py-3.5 text-sm font-bold text-white shadow-md shadow-brand-500/25 transition hover:bg-brand-700 hover:shadow-brand-500/35 active:scale-95"
+              >
+                <span>Check ATS Score — Free</span>
+                <span aria-hidden="true">&rarr;</span>
               </Link>
-              <Link to="/builder?mode=improve" className="btn-secondary px-6 py-3 text-base">
-                Improve Existing CV
+              <Link
+                to="/builder?mode=improve"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-ink-200 bg-white px-6 py-3.5 text-sm font-bold text-ink-800 shadow-2xs transition hover:bg-ink-50 hover:border-ink-300 active:scale-95"
+              >
+                <span>Improve Existing CV</span>
               </Link>
             </div>
 
-            <p className="mt-3 text-sm text-ink-500">
-              No credit card or login required. Your source CV facts are never modified without proof.
+            <p className="mt-3.5 text-xs text-ink-500 flex items-center gap-1.5">
+              <span>🔒</span>
+              <span>No credit card or login required. Your source CV facts are never modified without proof.</span>
             </p>
 
             {/* Quick 1-Click Sample CV Test-Drive Link */}
-            <div className="mt-6">
-              <div className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50/80 px-4 py-2 text-xs font-medium text-ink-800 shadow-xs transition hover:bg-brand-100/80">
+            <div className="mt-5">
+              <div className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-white/90 px-4 py-2 text-xs font-medium text-ink-800 shadow-2xs transition hover:bg-brand-50/60">
                 <span className="font-semibold text-brand-700">Want to explore without uploading?</span>
                 <Link
                   to="/builder?sample=true"
@@ -145,52 +153,108 @@ export default function Landing() {
             </div>
           </div>
 
-          {/* Right Column: Original EnhanceCV Floating Interactive Match Card */}
-          <div className="relative mx-auto w-full max-w-lg" aria-hidden="true">
-            {/* Primary Job Match Card */}
-            <div className="card rotate-1 p-6 pb-14 shadow-lift transition hover:rotate-0 duration-300">
-              <div className="flex items-center justify-between">
+          {/* Right Column: Sleek Interactive AI Engine & ATS Intelligence Card */}
+          <div className="relative mx-auto w-full max-w-lg lg:max-w-none" aria-hidden="true">
+            {/* Ambient Backlight Glow */}
+            <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-brand-500/20 via-indigo-500/20 to-purple-500/20 blur-2xl opacity-70" />
+
+            {/* Main Interactive Studio Glass Card */}
+            <div className="relative rounded-3xl border border-slate-200/90 bg-white/95 p-6 sm:p-7 shadow-2xl shadow-brand-900/10 backdrop-blur-xl transition hover:shadow-brand-900/15 duration-300">
+              {/* Window Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                  <span className="ml-2 font-mono text-[11px] font-semibold text-slate-500">
+                    Aarav_Sharma_Resume.pdf
+                  </span>
+                </div>
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Truth Guard™ Verified
+                </div>
+              </div>
+
+              {/* Role Title and ATS Compatibility Ring */}
+              <div className="mt-5 flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Illustrative Job Match</p>
-                  <p className="text-lg font-bold text-ink-900">Senior Java Backend Engineer</p>
-                  <p className="text-sm text-ink-500">Benchmark Role · Tech Ecosystem</p>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-brand-600">
+                    Target Job Fit Benchmark
+                  </span>
+                  <h3 className="text-xl font-bold text-slate-900 sm:text-2xl">
+                    Senior Cloud Solutions Architect
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Tier-1 Candidate Fit • Top 3% of Applicant Pool
+                  </p>
                 </div>
-                <div className="relative inline-flex h-20 w-20 items-center justify-center rounded-full border-[6px] border-emerald-500 bg-white shadow-xs">
-                  <span className="text-xl font-extrabold text-ink-900">84</span>
-                </div>
-              </div>
-
-              <div className="mt-5 space-y-2 text-sm">
-                <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2 border border-emerald-100">
-                  <span className="font-medium text-emerald-800">Java, Spring Boot, REST APIs</span>
-                  <span className="chip bg-emerald-100 text-emerald-800 text-xs">Matched</span>
-                </div>
-                <div className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 border border-amber-100">
-                  <span className="font-medium text-amber-800">Microservices, CI/CD</span>
-                  <span className="chip bg-amber-100 text-amber-800 text-xs">Partial</span>
-                </div>
-                <div className="flex items-center justify-between rounded-lg bg-red-50 px-3 py-2 border border-red-100">
-                  <span className="font-medium text-red-800">AWS, Kubernetes, Terraform</span>
-                  <span className="chip bg-red-100 text-red-800 text-xs">Missing</span>
+                {/* Modern Circular Score Badge */}
+                <div className="flex flex-col items-center shrink-0">
+                  <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-600 to-indigo-700 text-white shadow-md shadow-brand-600/30">
+                    <span className="text-2xl font-black">94</span>
+                    <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white shadow-2xs">
+                      ✓
+                    </span>
+                  </div>
+                  <span className="mt-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">ATS Score</span>
                 </div>
               </div>
 
-              <div className="mt-5 rounded-xl border border-ink-100 bg-ink-50 p-3.5">
-                <p className="text-xs font-semibold text-ink-700 tracking-wide uppercase">Truth Guard™ Audit</p>
-                <p className="mt-1.5 text-xs text-ink-600">
-                  ✓ Supported by Source CV · ✓ Supported by Source CV · ✓ Reverted 1 unevidenced claim
-                </p>
+              {/* Key Optimized Skills & Google XYZ Badges */}
+              <div className="mt-5 space-y-2 text-xs">
+                <div className="flex items-center justify-between rounded-xl bg-slate-50/80 px-3.5 py-2.5 border border-slate-200/70">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 text-xs font-bold">✓</span>
+                    <span className="font-semibold text-slate-800">Kubernetes, Terraform &amp; AWS Multi-Region</span>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">100% Match</span>
+                </div>
+
+                <div className="flex items-center justify-between rounded-xl bg-slate-50/80 px-3.5 py-2.5 border border-slate-200/70">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-md bg-brand-100 text-brand-700 text-xs font-bold">⚡</span>
+                    <span className="font-semibold text-slate-800">Google XYZ Rewriting: £420k compute saving quantified</span>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-brand-700 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">Optimized</span>
+                </div>
+
+                <div className="flex items-center justify-between rounded-xl bg-slate-50/80 px-3.5 py-2.5 border border-slate-200/70">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-md bg-indigo-100 text-indigo-700 text-xs font-bold">🛡️</span>
+                    <span className="font-semibold text-slate-800">Truth Guard™ Audit: 0 fabricated claims, 100% evidenced</span>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">Grounded</span>
+                </div>
+              </div>
+
+              {/* Bottom Quick Metric Bar */}
+              <div className="mt-5 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-950 p-4 text-white shadow-inner flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400">
+                    Automated ATS Compliance
+                  </div>
+                  <div className="text-xs font-semibold text-slate-200 mt-0.5">
+                    Standard single-column format • Clean parseable text layer
+                  </div>
+                </div>
+                <Link
+                  to="/builder?sample=true"
+                  className="rounded-lg bg-brand-600 hover:bg-brand-500 px-3 py-1.5 text-xs font-bold text-white shadow-xs transition active:scale-95"
+                >
+                  Inspect CV →
+                </Link>
               </div>
             </div>
 
-            {/* Overlapping Floating ATS Card */}
-            <div className="card absolute top-8 right-0 w-44 -rotate-3 p-4 shadow-lift border border-ink-100 bg-white">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">ATS Compatibility</p>
-              <p className="mt-1 text-2xl font-extrabold text-ink-900">
-                74<span className="text-sm font-medium text-ink-400">/100</span>
-              </p>
-              <div className="mt-2 h-1.5 w-full rounded-full bg-ink-100 overflow-hidden">
-                <div className="h-full w-3/4 rounded-full bg-brand-600" />
+            {/* Subtle Floating Lift Badge */}
+            <div className="hidden sm:flex absolute -bottom-5 -right-4 items-center gap-2.5 rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-2.5 shadow-xl shadow-slate-900/10 backdrop-blur-md">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 text-lg">
+                📈
+              </span>
+              <div>
+                <div className="text-xs font-extrabold text-slate-900">+32% Interview Call Rate</div>
+                <div className="text-[10px] text-slate-500">Based on Google XYZ bullet standard</div>
               </div>
             </div>
           </div>
