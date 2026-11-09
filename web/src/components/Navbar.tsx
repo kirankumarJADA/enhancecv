@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Logo } from './ui';
 import DataPrivacyModal from './DataPrivacyModal';
@@ -11,27 +11,13 @@ interface NavbarProps {
 
 export default function Navbar({ onOpenPrivacy, ctaText = 'Start Building Free', ctaLink = '/builder' }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [toolsDropdownOpen, setToolsDropdownOpen] = useState(false);
   const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
 
-  // Close menus on route change
+  // Close mobile menu on route change
   useEffect(() => {
     setMobileMenuOpen(false);
-    setToolsDropdownOpen(false);
   }, [location.pathname, location.search]);
-
-  // Click outside listener for Tools dropdown
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setToolsDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   // Lock body scroll when mobile menu is open
   useEffect(() => {
@@ -58,34 +44,42 @@ export default function Navbar({ onOpenPrivacy, ctaText = 'Start Building Free',
     return location.pathname.startsWith(path);
   };
 
-  const isCareerToolsActive = [
-    '/prepare-application',
-    '/jobs',
-    '/applications',
-    '/interview',
-    '/linkedin',
-  ].some((p) => location.pathname.startsWith(p));
-
   const isLanding = location.pathname === '/';
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-ink-100 bg-white/95 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-ink-100 bg-white/90 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
-          {/* Brand Logo */}
+          {/* Brand Logo & Free Badge */}
           <div className="flex items-center gap-3">
             <Link to="/" className="inline-flex items-center focus-visible:outline-2 focus-visible:outline-brand-500 rounded-lg">
               <Logo />
             </Link>
+            <span className="hidden xl:inline-flex items-center rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700 border border-brand-200">
+              100% Free &amp; Anonymous
+            </span>
           </div>
 
-          {/* Desktop Navigation (Organized, spacious, Linear/Stripe-level hierarchy) */}
-          <nav className="hidden lg:flex items-center gap-1 xl:gap-2 text-sm font-medium text-ink-600" aria-label="Main Navigation">
+          {/* Desktop Navigation (grouped, balanced spacing) */}
+          <nav className="hidden lg:flex items-center gap-1.5 xl:gap-2 text-sm font-medium text-ink-600" aria-label="Main Navigation">
+            {/* Flagship Prepare Application Stepper */}
+            <Link
+              to="/prepare-application"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                isActive('/prepare-application')
+                  ? 'bg-brand-600 text-white shadow-xs'
+                  : 'bg-brand-50 text-brand-700 border border-brand-200 hover:bg-brand-100 hover:text-brand-900'
+              }`}
+            >
+              <span>🚀</span>
+              <span>Prepare Application</span>
+            </Link>
+
             <Link
               to="/builder"
-              className={`px-3 py-1.5 rounded-lg text-xs xl:text-sm font-medium transition ${
+              className={`px-3 py-1.5 rounded-lg transition ${
                 isActive('/builder') && !location.search.includes('mode=ats')
-                  ? 'text-brand-700 font-semibold bg-brand-50'
+                  ? 'text-brand-700 font-bold bg-brand-50'
                   : 'hover:text-ink-900 hover:bg-ink-50'
               }`}
             >
@@ -94,163 +88,110 @@ export default function Navbar({ onOpenPrivacy, ctaText = 'Start Building Free',
 
             <Link
               to="/builder?mode=ats"
-              className={`px-3 py-1.5 rounded-lg text-xs xl:text-sm font-medium transition ${
+              className={`px-3 py-1.5 rounded-lg transition ${
                 location.pathname === '/builder' && location.search.includes('mode=ats')
-                  ? 'text-brand-700 font-semibold bg-brand-50'
+                  ? 'text-brand-700 font-bold bg-brand-50'
                   : 'hover:text-ink-900 hover:bg-ink-50'
               }`}
             >
               Check ATS
             </Link>
 
-            {/* Career Tools Popover Dropdown */}
-            <div className="relative" ref={dropdownRef}>
-              <button
-                type="button"
-                onClick={() => setToolsDropdownOpen(!toolsDropdownOpen)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs xl:text-sm font-medium transition ${
-                  isCareerToolsActive
-                    ? 'text-brand-700 font-semibold bg-brand-50'
-                    : 'hover:text-ink-900 hover:bg-ink-50'
-                }`}
-                aria-expanded={toolsDropdownOpen}
-              >
-                <span>Career Tools</span>
-                <svg
-                  className={`h-3.5 w-3.5 text-ink-400 transition-transform duration-150 ${toolsDropdownOpen ? 'rotate-180 text-brand-600' : ''}`}
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
+            <Link
+              to="/jobs"
+              className={`px-3 py-1.5 rounded-lg transition ${
+                isActive('/jobs')
+                  ? 'text-brand-700 font-bold bg-brand-50'
+                  : 'hover:text-ink-900 hover:bg-ink-50'
+              }`}
+            >
+              Find Jobs
+            </Link>
 
-              {toolsDropdownOpen && (
-                <div
-                  className="absolute left-0 top-full mt-2 w-80 rounded-2xl border border-ink-100 bg-white/98 backdrop-blur-xl p-3 shadow-2xl ring-1 ring-black/5 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
-                  role="menu"
-                >
-                  <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-ink-400">
-                    Flagship Orchestrator
-                  </div>
-                  <Link
-                    to="/prepare-application"
-                    onClick={() => setToolsDropdownOpen(false)}
-                    className="flex items-start gap-3 rounded-xl p-2.5 transition hover:bg-brand-50/80 group"
-                  >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-brand-700 text-base group-hover:bg-brand-600 group-hover:text-white transition">
-                      🚀
-                    </span>
-                    <div>
-                      <div className="text-xs font-bold text-ink-900 group-hover:text-brand-700">Prepare Application</div>
-                      <div className="text-[11px] text-ink-500">5-step guided orchestrator from target JD to interview</div>
-                    </div>
-                  </Link>
+            <Link
+              to="/applications"
+              className={`px-3 py-1.5 rounded-lg transition ${
+                isActive('/applications')
+                  ? 'text-brand-700 font-bold bg-brand-50'
+                  : 'hover:text-ink-900 hover:bg-ink-50'
+              }`}
+            >
+              Tracker
+            </Link>
 
-                  <div className="my-1.5 border-t border-ink-100" />
-                  <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-ink-400">
-                    Autonomous Career Suite
-                  </div>
-                  <div className="space-y-0.5">
-                    <Link
-                      to="/jobs"
-                      onClick={() => setToolsDropdownOpen(false)}
-                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50 hover:text-brand-700 transition"
-                    >
-                      <span className="text-sm">🔍</span>
-                      <span>Find Jobs &amp; Market Match</span>
-                    </Link>
-                    <Link
-                      to="/applications"
-                      onClick={() => setToolsDropdownOpen(false)}
-                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50 hover:text-brand-700 transition"
-                    >
-                      <span className="text-sm">📊</span>
-                      <span>Application Tracker (Kanban)</span>
-                    </Link>
-                    <Link
-                      to="/interview"
-                      onClick={() => setToolsDropdownOpen(false)}
-                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50 hover:text-brand-700 transition"
-                    >
-                      <span className="text-sm">🎙️</span>
-                      <span>AI Interview Coach (STAR)</span>
-                    </Link>
-                    <Link
-                      to="/linkedin"
-                      onClick={() => setToolsDropdownOpen(false)}
-                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50 hover:text-brand-700 transition"
-                    >
-                      <span className="text-sm">🌐</span>
-                      <span>LinkedIn Profile Optimizer</span>
-                    </Link>
-                    <a
-                      href="/curevo-ai-extension.zip"
-                      download
-                      onClick={() => setToolsDropdownOpen(false)}
-                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50 hover:text-brand-700 transition"
-                    >
-                      <span className="text-sm">🧩</span>
-                      <span>Chrome Job Saver Extension (.zip)</span>
-                    </a>
-                  </div>
-                </div>
-              )}
-            </div>
+            <Link
+              to="/interview"
+              className={`px-3 py-1.5 rounded-lg transition ${
+                isActive('/interview')
+                  ? 'text-brand-700 font-bold bg-brand-50'
+                  : 'hover:text-ink-900 hover:bg-ink-50'
+              }`}
+            >
+              Interview Coach
+            </Link>
 
-            {/* Informational anchor links */}
-            {isLanding ? (
+            <Link
+              to="/linkedin"
+              className={`px-3 py-1.5 rounded-lg transition ${
+                isActive('/linkedin')
+                  ? 'text-brand-700 font-bold bg-brand-50'
+                  : 'hover:text-ink-900 hover:bg-ink-50'
+              }`}
+            >
+              LinkedIn
+            </Link>
+
+            {/* Informational anchor links on landing page */}
+            {isLanding && (
               <>
-                <a
-                  href="#how"
-                  className="px-3 py-1.5 rounded-lg text-xs xl:text-sm text-ink-600 hover:text-ink-900 hover:bg-ink-50 transition"
-                >
+                <a href="#how" className="px-2.5 py-1.5 text-xs text-ink-500 hover:text-ink-900 transition">
                   How It Works
                 </a>
-                <a
-                  href="#truth"
-                  className="px-3 py-1.5 rounded-lg text-xs xl:text-sm text-ink-600 hover:text-ink-900 hover:bg-ink-50 transition"
-                >
+                <a href="#truth" className="px-2.5 py-1.5 text-xs text-ink-500 hover:text-ink-900 transition">
                   Truth Guard™
                 </a>
-              </>
-            ) : (
-              <>
-                <Link
-                  to="/#how"
-                  className="px-3 py-1.5 rounded-lg text-xs xl:text-sm text-ink-600 hover:text-ink-900 hover:bg-ink-50 transition"
-                >
-                  How It Works
-                </Link>
-                <Link
-                  to="/#truth"
-                  className="px-3 py-1.5 rounded-lg text-xs xl:text-sm text-ink-600 hover:text-ink-900 hover:bg-ink-50 transition"
-                >
-                  Truth Guard™
-                </Link>
+                <a href="#features" className="px-2.5 py-1.5 text-xs text-ink-500 hover:text-ink-900 transition">
+                  Features
+                </a>
+                <a href="#faq" className="px-2.5 py-1.5 text-xs text-ink-500 hover:text-ink-900 transition">
+                  FAQ
+                </a>
               </>
             )}
           </nav>
 
           {/* Desktop Right Action Area */}
-          <div className="hidden lg:flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-2.5">
             {/* Privacy & Sovereignty */}
             <button
               type="button"
               onClick={handleOpenPrivacy}
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-ink-600 hover:text-ink-900 hover:bg-ink-50 transition"
+              className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-700 transition hover:bg-ink-50 hover:border-ink-300"
               title="View data privacy, download complete JSON backup or restore"
               aria-label="Privacy and backup controls"
             >
               <span>🛡️</span>
-              <span>Privacy &amp; Backup</span>
+              <span className="hidden xl:inline">Privacy &amp; Backup</span>
             </button>
+
+            {/* Chrome Extension Download Quick Link */}
+            <a
+              href="/curevo-ai-extension.zip"
+              download
+              className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-700 transition hover:bg-ink-50 hover:border-ink-300"
+              title="Download Curevo AI Chrome Extension (Manifest V3 .zip)"
+              aria-label="Download Chrome extension"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 text-brand-600" aria-hidden="true">
+                <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>Extension</span>
+            </a>
 
             {/* Primary Action Button */}
             <Link
               to={ctaLink}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-xs font-bold text-white shadow-sm shadow-brand-500/20 transition hover:bg-brand-700 hover:shadow-brand-500/30 active:scale-95 focus-visible:outline-2 focus-visible:outline-brand-500"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-brand-500"
             >
               <span>{ctaText}</span>
               <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-brand-200" aria-hidden="true">

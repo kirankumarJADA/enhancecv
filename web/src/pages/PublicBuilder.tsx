@@ -1837,63 +1837,62 @@ export default function PublicBuilder() {
       <main className="flex-1 pb-16">
         {/* Banner Section (Only shown when not ready) */}
         {step !== 'ready' && (
-          <section className="relative overflow-hidden border-b border-slate-200/80 bg-gradient-to-b from-slate-50 via-white to-slate-50/60 py-12 px-4 sm:px-6">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-brand-100/30 via-transparent to-transparent pointer-events-none" />
-            <div className="relative mx-auto max-w-4xl text-center">
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-brand-200/90 bg-white/90 px-3.5 py-1 text-xs font-semibold text-brand-800 shadow-xs backdrop-blur-sm">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>100% In-Memory • Zero Database Retention • Free &amp; Private</span>
+          <section className="bg-white border-b border-slate-200 py-10 px-4 sm:px-6">
+            <div className="mx-auto max-w-4xl text-center">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-800">
+                <span className="h-2 w-2 rounded-full bg-brand-500" />
+                100% In-Memory • Zero Database • No Sign-up Required
               </div>
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-slate-900">
-                Curevo AI Resume Studio
+              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900">
+                Curevo AI Resume Builder
               </h1>
-              <p className="mt-3 text-base text-slate-600 max-w-xl mx-auto leading-relaxed">
-                Powered by our deterministic AI Engine with algorithmic Truth Guard™ verification. Select an objective to get started:
+              <p className="mt-2 text-base text-slate-600 max-w-xl mx-auto">
+                Powered by our AI Engine with strict Truth Guard™ verification. Choose an option below to begin.
               </p>
 
-              {/* Modern Segmented Control */}
-              <div className="mt-8 inline-flex flex-wrap justify-center rounded-2xl bg-slate-100/90 p-1.5 border border-slate-200/90 shadow-xs gap-1.5">
+              {/* Mode Toggle Tabs */}
+              <div className="mt-6 inline-flex flex-wrap justify-center rounded-xl bg-slate-100 p-1.5 border border-slate-200 shadow-inner gap-1">
                 <button
                   type="button"
                   onClick={() => { setMode('ats'); setErrorMessage(null); }}
-                  className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs sm:text-sm font-bold transition-all duration-200 ${
+                  className={`inline-flex items-center gap-2 rounded-lg px-4 sm:px-5 py-2.5 text-sm font-bold transition duration-150 ${
                     mode === 'ats'
-                      ? 'bg-white text-brand-700 shadow-sm ring-1 ring-slate-900/5'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <span className="flex h-5 w-5 items-center justify-center rounded-lg bg-brand-50 text-brand-600 text-xs">
-                    ✓
-                  </span>
-                  <span>Check ATS Score</span>
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-brand-600">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.7-9.3a1 1 0 00-1.4-1.4L9 10.6 7.7 9.3a1 1 0 00-1.4 1.4l2 2a1 1 0 001.4 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  Check ATS Score
                 </button>
                 <button
                   type="button"
                   onClick={() => { setMode('improve'); setErrorMessage(null); }}
-                  className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs sm:text-sm font-bold transition-all duration-200 ${
+                  className={`inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold transition duration-150 ${
                     mode === 'improve'
-                      ? 'bg-white text-brand-700 shadow-sm ring-1 ring-slate-900/5'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <span className="flex h-5 w-5 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 text-xs">
-                    ⚡
-                  </span>
-                  <span>Improve My Existing CV</span>
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-brand-600">
+                    <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Improve My Existing CV
                 </button>
                 <button
                   type="button"
                   onClick={() => { setMode('create'); setErrorMessage(null); }}
-                  className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs sm:text-sm font-bold transition-all duration-200 ${
+                  className={`inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold transition duration-150 ${
                     mode === 'create'
-                      ? 'bg-white text-brand-700 shadow-sm ring-1 ring-slate-900/5'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <span className="flex h-5 w-5 items-center justify-center rounded-lg bg-slate-100 text-slate-700 text-xs">
-                    ✎
-                  </span>
-                  <span>Create from Scratch</span>
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-slate-700">
+                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                  </svg>
+                  Create from Scratch
                 </button>
               </div>
             </div>
@@ -1971,16 +1970,16 @@ export default function PublicBuilder() {
           {/* Dedicated ATS Checking Workflow View */}
           {step === 'idle' && mode === 'ats' && (
             <div className="max-w-2xl mx-auto space-y-6">
-              <div className="rounded-2xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-sm">
+              <div className="card p-6 sm:p-8 border-slate-200 shadow-sm bg-white">
                 <div className="text-center">
-                  <div className="mx-auto mb-3.5 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 border border-brand-100 shadow-xs">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-7 w-7">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6">
                       <path d="M9 12l2 2 4-4m5.6 1.2A8.5 8.5 0 113.4 13.2a8.5 8.5 0 0117.2-4z" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </div>
                   <h2 className="text-2xl font-bold text-slate-900">Check ATS Score</h2>
                   <p className="text-sm text-slate-600 mt-1 max-w-md mx-auto">
-                    Upload your CV and get an instant ATS compatibility score with a comprehensive 9-dimension breakdown.
+                    Upload your CV and get an ATS compatibility score with a detailed 9-dimension breakdown.
                   </p>
                 </div>
 
@@ -1989,10 +1988,10 @@ export default function PublicBuilder() {
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
-                  className={`mt-6 group flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-8 text-center transition-all duration-200 cursor-pointer ${
+                  className={`mt-6 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-8 text-center transition cursor-pointer ${
                     isDragging
-                      ? 'border-brand-500 bg-brand-50/60 scale-[0.99]'
-                      : 'border-slate-300 hover:border-brand-500 bg-slate-50/60 hover:bg-slate-50'
+                      ? 'border-brand-500 bg-brand-50/50'
+                      : 'border-slate-300 hover:border-brand-400 bg-slate-50/50'
                   }`}
                   onClick={() => fileInputRef.current?.click()}
                 >
@@ -2006,19 +2005,19 @@ export default function PublicBuilder() {
                       if (file) void handleFileSelect(file);
                     }}
                   />
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white border border-slate-200/80 text-brand-600 mb-3.5 shadow-xs group-hover:scale-105 group-hover:border-brand-300 transition-transform duration-200">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 mb-3 shadow-sm">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-7 w-7">
                       <path d="M9 17v-6m4 6V7m4 10v-3M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </div>
-                  <p className="text-base font-bold text-slate-900 group-hover:text-brand-700 transition-colors">
+                  <p className="text-base font-bold text-slate-900">
                     Click to select file or drag &amp; drop here
                   </p>
-                  <p className="mt-1.5 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-slate-500">
                     Supports <span className="font-semibold text-slate-700">PDF, DOCX, TXT</span> documents up to <span className="font-semibold text-slate-700">8 MB</span>
                   </p>
                   {selectedFileName && (
-                    <div className="mt-3.5 inline-flex items-center gap-1.5 rounded-full bg-brand-50 border border-brand-200 px-3.5 py-1 text-xs font-semibold text-brand-800 animate-fade-in">
+                    <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-brand-50 border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-800">
                       <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-brand-600" aria-hidden="true">
                         <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
                       </svg>
@@ -2028,9 +2027,9 @@ export default function PublicBuilder() {
                 </div>
 
                 {/* 1-Click Sample CV Action */}
-                <div className="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-brand-200/90 bg-gradient-to-r from-brand-50/80 to-indigo-50/60 p-4 text-center sm:text-left transition hover:border-brand-300">
+                <div className="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-brand-50/70 p-4 text-center sm:text-left transition hover:bg-brand-50">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-xs font-bold text-base" aria-hidden="true">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm font-bold text-base" aria-hidden="true">
                       ⚡
                     </div>
                     <div>
@@ -2045,7 +2044,7 @@ export default function PublicBuilder() {
                     onClick={() => {
                       void handleLoadSampleCv('ats');
                     }}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl border border-brand-600 bg-white px-4 py-2.5 text-xs font-bold text-brand-700 shadow-xs transition hover:bg-brand-600 hover:text-white active:scale-95 shrink-0"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl border border-brand-600 bg-white px-4 py-2 text-xs font-bold text-brand-800 shadow-sm transition hover:bg-brand-600 hover:text-white active:scale-95 shrink-0"
                   >
                     <span>Check Sample CV Score</span>
                     <span aria-hidden="true">&rarr;</span>
@@ -2054,17 +2053,17 @@ export default function PublicBuilder() {
 
                 {/* What Gets Audited Breakdown preview banner */}
                 <div className="mt-6 border-t border-slate-100 pt-5 text-xs text-slate-500">
-                  <p className="font-bold text-slate-700 mb-2.5">9 ATS Dimensions Evaluated:</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-[11px] text-slate-600">
-                    <span className="flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 border border-slate-100"><span>📄</span> Parsing &amp; Readability</span>
-                    <span className="flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 border border-slate-100"><span>📊</span> Metric Quantification</span>
-                    <span className="flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 border border-slate-100"><span>🔄</span> Phrasing &amp; Repetition</span>
-                    <span className="flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 border border-slate-100"><span>✍️</span> Spelling &amp; Grammar</span>
-                    <span className="flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 border border-slate-100"><span>📏</span> Visual Consistency</span>
-                    <span className="flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 border border-slate-100"><span>📑</span> Standard Sections</span>
-                    <span className="flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 border border-slate-100"><span>🎯</span> Essential Info</span>
-                    <span className="flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 border border-slate-100"><span>👀</span> Recruiter Scan</span>
-                    <span className="flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 border border-slate-100"><span>🤝</span> Inclusivity &amp; Safety</span>
+                  <p className="font-bold text-slate-700 mb-2">9 ATS Dimensions Evaluated:</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] text-slate-600">
+                    <span className="flex items-center gap-1"><span>📄</span> Parsing &amp; Readability</span>
+                    <span className="flex items-center gap-1"><span>📊</span> Metric Quantification</span>
+                    <span className="flex items-center gap-1"><span>🔄</span> Phrasing &amp; Repetition</span>
+                    <span className="flex items-center gap-1"><span>✍️</span> Spelling &amp; Grammar</span>
+                    <span className="flex items-center gap-1"><span>📏</span> Visual Consistency</span>
+                    <span className="flex items-center gap-1"><span>📑</span> Standard Sections</span>
+                    <span className="flex items-center gap-1"><span>🎯</span> Essential Info</span>
+                    <span className="flex items-center gap-1"><span>👀</span> Recruiter Scan</span>
+                    <span className="flex items-center gap-1"><span>🤝</span> Inclusivity &amp; Safety</span>
                   </div>
                 </div>
               </div>
@@ -2074,16 +2073,11 @@ export default function PublicBuilder() {
           {/* Option 1: Improve Existing CV View */}
           {step === 'idle' && mode === 'improve' && (
             <div className="max-w-2xl mx-auto space-y-6">
-              <div className="rounded-2xl border border-slate-200/90 bg-white p-6 sm:p-8 shadow-sm">
+              <div className="card p-6 sm:p-8 border-slate-200 shadow-sm bg-white">
                 <div className="text-center">
-                  <div className="mx-auto mb-3.5 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-xs">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-7 w-7">
-                      <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
                   <h2 className="text-2xl font-bold text-slate-900">Upload Your Resume</h2>
-                  <p className="text-sm text-slate-600 mt-1 max-w-md mx-auto">
-                    Upload your current CV to extract verified facts and enhance it with grounded AI rewriting.
+                  <p className="text-sm text-slate-600 mt-1">
+                    Upload your current CV to automatically extract facts and tailor it with fact-grounded AI.
                   </p>
                 </div>
 
@@ -2092,10 +2086,10 @@ export default function PublicBuilder() {
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
-                  className={`mt-6 group flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-8 text-center transition-all duration-200 cursor-pointer ${
+                  className={`mt-6 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-8 text-center transition cursor-pointer ${
                     isDragging
-                      ? 'border-brand-500 bg-brand-50/60 scale-[0.99]'
-                      : 'border-slate-300 hover:border-brand-500 bg-slate-50/60 hover:bg-slate-50'
+                      ? 'border-brand-500 bg-brand-50/50'
+                      : 'border-slate-300 hover:border-brand-400 bg-slate-50/50'
                   }`}
                   onClick={() => fileInputRef.current?.click()}
                 >
@@ -2109,19 +2103,19 @@ export default function PublicBuilder() {
                       if (file) void handleFileSelect(file);
                     }}
                   />
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white border border-slate-200/80 text-indigo-600 mb-3.5 shadow-xs group-hover:scale-105 group-hover:border-indigo-300 transition-transform duration-200">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 mb-3 shadow-sm">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-7 w-7">
                       <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </div>
-                  <p className="text-base font-bold text-slate-900 group-hover:text-brand-700 transition-colors">
+                  <p className="text-base font-bold text-slate-900">
                     Click to select file or drag &amp; drop here
                   </p>
-                  <p className="mt-1.5 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-slate-500">
                     Supports <span className="font-semibold text-slate-700">PDF, DOCX, TXT</span> documents up to <span className="font-semibold text-slate-700">8 MB</span>
                   </p>
                   {selectedFileName && (
-                    <div className="mt-3.5 inline-flex items-center gap-1.5 rounded-full bg-brand-50 border border-brand-200 px-3.5 py-1 text-xs font-semibold text-brand-800 animate-fade-in">
+                    <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-brand-50 border border-brand-200 px-3 py-1 text-xs font-semibold text-brand-800">
                       <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-brand-600" aria-hidden="true">
                         <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
                       </svg>
@@ -2131,9 +2125,9 @@ export default function PublicBuilder() {
                 </div>
 
                 {/* 1-Click Sample CV Action */}
-                <div className="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-brand-200/90 bg-gradient-to-r from-brand-50/80 to-indigo-50/60 p-4 text-center sm:text-left transition hover:border-brand-300">
+                <div className="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-brand-50/70 p-4 text-center sm:text-left transition hover:bg-brand-50">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-xs font-bold text-base" aria-hidden="true">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm font-bold text-base" aria-hidden="true">
                       ⚡
                     </div>
                     <div>
@@ -2146,7 +2140,7 @@ export default function PublicBuilder() {
                   <button
                     type="button"
                     onClick={handleLoadSampleCv}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl border border-brand-600 bg-white px-4 py-2.5 text-xs font-bold text-brand-700 shadow-xs transition hover:bg-brand-600 hover:text-white active:scale-95 shrink-0"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl border border-brand-600 bg-white px-4 py-2 text-xs font-bold text-brand-800 shadow-sm transition hover:bg-brand-600 hover:text-white active:scale-95 shrink-0"
                   >
                     <span>Try with a Sample CV</span>
                     <span aria-hidden="true">&rarr;</span>
@@ -2744,7 +2738,7 @@ export default function PublicBuilder() {
               )}
 
               {/* Workspace Top Control Panel */}
-              <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              <div className="card p-6 bg-white border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                 <div className="flex items-center gap-5">
                   {ats && (
                     <ScoreRing
@@ -2755,7 +2749,7 @@ export default function PublicBuilder() {
                   )}
                   <div>
                     <h2 className="text-2xl font-bold text-slate-900">{resume.personal.fullName}</h2>
-                    <p className="text-sm text-slate-500 font-medium">{resume.personal.headline || 'Resume Ready'}</p>
+                    <p className="text-sm text-slate-500">{resume.personal.headline || 'Resume Ready'}</p>
                     <div className="mt-2.5 flex flex-wrap gap-2 items-center">
                       {truthBadge && (
                         <span
@@ -2787,7 +2781,7 @@ export default function PublicBuilder() {
                       id="template-select"
                       value={selectedTemplate}
                       onChange={(e) => setSelectedTemplate(e.target.value)}
-                      className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs font-semibold text-slate-700 focus:bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition"
+                      className="input py-2 text-xs font-semibold text-slate-700 bg-slate-50 border-slate-300"
                     >
                       {TEMPLATES.map((t) => (
                         <option key={t.id} value={t.id}>
@@ -2801,7 +2795,7 @@ export default function PublicBuilder() {
                       id="margin-density-select"
                       value={selectedMarginDensity}
                       onChange={(e) => setSelectedMarginDensity(e.target.value as 'compact' | 'normal' | 'spacious')}
-                      className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs font-semibold text-slate-700 focus:bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition"
+                      className="input py-2 text-xs font-semibold text-slate-700 bg-slate-50 border-slate-300"
                     >
                       <option value="compact">Spacing: Compact (1-Page)</option>
                       <option value="normal">Spacing: Normal (Standard)</option>
@@ -2813,7 +2807,7 @@ export default function PublicBuilder() {
                       id="page-size-select"
                       value={selectedPageSize}
                       onChange={(e) => setSelectedPageSize(e.target.value as PageSize)}
-                      className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs font-semibold text-slate-700 focus:bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition"
+                      className="input py-2 text-xs font-semibold text-slate-700 bg-slate-50 border-slate-300"
                     >
                       <option value="A4">Size: A4 (UK / Intl)</option>
                       <option value="LETTER">Size: US Letter</option>
@@ -2826,7 +2820,7 @@ export default function PublicBuilder() {
                       setTailorError(null);
                       setShowTailorModal(true);
                     }}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 shadow-2xs transition hover:bg-slate-50 hover:border-slate-300 active:scale-95"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 shadow-sm transition hover:bg-slate-50 hover:border-slate-400 active:scale-95"
                   >
                     <span className="text-amber-500 font-bold">⚡</span> Tailor to Job
                   </button>
@@ -2836,7 +2830,7 @@ export default function PublicBuilder() {
                       type="button"
                       onClick={handleSaveTailoredVersion}
                       disabled={isSavingTailored}
-                      className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-xs font-bold text-brand-700 shadow-2xs transition hover:bg-brand-100 active:scale-95"
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl border border-brand-600 bg-brand-50 px-4 py-2.5 text-xs font-bold text-brand-800 shadow-sm transition hover:bg-brand-100 active:scale-95"
                     >
                       {isSavingTailored ? (
                         <>
@@ -2857,7 +2851,7 @@ export default function PublicBuilder() {
                     type="button"
                     onClick={handleDownloadPdf}
                     disabled={isDownloading}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 hover:bg-brand-700 px-5 py-2.5 text-xs font-bold text-white shadow-xs shadow-brand-600/30 transition disabled:opacity-50 active:scale-95"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50 active:scale-95"
                   >
                     {isDownloading ? (
                       <>
@@ -2865,7 +2859,7 @@ export default function PublicBuilder() {
                       </>
                     ) : (
                       <>
-                        <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-white">
+                        <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-brand-400">
                           <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
                         </svg>
                         Download ATS-Friendly PDF
@@ -2875,7 +2869,7 @@ export default function PublicBuilder() {
                   <button
                     type="button"
                     onClick={() => setIsEmailModalOpen(true)}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-2xs transition hover:bg-slate-50 cursor-pointer"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-xs transition hover:bg-slate-50 cursor-pointer"
                     title="Send a private copy of this CV to your email address"
                   >
                     <span>✉️</span> Email CV to Me
@@ -2897,15 +2891,15 @@ export default function PublicBuilder() {
               />
 
               {/* Workspace Navigation Tabs */}
-              <div className="flex border-b border-slate-200/90 gap-1 overflow-x-auto">
+              <div className="flex border-b border-slate-200 gap-2 overflow-x-auto">
                 {/* On mobile (< lg): Tab 1 is Document Preview */}
                 <button
                   type="button"
                   onClick={() => setActiveTab('preview')}
-                  className={`lg:hidden px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors duration-150 ${
+                  className={`lg:hidden px-4 py-2 text-sm font-bold border-b-2 whitespace-nowrap transition ${
                     activeTab === 'preview'
-                      ? 'border-brand-600 text-brand-700'
-                      : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                      ? 'border-slate-900 text-slate-900'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
                   Document Preview
@@ -2914,10 +2908,10 @@ export default function PublicBuilder() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('edit')}
-                  className={`lg:hidden px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors duration-150 ${
+                  className={`lg:hidden px-4 py-2 text-sm font-bold border-b-2 whitespace-nowrap transition ${
                     activeTab === 'edit'
-                      ? 'border-brand-600 text-brand-700'
-                      : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                      ? 'border-slate-900 text-slate-900'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
                   Edit Content
@@ -2927,13 +2921,13 @@ export default function PublicBuilder() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('preview')}
-                  className={`hidden lg:inline-flex items-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors duration-150 ${
+                  className={`hidden lg:inline-flex items-center gap-1.5 px-4 py-2 text-sm font-bold border-b-2 whitespace-nowrap transition ${
                     activeTab === 'preview' || activeTab === 'edit'
-                      ? 'border-brand-600 text-brand-700'
-                      : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                      ? 'border-slate-900 text-slate-900'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  <svg className="w-4 h-4 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <svg className="w-4 h-4 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
                   </svg>
                   Editor &amp; Live Preview
@@ -2942,10 +2936,10 @@ export default function PublicBuilder() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('ats')}
-                  className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors duration-150 ${
+                  className={`px-4 py-2 text-sm font-bold border-b-2 whitespace-nowrap transition ${
                     activeTab === 'ats'
-                      ? 'border-brand-600 text-brand-700'
-                      : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                      ? 'border-slate-900 text-slate-900'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
                   Advanced ATS Audit {ats && `(${ats.audit ? ats.audit.overallScore : ats.overallScore}/100)`}
@@ -2953,10 +2947,10 @@ export default function PublicBuilder() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('match')}
-                  className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors duration-150 ${
+                  className={`px-4 py-2 text-sm font-bold border-b-2 whitespace-nowrap transition ${
                     activeTab === 'match'
-                      ? 'border-brand-600 text-brand-700'
-                      : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                      ? 'border-slate-900 text-slate-900'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
                   Job Match {match ? `(${match.score}%)` : ''}
@@ -2964,10 +2958,10 @@ export default function PublicBuilder() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('cover')}
-                  className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors duration-150 flex items-center gap-1.5 ${
+                  className={`px-4 py-2 text-sm font-bold border-b-2 whitespace-nowrap transition flex items-center gap-1.5 ${
                     activeTab === 'cover'
-                      ? 'border-brand-600 text-brand-700'
-                      : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                      ? 'border-slate-900 text-slate-900'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
                   <span>✉️</span>
@@ -2976,10 +2970,10 @@ export default function PublicBuilder() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('truth')}
-                  className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors duration-150 ${
+                  className={`px-4 py-2 text-sm font-bold border-b-2 whitespace-nowrap transition ${
                     activeTab === 'truth'
-                      ? 'border-brand-600 text-brand-700'
-                      : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                      ? 'border-slate-900 text-slate-900'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
                   Truth Guard™ Audit
@@ -2988,10 +2982,10 @@ export default function PublicBuilder() {
                   <button
                     type="button"
                     onClick={() => setActiveTab('changelog')}
-                    className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors duration-150 ${
+                    className={`px-4 py-2 text-sm font-bold border-b-2 whitespace-nowrap transition ${
                       activeTab === 'changelog'
-                        ? 'border-brand-600 text-brand-700'
-                        : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                        ? 'border-slate-900 text-slate-900'
+                        : 'border-transparent text-slate-500 hover:text-slate-800'
                     }`}
                   >
                     AI Changes ({changeLog.length})
