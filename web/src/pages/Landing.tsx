@@ -252,7 +252,7 @@ export default function Landing() {
             {/* Pill Badge */}
             <p className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3.5 py-1 text-xs font-semibold text-brand-700">
               <span className="h-2 w-2 rounded-full bg-brand-500 animate-pulse" aria-hidden="true" />
-              Curevo AI • 100% In-Memory • Truthful AI Engine
+              <span><span className="text-[#17212B] font-bold">Curevo</span> <span className="text-[#10B981] font-bold">AI</span> • 100% In-Memory • Truthful AI Engine</span>
             </p>
 
             {/* Main Headline with Purple Gradient Accent */}
@@ -329,7 +329,7 @@ export default function Landing() {
                 <div className="flex items-center gap-2">
                   <div className="h-2 w-2 rounded-full bg-emerald-500" />
                   <span className="text-[11px] font-bold uppercase tracking-wider text-ink-500">
-                    Sample CV · Formatted with Curevo AI
+                    Sample CV · Formatted with <span className="text-[#17212B]">Curevo</span> <span className="text-[#10B981]">AI</span>
                   </span>
                 </div>
                 <span className="chip bg-brand-50 text-brand-700 border border-brand-200 text-[10px] font-semibold">
@@ -589,7 +589,7 @@ export default function Landing() {
                     </p>
                   </div>
                   <span className="chip bg-brand-50 text-brand-700 border border-brand-200 text-xs font-semibold">
-                    Curevo AI Metric
+                    <span className="text-[#17212B]">Curevo</span> <span className="text-[#10B981]">AI</span> Metric
                   </span>
                 </div>
 

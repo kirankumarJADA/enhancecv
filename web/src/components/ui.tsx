@@ -3,15 +3,15 @@ import type { ReactNode } from 'react';
 export function Logo({ className = '', light = false }: { className?: string; light?: boolean }) {
   return (
     <span className={`inline-flex items-center gap-2.5 ${className}`}>
-      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white shadow-sm">
-        <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M19 8.5A6.5 6.5 0 1 0 19 15.5" />
-          <circle cx="19" cy="8.5" r="1.5" fill="currentColor" />
-          <circle cx="19" cy="15.5" r="1.5" fill="currentColor" />
-        </svg>
-      </span>
-      <span className={`text-lg font-bold tracking-tight ${light ? 'text-white' : 'text-ink-900'}`}>
-        Curevo <span className="text-brand-600">AI</span>
+      <img
+        src="/curevo-symbol.png"
+        alt="Curevo AI symbol"
+        className="h-8 w-8 object-contain shrink-0"
+        aria-hidden="true"
+      />
+      <span className="text-lg font-semibold tracking-tight inline-flex items-center">
+        <span className={light ? 'text-white' : 'text-[#17212B]'}>Curevo</span>
+        <span className="text-[#10B981] ml-1">AI</span>
       </span>
     </span>
   );
