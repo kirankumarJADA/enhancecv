@@ -27,36 +27,103 @@ const HOW_IT_WORKS = [
   },
 ];
 
-const FEATURES = [
+const TRUST_PILLARS = [
   {
-    title: 'Intelligent AI Engine',
-    body: 'Powered by our advanced AI Engine for intelligent structural rewriting, keyword optimization, and achievement phrasing.',
-    icon: 'M13 10V3L4 14h7v7l9-11h-7z',
+    title: '100% Free Public Access',
+    desc: 'No credit card, no monthly subscription, and no paywalls. All builder tools and exports are completely open.',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5 text-brand-600" aria-hidden="true">
+        <path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
   },
   {
-    title: 'Truth Guard™ Verification',
-    body: 'Factual grounding checks. Generated skills, technologies, and quantitative metrics are algorithmically verified against your source CV tokens; bullets with unevidenced technologies or fabricated numbers are automatically repaired or reverted to original wording.',
-    icon: 'M9 12l2 2 4-4m5.6 1.2A8.5 8.5 0 113.4 13.2a8.5 8.5 0 0117.2-4z',
+    title: 'Zero Database Retention',
+    desc: 'Purely in-memory and client-side draft storage. We never store your resume or personal details in a database.',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5 text-brand-600" aria-hidden="true">
+        <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
   },
   {
     title: 'Deterministic ATS Scoring',
-    body: 'Transparent 0–100 compatibility score evaluating formatting, content, structure, skills, and readability derived from implemented ATS parser rules.',
-    icon: 'M9 17v-6m4 6V7m4 10v-3M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z',
+    desc: 'Transparent 0–100 score evaluating formatting, structure, skills, and readability derived from implemented ATS rules.',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5 text-brand-600" aria-hidden="true">
+        <path d="M9 17v-6m4 6V7m4 10v-3M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
   },
   {
-    title: '100% In-Memory Privacy',
-    body: 'No login, no password, and zero database persistence. All resume processing occurs ephemerally in React memory and server worker sandbox.',
-    icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
+    title: 'Intelligent AI Engine',
+    desc: 'Transforms passive phrasing into high-impact Google XYZ achievements with tailored keywords for target roles.',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5 text-brand-600" aria-hidden="true">
+        <path d="M13 10V3L4 14h7v7l9-11h-7z" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
   },
   {
-    title: '6 ATS-Safe PDF Templates',
-    body: 'Classic, Modern, Minimal, Professional, Technical, and Executive templates designed strictly with ATS-parseable single-column margins and standard fonts.',
-    icon: 'M12 10v6m-3-3h6m-9 8h12a2 2 0 002-2V7l-5-5H6a2 2 0 00-2 2v14a2 2 0 002 2z',
+    title: 'Truth Guard™ Verification',
+    desc: 'Factual grounding checks automatically revert any unevidenced technologies or fabricated statistics.',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5 text-brand-600" aria-hidden="true">
+        <path d="M9 12l2 2 4-4m5.6 1.2A8.5 8.5 0 113.4 13.2a8.5 8.5 0 0117.2-4z" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+];
+
+const CAREER_TOOLS = [
+  {
+    title: 'CV Builder & Rebuilder',
+    desc: 'Build from scratch or upload your existing document. Choose between 6 ATS-safe clean single-column templates.',
+    link: '/builder',
+    badge: 'Core Builder',
+    icon: '📄',
   },
   {
-    title: 'Instant Binary PDF Delivery',
-    body: 'Download high-resolution, machine-readable PDFs generated natively on the server with clean text layers parsers can ingest without OCR errors.',
-    icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4',
+    title: 'ATS Compatibility Checker',
+    desc: 'Instantly score your resume against real-world ATS parsing algorithms and get actionable bullet fixes.',
+    link: '/builder?mode=ats',
+    badge: 'Scoring',
+    icon: '🎯',
+  },
+  {
+    title: 'Prepare Application Stepper',
+    desc: 'Step-by-step orchestrator matching your CV directly to any target job description with a tailored cover letter.',
+    link: '/prepare-application',
+    badge: 'Orchestrator',
+    icon: '🚀',
+  },
+  {
+    title: 'Job Search & Matches',
+    desc: 'Search tech jobs in the UK, US, and Europe and see automated keyword match percentages for your CV.',
+    link: '/jobs',
+    badge: 'Discovery',
+    icon: '🔍',
+  },
+  {
+    title: 'Application Kanban Tracker',
+    desc: 'Organize your job hunt across Wishlist, Applied, Interview, Offer, and Rejected without external spreadsheets.',
+    link: '/applications',
+    badge: 'Productivity',
+    icon: '📋',
+  },
+  {
+    title: 'AI Interview Practice Coach',
+    desc: 'Simulate technical and behavioral interviews with real-time feedback and structured STAR story generation.',
+    link: '/interview',
+    badge: 'Coaching',
+    icon: '🎙️',
+  },
+  {
+    title: 'LinkedIn Profile Optimizer',
+    desc: 'Transform your CV into an engaging LinkedIn headline, about section, and recruiter-visible keyword profile.',
+    link: '/linkedin',
+    badge: 'Branding',
+    icon: '💼',
   },
 ];
 
@@ -66,7 +133,7 @@ const FAQS = [
     a: 'Yes. Curevo AI is 100% free with no account creation, no password resets, no credit card, and no paywalls. Both the existing CV rebuild flow and the create from scratch builder are available to everyone immediately.',
   },
   {
-    q: 'How does Truth Guard protect factual grounding?',
+    q: 'How does Truth Guard™ protect factual grounding?',
     a: 'Traditional AI resume tools often hallucinate technologies or invent statistics that fail during background checks or interviews. Curevo AI enforces a strict Truth Guard engine: proposed bullets are checked for unevidenced technologies and new numeric metrics. Any bullet introducing ungrounded tools or fabricated numbers is automatically reverted to your original source CV text.',
   },
   {
@@ -92,47 +159,72 @@ export default function Landing() {
       {/* Top Navigation */}
       <Navbar onOpenPrivacy={() => setPrivacyModalOpen(true)} ctaText="Start Building Free" ctaLink="/builder" />
 
-      {/* Hero Section — Original EnhanceCV Split-Hero Layout */}
+      {/* Hero Section — Enhancv-Inspired Split Hero */}
       <section className="relative overflow-hidden border-b border-ink-100 bg-white">
-        {/* Soft Ambient Glows from 503b246 */}
-        <div className="pointer-events-none absolute -top-32 right-0 h-96 w-96 rounded-full bg-brand-50 blur-3xl opacity-80" aria-hidden="true" />
-        <div className="pointer-events-none absolute top-40 -left-24 h-72 w-72 rounded-full bg-brand-100/40 blur-3xl" aria-hidden="true" />
+        {/* Soft Pastel Ambient Glows */}
+        <div className="pointer-events-none absolute -top-40 right-10 h-[500px] w-[500px] rounded-full bg-brand-50 blur-3xl opacity-70" aria-hidden="true" />
+        <div className="pointer-events-none absolute top-48 -left-20 h-80 w-80 rounded-full bg-purple-50 blur-3xl opacity-60" aria-hidden="true" />
+        <div className="pointer-events-none absolute bottom-10 right-1/4 h-72 w-72 rounded-full bg-sky-50 blur-3xl opacity-50" aria-hidden="true" />
 
-        <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:py-24 relative">
-          <div>
+        <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-12 lg:py-24 relative">
+          {/* Left Column: Headline, Copy, CTAs, Trust Row (col-span-7) */}
+          <div className="lg:col-span-7 space-y-6">
             {/* Pill Badge */}
-            <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3.5 py-1 text-xs font-semibold text-brand-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-600" aria-hidden="true" />
+            <p className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3.5 py-1 text-xs font-semibold text-brand-700">
+              <span className="h-2 w-2 rounded-full bg-brand-500 animate-pulse" aria-hidden="true" />
               Curevo AI • 100% In-Memory • Truthful AI Engine
             </p>
 
-            {/* Main Headline */}
-            <h1 className="text-4xl font-extrabold leading-[1.1] tracking-tight text-ink-900 sm:text-5xl lg:text-[3.4rem]">
-              Build a better CV for every job.
+            {/* Main Headline with Purple Highlight */}
+            <h1 className="text-4xl font-extrabold leading-[1.12] tracking-tight text-ink-900 sm:text-5xl lg:text-[3.5rem]">
+              Land More Interviews{' '}
+              <span className="text-purple-600 block sm:inline">with a CV built for every opportunity.</span>
             </h1>
 
             {/* Subtitle */}
-            <p className="mt-5 max-w-xl text-lg leading-relaxed text-ink-600">
-              Upload your CV, let our AI Engine optimize your experience with the Google XYZ formula, and download a verified ATS-compliant resume with zero login and strict Truth Guard™ protection.
+            <p className="max-w-xl text-lg leading-relaxed text-ink-600">
+              Build your CV with AI, check its ATS compatibility, and tailor it to the jobs you want — all with strict factual grounding and zero sign-up required.
             </p>
 
             {/* CTA Buttons */}
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Link to="/builder?mode=ats" className="btn-primary px-6 py-3 text-base">
-                Check ATS Score — Free
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <Link
+                to="/builder?mode=create"
+                className="btn-primary px-7 py-3.5 text-base font-bold shadow-sm"
+              >
+                Build Your CV →
               </Link>
-              <Link to="/builder?mode=improve" className="btn-secondary px-6 py-3 text-base">
-                Improve Existing CV
+              <Link
+                to="/builder?mode=ats"
+                className="btn-secondary px-6 py-3.5 text-base font-semibold shadow-xs"
+              >
+                Check Your CV Score
               </Link>
             </div>
 
-            <p className="mt-3 text-sm text-ink-500">
-              No credit card or login required. Your source CV facts are never modified without proof.
-            </p>
+            {/* Trust Row */}
+            <div className="pt-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-ink-600 font-medium">
+              <div className="flex items-center gap-1.5">
+                <span className="text-brand-600 font-bold">✓</span>
+                <span>No sign-up required</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-brand-600 font-bold">✓</span>
+                <span>ATS analysis</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-brand-600 font-bold">✓</span>
+                <span>AI bullet engine</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-brand-600 font-bold">✓</span>
+                <span>Truth Guard™ verified</span>
+              </div>
+            </div>
 
             {/* Quick 1-Click Sample CV Test-Drive Link */}
-            <div className="mt-6">
-              <div className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50/80 px-4 py-2 text-xs font-medium text-ink-800 shadow-xs transition hover:bg-brand-100/80">
+            <div className="pt-1">
+              <div className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50/70 px-4 py-2 text-xs font-medium text-ink-800 transition hover:bg-brand-100/80">
                 <span className="font-semibold text-brand-700">Want to explore without uploading?</span>
                 <Link
                   to="/builder?sample=true"
@@ -145,73 +237,178 @@ export default function Landing() {
             </div>
           </div>
 
-          {/* Right Column: Original EnhanceCV Floating Interactive Match Card */}
-          <div className="relative mx-auto w-full max-w-lg" aria-hidden="true">
-            {/* Primary Job Match Card */}
-            <div className="card rotate-1 p-6 pb-14 shadow-lift transition hover:rotate-0 duration-300">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Illustrative Job Match</p>
-                  <p className="text-lg font-bold text-ink-900">Senior Java Backend Engineer</p>
-                  <p className="text-sm text-ink-500">Benchmark Role · Tech Ecosystem</p>
+          {/* Right Column: Realistic Floating CV Document Hero Preview (col-span-5) */}
+          <div className="lg:col-span-5 relative flex justify-center">
+            {/* Ambient Multi-Hue Glow Behind the CV */}
+            <div className="pointer-events-none absolute inset-0 -m-6 rounded-3xl bg-gradient-to-tr from-brand-100/60 via-purple-100/40 to-sky-100/50 blur-2xl -z-10" aria-hidden="true" />
+
+            {/* The Floating CV Paper */}
+            <div className="w-full max-w-[420px] rounded-xl bg-white p-6 sm:p-7 shadow-resume ring-1 ring-ink-100 transition-transform duration-300 hover:-translate-y-1">
+              {/* Top Banner Tag */}
+              <div className="flex items-center justify-between border-b border-ink-100 pb-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-ink-500">
+                    Curevo AI Verified CV
+                  </span>
                 </div>
-                <div className="relative inline-flex h-20 w-20 items-center justify-center rounded-full border-[6px] border-emerald-500 bg-white shadow-xs">
-                  <span className="text-xl font-extrabold text-ink-900">84</span>
-                </div>
+                <span className="chip bg-brand-50 text-brand-700 border border-brand-200 text-[10px] font-semibold">
+                  ATS Score: 92/100
+                </span>
               </div>
 
-              <div className="mt-5 space-y-2 text-sm">
-                <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2 border border-emerald-100">
-                  <span className="font-medium text-emerald-800">Java, Spring Boot, REST APIs</span>
-                  <span className="chip bg-emerald-100 text-emerald-800 text-xs">Matched</span>
-                </div>
-                <div className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 border border-amber-100">
-                  <span className="font-medium text-amber-800">Microservices, CI/CD</span>
-                  <span className="chip bg-amber-100 text-amber-800 text-xs">Partial</span>
-                </div>
-                <div className="flex items-center justify-between rounded-lg bg-red-50 px-3 py-2 border border-red-100">
-                  <span className="font-medium text-red-800">AWS, Kubernetes, Terraform</span>
-                  <span className="chip bg-red-100 text-red-800 text-xs">Missing</span>
-                </div>
-              </div>
-
-              <div className="mt-5 rounded-xl border border-ink-100 bg-ink-50 p-3.5">
-                <p className="text-xs font-semibold text-ink-700 tracking-wide uppercase">Truth Guard™ Audit</p>
-                <p className="mt-1.5 text-xs text-ink-600">
-                  ✓ Supported by Source CV · ✓ Supported by Source CV · ✓ Reverted 1 unevidenced claim
+              {/* Candidate Header */}
+              <div>
+                <h2 className="text-xl font-extrabold text-ink-900 tracking-tight">Sarah Jenkins</h2>
+                <p className="text-xs font-bold text-purple-600 mt-0.5">
+                  Senior Product Designer &amp; Design Systems Lead
+                </p>
+                <p className="text-[11px] text-ink-400 mt-1">
+                  London, UK • sarah.jenkins@example.com • linkedin.com/in/sarahjenkins
                 </p>
               </div>
-            </div>
 
-            {/* Overlapping Floating ATS Card */}
-            <div className="card absolute top-8 right-0 w-44 -rotate-3 p-4 shadow-lift border border-ink-100 bg-white">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">ATS Compatibility</p>
-              <p className="mt-1 text-2xl font-extrabold text-ink-900">
-                74<span className="text-sm font-medium text-ink-400">/100</span>
-              </p>
-              <div className="mt-2 h-1.5 w-full rounded-full bg-ink-100 overflow-hidden">
-                <div className="h-full w-3/4 rounded-full bg-brand-600" />
+              {/* Professional Summary */}
+              <div className="mt-4 pt-3 border-t border-ink-100">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-ink-400">
+                  Professional Summary
+                </p>
+                <p className="mt-1 text-xs text-ink-600 leading-relaxed">
+                  Strategic Product Designer with 7+ years orchestrating design systems and multi-platform SaaS experiences. Proven track record increasing enterprise adoption and design-to-code velocity using scalable component libraries and rigorous accessibility standards.
+                </p>
+              </div>
+
+              {/* Core Skills Chips */}
+              <div className="mt-4 pt-3 border-t border-ink-100">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-ink-400">
+                  Core Competencies
+                </p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {['Design Systems', 'Figma & Tokens', 'User Research', 'React & CSS', 'ATS Compliance', 'Information Architecture'].map((skill) => (
+                    <span key={skill} className="rounded-md bg-ink-50 px-2 py-0.5 text-[10px] font-medium text-ink-700 border border-ink-200/60">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Experience Snippet */}
+              <div className="mt-4 pt-3 border-t border-ink-100">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-ink-400">
+                  Experience
+                </p>
+
+                <div className="mt-2 space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-ink-900">Lead Product Designer</span>
+                      <span className="text-[11px] text-ink-400">2022 – Present</span>
+                    </div>
+                    <p className="text-[11px] text-brand-700 font-semibold">Monolith Financial • London</p>
+                    <ul className="mt-1 space-y-1 text-[11px] text-ink-600">
+                      <li className="flex items-start gap-1.5">
+                        <span className="text-emerald-500 font-bold">•</span>
+                        <span>Spearheaded unified design system across 4 web apps, reducing component delivery time by 38%.</span>
+                      </li>
+                      <li className="flex items-start gap-1.5">
+                        <span className="text-emerald-500 font-bold">•</span>
+                        <span>Redesigned onboarding funnel resulting in a 24% boost in customer conversion across 450k monthly active users.</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-ink-900">Senior UI/UX Designer</span>
+                      <span className="text-[11px] text-ink-400">2019 – 2022</span>
+                    </div>
+                    <p className="text-[11px] text-brand-700 font-semibold">Vantage Scale • Manchester</p>
+                    <ul className="mt-1 space-y-1 text-[11px] text-ink-600">
+                      <li className="flex items-start gap-1.5">
+                        <span className="text-emerald-500 font-bold">•</span>
+                        <span>Architected scalable design token pipeline adopted by 40+ cross-functional engineers.</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* Education */}
+              <div className="mt-4 pt-3 border-t border-ink-100">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-ink-400">
+                  Education &amp; Credentials
+                </p>
+                <div className="mt-1 text-[11px] text-ink-700 flex justify-between">
+                  <span className="font-medium">BSc (Hons) Human-Computer Interaction</span>
+                  <span className="text-ink-400">Univ. of Manchester</span>
+                </div>
+                <div className="mt-0.5 text-[11px] text-ink-700 flex justify-between">
+                  <span className="font-medium">NN/g UX Master Certified</span>
+                  <span className="text-ink-400">Credential #9482</span>
+                </div>
+              </div>
+
+              {/* Floating Bottom Stamp */}
+              <div className="mt-4 pt-3 border-t border-dashed border-ink-200 flex items-center justify-between text-[11px]">
+                <span className="text-ink-400">Single-Column Standard Layout</span>
+                <span className="font-semibold text-brand-700 flex items-center gap-1">
+                  <span>✓</span> 100% Parseable PDF
+                </span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* How it works */}
-      <section id="how" className="border-t border-ink-100 bg-ink-50/60 py-20">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <h2 className="section-heading text-center">From raw CV to tailored resume in four steps</h2>
-          <p className="mx-auto mt-3 max-w-2xl text-center text-ink-600">
-            Curevo AI is built on one foundational principle: your real experience is the single source of truth. Analysis and tailoring work for you — our AI Engine never invents for you.
-          </p>
+      {/* Section 2: Trust Pillars & Core Guarantees */}
+      <section className="py-16 bg-ink-50/60 border-b border-ink-100">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="text-center max-w-2xl mx-auto mb-12">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-brand-600">Built for Trust</h2>
+            <p className="mt-2 text-2xl font-extrabold text-ink-900 sm:text-3xl">
+              Why job seekers choose Curevo AI
+            </p>
+            <p className="mt-2 text-sm text-ink-600">
+              Unlike ordinary resume builders that charge hidden fees or hallucinate credentials, Curevo AI is transparent and factually grounded.
+            </p>
+          </div>
 
-          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
+            {TRUST_PILLARS.map((pillar) => (
+              <div key={pillar.title} className="card p-5 transition hover:shadow-lift flex flex-col justify-between">
+                <div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 border border-brand-100 mb-4">
+                    {pillar.icon}
+                  </div>
+                  <h3 className="text-sm font-bold text-ink-900">{pillar.title}</h3>
+                  <p className="mt-2 text-xs leading-relaxed text-ink-600">{pillar.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Section 3: How it Works (4 Steps) */}
+      <section id="how" className="py-20 bg-white border-b border-ink-100">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="text-center max-w-2xl mx-auto">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-brand-600">Simple Process</h2>
+            <p className="mt-2 text-3xl font-extrabold text-ink-900 sm:text-4xl">
+              From raw CV to tailored resume in four steps
+            </p>
+            <p className="mt-3 text-base text-ink-600">
+              Curevo AI is built on one foundational principle: your real experience is the single source of truth.
+            </p>
+          </div>
+
+          <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {HOW_IT_WORKS.map((s) => (
-              <div key={s.step} className="card p-6 transition hover:shadow-lift">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white shadow-xs">
+              <div key={s.step} className="card p-6 transition hover:shadow-lift relative">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white shadow-xs">
                   {s.step}
                 </div>
-                <h3 className="mt-4 text-base font-semibold text-ink-900">{s.title}</h3>
+                <h3 className="mt-4 text-base font-bold text-ink-900">{s.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-ink-600">{s.body}</p>
               </div>
             ))}
@@ -219,79 +416,153 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* CV analysis + Job matching split (from original 503b246) */}
-      <section className="py-20 border-b border-ink-100 bg-white">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">CV analysis &amp; audit</p>
-            <h2 className="section-heading mt-2">Know your baseline before you apply</h2>
-            <p className="mt-4 text-ink-600 leading-relaxed">
-              Curevo AI’s ATS Compatibility score breaks your CV into five clear categories and shows exactly what is working and what needs improvement — with concrete rule-based recommendations, never vague hints.
+      {/* Section 4: Complete Career Suite / Tools */}
+      <section id="tools" className="py-20 bg-ink-50/50 border-b border-ink-100">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="text-center max-w-3xl mx-auto mb-14">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-brand-600">The Complete Platform</h2>
+            <p className="mt-2 text-3xl font-extrabold text-ink-900 sm:text-4xl">
+              Everything you need to navigate modern hiring
             </p>
-            <ul className="mt-6 space-y-2.5 text-sm text-ink-700">
-              {[
-                'Formatting: standard single-column headings, parseable contact block, consistent dates',
-                'Content: Google XYZ achievement bullets, action verbs, quantified outcomes',
-                'Skills: recognised industry technology tokens, organised categorization',
-                'Readability: bullet length, typographical hierarchy, clean spacing',
-              ].map((t) => (
-                <li key={t} className="flex gap-2.5 items-start">
-                  <svg viewBox="0 0 20 20" className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.7-9.3a1 1 0 00-1.4-1.4L9 10.6 7.7 9.3a1 1 0 00-1.4 1.4l2 2a1 1 0 001.4 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  <span>{t}</span>
-                </li>
-              ))}
-            </ul>
+            <p className="mt-3 text-base text-ink-600">
+              From crafting your resume to discovering matching jobs and practicing interview answers.
+            </p>
           </div>
 
-          <div className="card p-6 shadow-card">
-            <div className="flex items-center justify-between border-b border-ink-100 pb-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">ATS Compatibility Breakdown</p>
-                <p className="text-2xl font-extrabold text-ink-900">
-                  74<span className="text-sm font-medium text-ink-400"> / 100</span>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {CAREER_TOOLS.map((tool) => (
+              <Link
+                key={tool.title}
+                to={tool.link}
+                className="card p-6 transition hover:shadow-lift hover:border-brand-300 flex flex-col justify-between group"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-2xl">{tool.icon}</span>
+                    <span className="chip bg-brand-50 text-brand-700 border border-brand-200 text-xs font-semibold">
+                      {tool.badge}
+                    </span>
+                  </div>
+                  <h3 className="text-base font-bold text-ink-900 group-hover:text-brand-700 transition">
+                    {tool.title}
+                  </h3>
+                  <p className="mt-2 text-xs leading-relaxed text-ink-600">
+                    {tool.desc}
+                  </p>
+                </div>
+                <div className="mt-5 pt-3 border-t border-ink-100 flex items-center gap-1 text-xs font-bold text-brand-600 group-hover:translate-x-0.5 transition-transform">
+                  <span>Open Tool</span>
+                  <span>&rarr;</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Section 5: ATS & Job Match Workflow (Relocated Signature Cards) */}
+      <section className="py-20 bg-white border-b border-ink-100">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="text-center max-w-3xl mx-auto mb-14">
+            <span className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3.5 py-1 text-xs font-semibold text-brand-700">
+              Deterministic Matching &amp; ATS Scoring
+            </span>
+            <h2 className="mt-3 text-3xl font-extrabold text-ink-900 sm:text-4xl">
+              Inspect your match score before applying
+            </h2>
+            <p className="mt-3 text-base text-ink-600">
+              See exactly how candidate skills align with target job descriptions, verified with strict Truth Guard™ auditing.
+            </p>
+          </div>
+
+          <div className="grid items-center gap-10 lg:grid-cols-2">
+            {/* Relocated Card 1: Job Match Card (84 Score) */}
+            <div className="card p-6 shadow-lift border border-ink-100 bg-white">
+              <div className="flex items-center justify-between border-b border-ink-100 pb-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Illustrative Job Match</p>
+                  <p className="text-lg font-bold text-ink-900">Senior Java Backend Engineer</p>
+                  <p className="text-xs text-ink-500">Benchmark Role · Tech Ecosystem</p>
+                </div>
+                <div className="relative inline-flex h-16 w-16 items-center justify-center rounded-full border-[5px] border-emerald-500 bg-white shadow-xs">
+                  <span className="text-xl font-extrabold text-ink-900">84</span>
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-2 text-xs">
+                <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2 border border-emerald-100">
+                  <span className="font-medium text-emerald-800">Java, Spring Boot, REST APIs</span>
+                  <span className="chip bg-emerald-100 text-emerald-800 text-[11px]">Matched</span>
+                </div>
+                <div className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 border border-amber-100">
+                  <span className="font-medium text-amber-800">Microservices, CI/CD</span>
+                  <span className="chip bg-amber-100 text-amber-800 text-[11px]">Partial</span>
+                </div>
+                <div className="flex items-center justify-between rounded-lg bg-red-50 px-3 py-2 border border-red-100">
+                  <span className="font-medium text-red-800">AWS, Kubernetes, Terraform</span>
+                  <span className="chip bg-red-100 text-red-800 text-[11px]">Missing</span>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-xl border border-ink-100 bg-ink-50 p-3.5">
+                <p className="text-xs font-semibold text-ink-700 tracking-wide uppercase">Truth Guard™ Audit</p>
+                <p className="mt-1 text-xs text-ink-600">
+                  ✓ Supported by Source CV · ✓ Supported by Source CV · ✓ Reverted 1 unevidenced claim
                 </p>
               </div>
-              <span className="chip bg-brand-50 text-brand-700 border border-brand-200">Curevo AI metric</span>
             </div>
 
-            <div className="mt-4 space-y-3">
-              {[
-                ['Formatting', 92],
-                ['Structure', 95],
-                ['Content', 68],
-                ['Skills', 72],
-                ['Readability', 86],
-              ].map(([label, v]) => (
-                <div key={label as string} className="flex items-center gap-3">
-                  <span className="w-24 text-sm text-ink-600">{label}</span>
-                  <div className="h-2 flex-1 rounded-full bg-ink-100 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${(v as number) >= 75 ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                      style={{ width: `${v}%` }}
-                    />
-                  </div>
-                  <span className="w-8 text-right text-sm font-semibold text-ink-800">{v}</span>
+            {/* Relocated Card 2: ATS Compatibility Breakdown (74/100) */}
+            <div className="card p-6 shadow-lift border border-ink-100 bg-white">
+              <div className="flex items-center justify-between border-b border-ink-100 pb-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">ATS Compatibility Breakdown</p>
+                  <p className="text-2xl font-extrabold text-ink-900">
+                    74<span className="text-sm font-medium text-ink-400"> / 100</span>
+                  </p>
                 </div>
-              ))}
-            </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl bg-emerald-50 p-3.5 border border-emerald-100">
-                <p className="text-xs font-semibold text-emerald-800">What is working</p>
-                <p className="mt-1 text-xs text-emerald-700">Standard headings · complete contact info · consistent dates</p>
+                <span className="chip bg-brand-50 text-brand-700 border border-brand-200 text-xs font-semibold">
+                  Curevo AI Metric
+                </span>
               </div>
-              <div className="rounded-xl bg-amber-50 p-3.5 border border-amber-100">
-                <p className="text-xs font-semibold text-amber-800">Needs improvement</p>
-                <p className="mt-1 text-xs text-amber-700">Passive phrasing · generic summary · unquantified bullets</p>
+
+              <div className="mt-4 space-y-2.5">
+                {[
+                  ['Formatting', 92],
+                  ['Structure', 95],
+                  ['Content', 68],
+                  ['Skills', 72],
+                  ['Readability', 86],
+                ].map(([label, v]) => (
+                  <div key={label as string} className="flex items-center gap-3">
+                    <span className="w-24 text-xs font-medium text-ink-600">{label}</span>
+                    <div className="h-2 flex-1 rounded-full bg-ink-100 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${(v as number) >= 75 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                        style={{ width: `${v}%` }}
+                      />
+                    </div>
+                    <span className="w-8 text-right text-xs font-bold text-ink-800">{v}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl bg-emerald-50 p-3 border border-emerald-100">
+                  <p className="text-xs font-bold text-emerald-800">What is working</p>
+                  <p className="mt-1 text-[11px] text-emerald-700 leading-snug">Standard headings · complete contact info · consistent dates</p>
+                </div>
+                <div className="rounded-xl bg-amber-50 p-3 border border-amber-100">
+                  <p className="text-xs font-bold text-amber-800">Needs improvement</p>
+                  <p className="mt-1 text-[11px] text-amber-700 leading-snug">Passive phrasing · generic summary · unquantified bullets</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Truth Guard Section (Dark Contrast Surface from original 503b246) */}
+      {/* Section 6: Truth Guard Engine (Dark Contrast Surface) */}
       <section id="truth" className="bg-ink-900 py-24 text-white">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="grid items-center gap-12 lg:grid-cols-2">
@@ -303,7 +574,7 @@ export default function Landing() {
               <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl text-white">
                 If your source facts don’t support it, it doesn’t go in.
               </h2>
-              <p className="mt-4 text-base leading-relaxed text-ink-300">
+              <p className="mt-4 text-sm leading-relaxed text-ink-300">
                 Most AI tools invent skills, certifications, and inflated metrics to boost keyword scores. That leads to disqualification in interviews. Curevo AI programmatically cross-references technologies and numbers in rewritten bullets against source facts, reverting ungrounded additions.
               </p>
 
@@ -359,27 +630,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Features */}
-      <section id="features" className="py-20 bg-white border-b border-ink-100">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <h2 className="section-heading text-center">Everything you need to apply with confidence</h2>
-          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((f) => (
-              <div key={f.title} className="card p-6 transition hover:shadow-lift">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden="true">
-                    <path d={f.icon} strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <h3 className="mt-4 text-base font-semibold text-ink-900">{f.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-ink-600">{f.body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ Accordion */}
+      {/* Section 7: FAQ Accordion */}
       <section id="faq" className="border-b border-ink-100 bg-ink-50/60 py-20">
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
           <div className="text-center">
@@ -394,7 +645,7 @@ export default function Landing() {
               <div key={f.q} className="card overflow-hidden">
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between px-6 py-4.5 text-left text-sm font-semibold text-ink-900 hover:bg-ink-50 transition"
+                  className="flex w-full items-center justify-between px-6 py-4.5 text-left text-sm font-semibold text-ink-900 hover:bg-ink-50 transition cursor-pointer"
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   aria-expanded={openFaq === i}
                 >
@@ -419,7 +670,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Final CTA Banner */}
+      {/* Section 8: Final CTA Banner */}
       <section className="py-20 bg-white text-center">
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
           <h2 className="section-heading">Your next application deserves a standout CV.</h2>
@@ -429,22 +680,22 @@ export default function Landing() {
 
           <div className="mt-8 flex flex-wrap justify-center gap-4">
             <Link
-              to="/builder?mode=ats"
-              className="btn-primary px-7 py-3 text-sm font-semibold shadow-sm"
+              to="/builder?mode=create"
+              className="btn-primary px-7 py-3.5 text-sm font-bold shadow-sm"
             >
-              Check ATS Score — Free
+              Build Your CV Free →
+            </Link>
+            <Link
+              to="/builder?mode=ats"
+              className="btn-secondary px-7 py-3.5 text-sm font-semibold shadow-xs"
+            >
+              Check ATS Score
             </Link>
             <Link
               to="/builder?mode=improve"
-              className="btn-secondary px-7 py-3 text-sm font-semibold shadow-sm"
+              className="btn-secondary px-7 py-3.5 text-sm font-semibold shadow-xs"
             >
-              Improve My Existing CV
-            </Link>
-            <Link
-              to="/builder?mode=create"
-              className="btn-secondary px-7 py-3 text-sm font-semibold shadow-sm"
-            >
-              Create from Scratch
+              Improve Existing CV
             </Link>
           </div>
         </div>
@@ -452,9 +703,9 @@ export default function Landing() {
 
       {/* Footer */}
       <footer className="border-t border-ink-100 py-10 bg-white mt-auto">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 px-4 sm:flex-row sm:px-6">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 px-4 sm:flex-row sm:px-6">
           <Logo />
-          <p className="text-sm text-ink-500 text-center sm:text-left">
+          <p className="text-xs text-ink-500 text-center sm:text-left">
             Curevo AI — Your next resume starts here. © {new Date().getFullYear()} Curevo AI. All rights reserved.
           </p>
           <div className="flex flex-wrap items-center gap-5 text-xs text-ink-600 font-medium">
@@ -467,7 +718,7 @@ export default function Landing() {
             </button>
             <Link to="/prepare-application" className="hover:text-ink-900 transition">Prepare Application</Link>
             <Link to="/builder?mode=ats" className="hover:text-ink-900 transition font-semibold text-brand-600">Check ATS Score</Link>
-            <Link to="/builder" className="hover:text-ink-900 transition">Resume Builder</Link>
+            <Link to="/builder" className="hover:text-ink-900 transition">CV Builder</Link>
             <a href="#truth" className="hover:text-ink-900 transition">Truth Guard™</a>
           </div>
         </div>
