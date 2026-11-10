@@ -94,6 +94,119 @@ export function createUploadFormData(file: File): FormData {
   return formData;
 }
 
+export const MAX_JOB_TEXT_LENGTH = 25000;
+export const WARN_JOB_TEXT_THRESHOLD = 20000;
+
+export interface CharacterCounterState {
+  length: number;
+  maxLength: number;
+  isOver: boolean;
+  isWarning: boolean;
+  exceededBy: number;
+}
+
+export function getCharacterCounterState(
+  text: string,
+  maxLength = MAX_JOB_TEXT_LENGTH,
+  warnThreshold = WARN_JOB_TEXT_THRESHOLD
+): CharacterCounterState {
+  const length = text ? text.length : 0;
+  const isOver = length > maxLength;
+  const isWarning = length > warnThreshold && !isOver;
+  const exceededBy = isOver ? length - maxLength : 0;
+  return { length, maxLength, isOver, isWarning, exceededBy };
+}
+
+export function getJobTextareaClasses(length: number, baseClass = 'input text-xs leading-relaxed'): string {
+  if (length > MAX_JOB_TEXT_LENGTH) {
+    return `${baseClass} border-red-500 focus:border-red-600 focus:ring-red-200 bg-red-50/20`;
+  }
+  if (length > WARN_JOB_TEXT_THRESHOLD) {
+    return `${baseClass} border-amber-400 focus:border-amber-500 focus:ring-amber-100`;
+  }
+  return baseClass;
+}
+
+export function CvUploadPrivacyIndicator() {
+  return (
+    <div
+      data-testid="cv-upload-privacy-indicator"
+      className="mt-3.5 flex items-start gap-2.5 rounded-xl border border-slate-200/90 bg-slate-50/90 px-3.5 py-2.5 text-left text-xs text-slate-600 shadow-2xs"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5"
+        aria-hidden="true"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
+        />
+      </svg>
+      <div className="space-y-0.5">
+        <p className="font-semibold text-slate-800">
+          Processed in memory — CV files are not stored as server-side files.
+        </p>
+        <p className="text-[11px] text-slate-500">
+          Your saved draft remains in your browser. You control your data.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export function JobTextCharacterCounter({
+  currentLength,
+  testId = 'job-text-counter',
+}: {
+  currentLength: number;
+  testId?: string;
+}) {
+  const isOver = currentLength > MAX_JOB_TEXT_LENGTH;
+  const isWarning = currentLength > WARN_JOB_TEXT_THRESHOLD && !isOver;
+  const exceededBy = isOver ? currentLength - MAX_JOB_TEXT_LENGTH : 0;
+
+  return (
+    <div data-testid={testId} className="mt-1.5 flex flex-wrap items-center justify-between gap-1 text-xs">
+      <div className="text-[11px]">
+        {isOver ? (
+          <span className="font-semibold text-red-600 flex items-center gap-1" data-testid={`${testId}-error`}>
+            <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 shrink-0" aria-hidden="true">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            Exceeds limit by {exceededBy.toLocaleString()} character{exceededBy === 1 ? '' : 's'}. Shorten before proceeding.
+          </span>
+        ) : isWarning ? (
+          <span className="font-medium text-amber-700 flex items-center gap-1" data-testid={`${testId}-warning`}>
+            <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 shrink-0" aria-hidden="true">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            Approaching 25,000 character limit
+          </span>
+        ) : (
+          <span className="text-slate-400">Optimal: 1,000–5,000 characters for focused keyword matching</span>
+        )}
+      </div>
+      <span
+        data-testid={`${testId}-count`}
+        className={`font-mono text-[11px] tabular-nums ${
+          isOver
+            ? 'font-bold text-red-600'
+            : isWarning
+            ? 'font-semibold text-amber-600'
+            : 'text-slate-500'
+        }`}
+      >
+        {currentLength.toLocaleString()} / 25,000 characters
+      </span>
+    </div>
+  );
+}
+
 export function getTruthBadgeInfo(truth: TruthReport | null | undefined): TruthBadgeInfo | null {
   if (!truth) return null;
 
@@ -396,6 +509,12 @@ export default function PublicBuilder() {
   // Analyze a new Job Description directly from the Job Match tab
   const handleAnalyzeNewJd = async (jdString: string, roleString?: string) => {
     if (!resume || !jdString.trim()) return;
+    if (jdString.length > MAX_JOB_TEXT_LENGTH) {
+      setErrorMessage(
+        `Job description exceeds the 25,000 character limit (${jdString.length.toLocaleString()} characters). Please shorten it before analyzing.`
+      );
+      return;
+    }
     setIsMatching(true);
     try {
       const res = await api.post<{ job: JobAnalysis; match: MatchAnalysis }>('/public/match', {
@@ -548,6 +667,12 @@ export default function PublicBuilder() {
       setTailorError('Please enter a target job role or paste a job description.');
       return;
     }
+    if (tailorJobText.length > MAX_JOB_TEXT_LENGTH) {
+      setTailorError(
+        `Job description exceeds the 25,000 character limit (${tailorJobText.length.toLocaleString()} characters). Please shorten it before tailoring.`
+      );
+      return;
+    }
     setIsTailoring(true);
     setTailorError(null);
     setTailoringElapsedSeconds(0);
@@ -633,6 +758,12 @@ export default function PublicBuilder() {
   // Handle Cover Letter Generation
   const handleGenerateCoverLetter = async () => {
     if (!resume) return;
+    if (coverJdText.length > MAX_JOB_TEXT_LENGTH) {
+      setCoverError(
+        `Job description exceeds the 25,000 character limit (${coverJdText.length.toLocaleString()} characters). Please shorten it.`
+      );
+      return;
+    }
     setIsGeneratingCover(true);
     setCoverError(null);
 
@@ -1117,6 +1248,14 @@ export default function PublicBuilder() {
   // ---------------------------------------------------------------------------
   const handleFileSelect = async (file: File) => {
     if (!file) return;
+
+    // Boundary check on optional job description
+    if (mode === 'improve' && jobText.length > MAX_JOB_TEXT_LENGTH) {
+      setErrorMessage(
+        `Job description exceeds the 25,000 character limit (${jobText.length.toLocaleString()} characters). Please shorten it before uploading.`
+      );
+      return;
+    }
 
     // File format check
     const ext = file.name.split('.').pop()?.toLowerCase();
@@ -2026,6 +2165,9 @@ export default function PublicBuilder() {
                   )}
                 </div>
 
+                {/* CV Upload Privacy Indicator */}
+                <CvUploadPrivacyIndicator />
+
                 {/* 1-Click Sample CV Action */}
                 <div className="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-brand-50/70 p-4 text-center sm:text-left transition hover:bg-brand-50">
                   <div className="flex items-center gap-3">
@@ -2124,6 +2266,9 @@ export default function PublicBuilder() {
                   )}
                 </div>
 
+                {/* CV Upload Privacy Indicator */}
+                <CvUploadPrivacyIndicator />
+
                 {/* 1-Click Sample CV Action */}
                 <div className="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-brand-50/70 p-4 text-center sm:text-left transition hover:bg-brand-50">
                   <div className="flex items-center gap-3">
@@ -2185,11 +2330,12 @@ export default function PublicBuilder() {
                         <label htmlFor="job-text" className="label text-xs">Job Description (paste full posting)</label>
                         <textarea
                           id="job-text"
-                          className="input min-h-[140px] text-xs leading-relaxed"
+                          className={getJobTextareaClasses(jobText.length, 'input min-h-[140px] text-xs leading-relaxed')}
                           placeholder="Paste the job posting to align keywords and technical requirements..."
                           value={jobText}
                           onChange={(e) => setJobText(e.target.value)}
                         />
+                        <JobTextCharacterCounter currentLength={jobText.length} testId="job-text-counter" />
                       </div>
                     </div>
                   )}
@@ -3263,7 +3409,7 @@ export default function PublicBuilder() {
                         <div>
                           <label className="label text-xs font-bold text-slate-700">Job Description / Requirements</label>
                           <textarea
-                            className="input w-full text-xs min-h-[140px] font-mono leading-relaxed"
+                            className={getJobTextareaClasses(tailorJobText.length, 'input w-full text-xs min-h-[140px] font-mono leading-relaxed')}
                             placeholder="Paste the job description or requirements here, or click a sample preset above..."
                             value={tailorJobText}
                             onChange={(e) => {
@@ -3271,6 +3417,7 @@ export default function PublicBuilder() {
                               setTailorJobText(e.target.value);
                             }}
                           />
+                          <JobTextCharacterCounter currentLength={tailorJobText.length} testId="tailor-job-text-counter" />
                         </div>
                         <div className="flex items-center justify-between gap-2 pt-2">
                           <span className="text-[11px] text-slate-400 italic">
@@ -3278,9 +3425,9 @@ export default function PublicBuilder() {
                           </span>
                           <button
                             type="button"
-                            disabled={isMatching || (!tailorJobText.trim() && !tailorTargetRole.trim())}
+                            disabled={isMatching || (!tailorJobText.trim() && !tailorTargetRole.trim()) || tailorJobText.length > MAX_JOB_TEXT_LENGTH}
                             onClick={() => handleAnalyzeNewJd(tailorJobText, tailorTargetRole)}
-                            className="btn-primary text-xs px-5 py-2.5 inline-flex items-center gap-2 cursor-pointer"
+                            className="btn-primary text-xs px-5 py-2.5 inline-flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {isMatching ? <Spinner className="h-4 w-4" /> : <span>🔍</span>}
                             {isMatching ? 'Analyzing Match...' : 'Analyze Job Match'}
@@ -3418,10 +3565,11 @@ export default function PublicBuilder() {
                             <div>
                               <label className="label text-xs font-bold text-slate-700">Job Description / Requirements</label>
                               <textarea
-                                className="input w-full text-xs min-h-[120px] font-mono leading-relaxed"
+                                className={getJobTextareaClasses(tailorJobText.length, 'input w-full text-xs min-h-[120px] font-mono leading-relaxed')}
                                 value={tailorJobText}
                                 onChange={(e) => setTailorJobText(e.target.value)}
                               />
+                              <JobTextCharacterCounter currentLength={tailorJobText.length} testId="switch-job-text-counter" />
                             </div>
                             <div className="flex items-center justify-between gap-2 pt-1">
                               <span className="text-[11px] text-slate-400 italic">
@@ -3437,9 +3585,9 @@ export default function PublicBuilder() {
                                 </button>
                                 <button
                                   type="button"
-                                  disabled={isMatching || (!tailorJobText.trim() && !tailorTargetRole.trim())}
+                                  disabled={isMatching || (!tailorJobText.trim() && !tailorTargetRole.trim()) || tailorJobText.length > MAX_JOB_TEXT_LENGTH}
                                   onClick={() => handleAnalyzeNewJd(tailorJobText, tailorTargetRole)}
-                                  className="btn-primary text-xs px-4 py-2 inline-flex items-center gap-1.5 cursor-pointer"
+                                  className="btn-primary text-xs px-4 py-2 inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   {isMatching ? <Spinner className="h-3.5 w-3.5" /> : <span>🔍</span>}
                                   {isMatching ? 'Re-analyzing...' : 'Analyze Match'}
@@ -4067,11 +4215,12 @@ export default function PublicBuilder() {
                       </label>
                       <textarea
                         id="cover-jd-textarea"
-                        className="input w-full text-xs min-h-[90px]"
+                        className={getJobTextareaClasses(coverJdText.length, 'input w-full text-xs min-h-[90px]')}
                         placeholder="Paste job posting text here to align opening hook and body paragraphs to specific role requirements..."
                         value={coverJdText}
                         onChange={(e) => setCoverJdText(e.target.value)}
                       />
+                      <JobTextCharacterCounter currentLength={coverJdText.length} testId="cover-job-text-counter" />
                     </div>
 
                     {/* Insufficient facts warning if resume is empty */}
@@ -4099,8 +4248,8 @@ export default function PublicBuilder() {
                       <button
                         type="button"
                         onClick={handleGenerateCoverLetter}
-                        disabled={isGeneratingCover || (!resume?.experience?.length && !resume?.summary && !resume?.skills?.technical?.length)}
-                        className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50 transition"
+                        disabled={isGeneratingCover || (!resume?.experience?.length && !resume?.summary && !resume?.skills?.technical?.length) || coverJdText.length > MAX_JOB_TEXT_LENGTH}
+                        className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50 transition disabled:cursor-not-allowed"
                       >
                         {isGeneratingCover ? (
                           <>
@@ -4472,11 +4621,12 @@ export default function PublicBuilder() {
                         <label htmlFor="tailor-job-text" className="label text-xs font-bold text-slate-700">Job Description / Requirements</label>
                         <textarea
                           id="tailor-job-text"
-                          className="input w-full text-xs min-h-[120px]"
+                          className={getJobTextareaClasses(tailorJobText.length, 'input w-full text-xs min-h-[120px]')}
                           placeholder="Paste the target job description or requirements here..."
                           value={tailorJobText}
                           onChange={(e) => setTailorJobText(e.target.value)}
                         />
+                        <JobTextCharacterCounter currentLength={tailorJobText.length} testId="modal-tailor-job-text-counter" />
                       </div>
                     </div>
 
@@ -4511,8 +4661,8 @@ export default function PublicBuilder() {
                       <button
                         type="button"
                         onClick={handleRunTailoring}
-                        disabled={isTailoring}
-                        className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
+                        disabled={isTailoring || tailorJobText.length > MAX_JOB_TEXT_LENGTH}
+                        className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isTailoring ? (
                           <>
