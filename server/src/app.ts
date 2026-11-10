@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import './middleware/async'; // async route rejections → central errorHandler
 import { config } from './config';
 import { errorHandler, notFoundHandler } from './middleware/http';
+import { rateLimit } from './middleware/rateLimit';
 import { newRequestId } from './lib/monitoring';
 import { corsOriginCheck } from './lib/cors';
 import { csrfProtection } from './middleware/csrf';
@@ -50,7 +51,7 @@ export async function buildApp(): Promise<express.Express> {
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
 
-  app.get('/api/health', (_req, res) => {
+  app.get('/api/health', rateLimit({ windowMs: 60_000, max: 120 }), (_req, res) => {
     res.json({ ok: true, service: 'curevo-ai', time: new Date().toISOString() });
   });
 

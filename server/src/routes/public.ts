@@ -46,7 +46,20 @@ import {
 } from '../ai/companyResearchAgent';
 import { isWebSearchConfigured, resolveSearchProvider } from '../lib/webSearch';
 import { sendEmail, isEmailConfigured } from '../lib/email';
-import type { ResumeData, JobAnalysis, PageSize } from '../types';
+import type {
+  ResumeData,
+  JobAnalysis,
+  PageSize,
+  PersonalInfo,
+  ExperienceItem,
+  EducationItem,
+  ProjectItem,
+  CertificationItem,
+  LanguageItem,
+  CustomSection,
+  SectionKey,
+} from '../types';
+import { DEFAULT_SECTION_ORDER } from '../types';
 
 const router = Router();
 
@@ -58,13 +71,24 @@ router.get('/status', (_req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // Upload Configuration: Memory storage only, 8MB max, PDF/DOCX/TXT only
 // ---------------------------------------------------------------------------
+const ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/x-pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
+  'text/plain',
+  'application/octet-stream',
+]);
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const isSupported = /\.(pdf|docx|txt)$/i.test(file.originalname);
-    if (!isSupported) {
-      cb(new AppError('UNSUPPORTED_FILE_TYPE', 'Unsupported file type. Please upload a PDF, DOCX or TXT file.', 400));
+    const isSupportedExt = /\.(pdf|docx|txt)$/i.test(file.originalname);
+    const mime = (file.mimetype || '').toLowerCase();
+    const isSupportedMime = ALLOWED_MIME_TYPES.has(mime);
+    if (!isSupportedExt || !isSupportedMime) {
+      cb(new AppError('UNSUPPORTED_FILE_TYPE', 'Unsupported file type or MIME format. Please upload a valid PDF, DOCX or TXT file.', 400));
       return;
     }
     cb(null, true);
@@ -178,47 +202,538 @@ function handlePublicError(err: unknown, res: Response): void {
   });
 }
 
-function validateResume(data: unknown): ResumeData {
-  if (!data || typeof data !== 'object') {
-    throw new AppError('VALIDATION_ERROR', 'A valid resume object is required.', 400);
+export const RESUME_LIMITS = {
+  // Structural collection limits
+  MAX_EXPERIENCE_ITEMS: 30,
+  MAX_BULLETS_PER_EXPERIENCE: 25,
+  MAX_BULLET_LENGTH: 1500,
+  MAX_EDUCATION_ITEMS: 15,
+  MAX_PROJECT_ITEMS: 20,
+  MAX_BULLETS_PER_PROJECT: 25,
+  MAX_TECHNICAL_SKILLS: 100,
+  MAX_SOFT_SKILLS: 50,
+  MAX_CERTIFICATIONS: 30,
+  MAX_LANGUAGES: 25,
+  MAX_ACHIEVEMENTS: 30,
+  MAX_CUSTOM_SECTIONS: 10,
+  MAX_BULLETS_PER_CUSTOM_SECTION: 25,
+  MAX_SECTION_ORDER_ITEMS: 30,
+  MAX_OTHER_LINKS: 15,
+
+  // String field length limits
+  MAX_FULL_NAME_LENGTH: 150,
+  MAX_EMAIL_LENGTH: 150,
+  MAX_PHONE_LENGTH: 50,
+  MAX_LOCATION_LENGTH: 150,
+  MAX_HEADLINE_LENGTH: 200,
+  MAX_URL_LENGTH: 250,
+  MAX_SUMMARY_LENGTH: 4000,
+  MAX_COMPANY_LENGTH: 150,
+  MAX_TITLE_LENGTH: 150,
+  MAX_DATE_LENGTH: 50,
+  MAX_INSTITUTION_LENGTH: 150,
+  MAX_DEGREE_LENGTH: 150,
+  MAX_FIELD_LENGTH: 150,
+  MAX_GRADE_LENGTH: 50,
+  MAX_PROJECT_NAME_LENGTH: 150,
+  MAX_PROJECT_DESC_LENGTH: 1500,
+  MAX_SKILL_NAME_LENGTH: 100,
+  MAX_CERT_NAME_LENGTH: 200,
+  MAX_CERT_ISSUER_LENGTH: 200,
+  MAX_LANGUAGE_NAME_LENGTH: 100,
+  MAX_LANGUAGE_PROFICIENCY_LENGTH: 100,
+  MAX_ACHIEVEMENT_LENGTH: 1000,
+  MAX_CUSTOM_TITLE_LENGTH: 100,
+  MAX_JOB_TEXT_LENGTH: 25000,
+} as const;
+
+function checkStringField(val: unknown, fieldName: string, maxLen: number): string {
+  if (val === undefined || val === null) return '';
+  if (typeof val !== 'string') {
+    throw new AppError('VALIDATION_ERROR', `${fieldName} must be a string.`, 400);
   }
-  const resume = data as ResumeData;
-  if (!resume.personal || !resume.personal.fullName || typeof resume.personal.fullName !== 'string') {
-    throw new AppError('VALIDATION_ERROR', 'Resume must contain personal.fullName.', 400);
+  if (val.length > maxLen) {
+    throw new AppError('VALIDATION_ERROR', `${fieldName} exceeds maximum length of ${maxLen.toLocaleString()} characters.`, 400);
   }
-  if (!resume.experience) resume.experience = [];
-  if (!resume.education) resume.education = [];
-  if (!resume.skills) resume.skills = { technical: [], soft: [] };
-  if (!resume.projects) resume.projects = [];
-  if (!resume.certifications) resume.certifications = [];
-  if (!resume.languages) resume.languages = [];
-  if (!resume.achievements) resume.achievements = [];
-  if (!resume.customSections) resume.customSections = [];
-  if (!resume.sectionOrder) {
-    resume.sectionOrder = ['summary', 'experience', 'projects', 'skills', 'education', 'certifications', 'languages', 'achievements'];
-  }
-  if (!resume.hiddenSections) resume.hiddenSections = [];
-  return resume;
+  return val;
 }
 
-function validateCoverLetter(data: unknown): CoverLetter {
-  if (!data || typeof data !== 'object') {
+function checkOptionalField(val: unknown, fieldName: string, maxLen: number): string | undefined {
+  if (val === undefined || val === null || val === '') return undefined;
+  if (typeof val !== 'string') {
+    throw new AppError('VALIDATION_ERROR', `${fieldName} must be a string.`, 400);
+  }
+  if (val.length > maxLen) {
+    throw new AppError('VALIDATION_ERROR', `${fieldName} exceeds maximum length of ${maxLen.toLocaleString()} characters.`, 400);
+  }
+  return val;
+}
+
+export function validateJobText(val: unknown, fieldName: string = 'Job description', required: boolean = false): string {
+  if (val === undefined || val === null || val === '') {
+    if (required) {
+      throw new AppError('VALIDATION_ERROR', `${fieldName} is required.`, 400);
+    }
+    return '';
+  }
+  if (typeof val !== 'string') {
+    throw new AppError('VALIDATION_ERROR', `${fieldName} must be a string.`, 400);
+  }
+  if (val.length > RESUME_LIMITS.MAX_JOB_TEXT_LENGTH) {
+    throw new AppError(
+      'VALIDATION_ERROR',
+      `${fieldName} exceeds maximum allowed length of ${RESUME_LIMITS.MAX_JOB_TEXT_LENGTH.toLocaleString()} characters (received ${val.length.toLocaleString()}).`,
+      400
+    );
+  }
+  return val.trim();
+}
+
+export function validateResume(data: unknown): ResumeData {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new AppError('VALIDATION_ERROR', 'A valid resume object is required.', 400);
+  }
+  const raw = data as Record<string, any>;
+
+  // Personal
+  if (!raw.personal || typeof raw.personal !== 'object' || Array.isArray(raw.personal)) {
+    throw new AppError('VALIDATION_ERROR', 'Resume must contain personal details.', 400);
+  }
+  if (!raw.personal.fullName || typeof raw.personal.fullName !== 'string' || raw.personal.fullName.trim().length === 0) {
+    throw new AppError('VALIDATION_ERROR', 'Resume must contain personal.fullName.', 400);
+  }
+  if (raw.personal.fullName.length > RESUME_LIMITS.MAX_FULL_NAME_LENGTH) {
+    throw new AppError('VALIDATION_ERROR', `Personal fullName exceeds maximum length of ${RESUME_LIMITS.MAX_FULL_NAME_LENGTH} characters.`, 400);
+  }
+
+  const personal: PersonalInfo = {
+    fullName: raw.personal.fullName.trim(),
+    email: checkStringField(raw.personal.email, 'Personal email', RESUME_LIMITS.MAX_EMAIL_LENGTH),
+    phone: checkStringField(raw.personal.phone, 'Personal phone', RESUME_LIMITS.MAX_PHONE_LENGTH),
+    location: checkStringField(raw.personal.location, 'Personal location', RESUME_LIMITS.MAX_LOCATION_LENGTH),
+    headline: checkOptionalField(raw.personal.headline, 'Personal headline', RESUME_LIMITS.MAX_HEADLINE_LENGTH),
+    linkedin: checkOptionalField(raw.personal.linkedin, 'Personal linkedin', RESUME_LIMITS.MAX_URL_LENGTH),
+    github: checkOptionalField(raw.personal.github, 'Personal github', RESUME_LIMITS.MAX_URL_LENGTH),
+    portfolio: checkOptionalField(raw.personal.portfolio, 'Personal portfolio', RESUME_LIMITS.MAX_URL_LENGTH),
+  };
+
+  if (raw.personal.otherLinks !== undefined && raw.personal.otherLinks !== null) {
+    if (!Array.isArray(raw.personal.otherLinks)) {
+      throw new AppError('VALIDATION_ERROR', 'Personal otherLinks must be an array.', 400);
+    }
+    if (raw.personal.otherLinks.length > RESUME_LIMITS.MAX_OTHER_LINKS) {
+      throw new AppError('VALIDATION_ERROR', `Personal otherLinks exceed maximum allowed limit of ${RESUME_LIMITS.MAX_OTHER_LINKS}.`, 400);
+    }
+    personal.otherLinks = raw.personal.otherLinks.map((link: unknown, idx: number) => {
+      if (typeof link !== 'string') {
+        throw new AppError('VALIDATION_ERROR', `Other link at index ${idx} must be a string.`, 400);
+      }
+      if (link.length > RESUME_LIMITS.MAX_URL_LENGTH) {
+        throw new AppError('VALIDATION_ERROR', `Other link at index ${idx} exceeds maximum length of ${RESUME_LIMITS.MAX_URL_LENGTH} characters.`, 400);
+      }
+      return link;
+    });
+  }
+
+  // Summary
+  const summary = checkStringField(raw.summary, 'Summary', RESUME_LIMITS.MAX_SUMMARY_LENGTH);
+
+  // Experience
+  let experience: ExperienceItem[] = [];
+  if (raw.experience !== undefined && raw.experience !== null) {
+    if (!Array.isArray(raw.experience)) {
+      throw new AppError('VALIDATION_ERROR', 'Experience must be an array.', 400);
+    }
+    if (raw.experience.length > RESUME_LIMITS.MAX_EXPERIENCE_ITEMS) {
+      throw new AppError('VALIDATION_ERROR', 'Experience entries exceed maximum allowed limit of 30.', 400);
+    }
+    experience = raw.experience.map((item: unknown, i: number) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new AppError('VALIDATION_ERROR', `Experience entry at index ${i} must be an object.`, 400);
+      }
+      const exp = item as Record<string, any>;
+      const company = checkStringField(exp.company, `Experience[${i}].company`, RESUME_LIMITS.MAX_COMPANY_LENGTH);
+      const title = checkStringField(exp.title, `Experience[${i}].title`, RESUME_LIMITS.MAX_TITLE_LENGTH);
+      const location = checkOptionalField(exp.location, `Experience[${i}].location`, RESUME_LIMITS.MAX_LOCATION_LENGTH);
+      const startDate = checkStringField(exp.startDate, `Experience[${i}].startDate`, RESUME_LIMITS.MAX_DATE_LENGTH);
+      const endDate = checkStringField(exp.endDate, `Experience[${i}].endDate`, RESUME_LIMITS.MAX_DATE_LENGTH);
+      const dateDisplay = checkOptionalField(exp.dateDisplay, `Experience[${i}].dateDisplay`, RESUME_LIMITS.MAX_DATE_LENGTH * 2);
+      const id = typeof exp.id === 'string' && exp.id.length <= 50 ? exp.id : `exp_${i + 1}`;
+
+      let bullets: string[] = [];
+      if (exp.bullets !== undefined && exp.bullets !== null) {
+        if (!Array.isArray(exp.bullets)) {
+          throw new AppError('VALIDATION_ERROR', `Experience[${i}].bullets must be an array.`, 400);
+        }
+        if (exp.bullets.length > RESUME_LIMITS.MAX_BULLETS_PER_EXPERIENCE) {
+          throw new AppError('VALIDATION_ERROR', 'Bullet points for experience entry exceed maximum allowed limit of 25.', 400);
+        }
+        bullets = exp.bullets.map((b: unknown, bIdx: number) => {
+          if (typeof b !== 'string') {
+            throw new AppError('VALIDATION_ERROR', `Bullet point at index ${bIdx} in experience[${i}] must be a string.`, 400);
+          }
+          if (b.length > RESUME_LIMITS.MAX_BULLET_LENGTH) {
+            throw new AppError('VALIDATION_ERROR', 'Bullet point text exceeds maximum length of 1,500 characters.', 400);
+          }
+          return b;
+        });
+      }
+
+      return {
+        id,
+        company,
+        title,
+        location,
+        startDate,
+        endDate,
+        current: Boolean(exp.current),
+        bullets,
+        dateDisplay,
+      };
+    });
+  }
+
+  // Education
+  let education: EducationItem[] = [];
+  if (raw.education !== undefined && raw.education !== null) {
+    if (!Array.isArray(raw.education)) {
+      throw new AppError('VALIDATION_ERROR', 'Education must be an array.', 400);
+    }
+    if (raw.education.length > RESUME_LIMITS.MAX_EDUCATION_ITEMS) {
+      throw new AppError('VALIDATION_ERROR', 'Education entries exceed maximum allowed limit of 15.', 400);
+    }
+    education = raw.education.map((item: unknown, i: number) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new AppError('VALIDATION_ERROR', `Education entry at index ${i} must be an object.`, 400);
+      }
+      const edu = item as Record<string, any>;
+      const institution = checkStringField(edu.institution, `Education[${i}].institution`, RESUME_LIMITS.MAX_INSTITUTION_LENGTH);
+      const degree = checkStringField(edu.degree, `Education[${i}].degree`, RESUME_LIMITS.MAX_DEGREE_LENGTH);
+      const field = checkOptionalField(edu.field, `Education[${i}].field`, RESUME_LIMITS.MAX_FIELD_LENGTH);
+      const startDate = checkStringField(edu.startDate, `Education[${i}].startDate`, RESUME_LIMITS.MAX_DATE_LENGTH);
+      const endDate = checkStringField(edu.endDate, `Education[${i}].endDate`, RESUME_LIMITS.MAX_DATE_LENGTH);
+      const grade = checkOptionalField(edu.grade, `Education[${i}].grade`, RESUME_LIMITS.MAX_GRADE_LENGTH);
+      const dateDisplay = checkOptionalField(edu.dateDisplay, `Education[${i}].dateDisplay`, RESUME_LIMITS.MAX_DATE_LENGTH * 2);
+      const id = typeof edu.id === 'string' && edu.id.length <= 50 ? edu.id : `edu_${i + 1}`;
+
+      return {
+        id,
+        institution,
+        degree,
+        field,
+        startDate,
+        endDate,
+        grade,
+        dateDisplay,
+      };
+    });
+  }
+
+  // Projects
+  let projects: ProjectItem[] = [];
+  if (raw.projects !== undefined && raw.projects !== null) {
+    if (!Array.isArray(raw.projects)) {
+      throw new AppError('VALIDATION_ERROR', 'Projects must be an array.', 400);
+    }
+    if (raw.projects.length > RESUME_LIMITS.MAX_PROJECT_ITEMS) {
+      throw new AppError('VALIDATION_ERROR', 'Project entries exceed maximum allowed limit of 20.', 400);
+    }
+    projects = raw.projects.map((item: unknown, i: number) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new AppError('VALIDATION_ERROR', `Project entry at index ${i} must be an object.`, 400);
+      }
+      const prj = item as Record<string, any>;
+      const name = checkStringField(prj.name, `Project[${i}].name`, RESUME_LIMITS.MAX_PROJECT_NAME_LENGTH);
+      const link = checkOptionalField(prj.link, `Project[${i}].link`, RESUME_LIMITS.MAX_URL_LENGTH);
+      const description = checkOptionalField(prj.description, `Project[${i}].description`, RESUME_LIMITS.MAX_PROJECT_DESC_LENGTH);
+      const id = typeof prj.id === 'string' && prj.id.length <= 50 ? prj.id : `prj_${i + 1}`;
+
+      let bullets: string[] = [];
+      if (prj.bullets !== undefined && prj.bullets !== null) {
+        if (!Array.isArray(prj.bullets)) {
+          throw new AppError('VALIDATION_ERROR', `Project[${i}].bullets must be an array.`, 400);
+        }
+        if (prj.bullets.length > RESUME_LIMITS.MAX_BULLETS_PER_PROJECT) {
+          throw new AppError('VALIDATION_ERROR', `Bullet points for project exceed maximum allowed limit of ${RESUME_LIMITS.MAX_BULLETS_PER_PROJECT}.`, 400);
+        }
+        bullets = prj.bullets.map((b: unknown, bIdx: number) => {
+          if (typeof b !== 'string') {
+            throw new AppError('VALIDATION_ERROR', `Bullet point at index ${bIdx} in project[${i}] must be a string.`, 400);
+          }
+          if (b.length > RESUME_LIMITS.MAX_BULLET_LENGTH) {
+            throw new AppError('VALIDATION_ERROR', `Project bullet point exceeds maximum length of ${RESUME_LIMITS.MAX_BULLET_LENGTH.toLocaleString()} characters.`, 400);
+          }
+          return b;
+        });
+      }
+
+      let tech: string[] | undefined = undefined;
+      if (prj.tech !== undefined && prj.tech !== null) {
+        if (!Array.isArray(prj.tech)) {
+          throw new AppError('VALIDATION_ERROR', `Project[${i}].tech must be an array.`, 400);
+        }
+        tech = prj.tech.map((t: unknown, tIdx: number) => {
+          if (typeof t !== 'string') {
+            throw new AppError('VALIDATION_ERROR', `Tech item at index ${tIdx} in project[${i}] must be a string.`, 400);
+          }
+          if (t.length > RESUME_LIMITS.MAX_SKILL_NAME_LENGTH) {
+            throw new AppError('VALIDATION_ERROR', `Tech item exceeds maximum length of ${RESUME_LIMITS.MAX_SKILL_NAME_LENGTH} characters.`, 400);
+          }
+          return t;
+        });
+      }
+
+      return {
+        id,
+        name,
+        link,
+        description,
+        bullets,
+        tech,
+      };
+    });
+  }
+
+  // Skills
+  let technical: string[] = [];
+  let soft: string[] = [];
+  if (raw.skills !== undefined && raw.skills !== null) {
+    if (typeof raw.skills !== 'object' || Array.isArray(raw.skills)) {
+      throw new AppError('VALIDATION_ERROR', 'Skills must be an object.', 400);
+    }
+    if (raw.skills.technical !== undefined && raw.skills.technical !== null) {
+      if (!Array.isArray(raw.skills.technical)) {
+        throw new AppError('VALIDATION_ERROR', 'Technical skills must be an array.', 400);
+      }
+      if (raw.skills.technical.length > RESUME_LIMITS.MAX_TECHNICAL_SKILLS) {
+        throw new AppError('VALIDATION_ERROR', `Technical skills exceed maximum allowed limit of ${RESUME_LIMITS.MAX_TECHNICAL_SKILLS}.`, 400);
+      }
+      technical = raw.skills.technical.map((s: unknown, idx: number) => {
+        if (typeof s !== 'string') {
+          throw new AppError('VALIDATION_ERROR', `Technical skill at index ${idx} must be a string.`, 400);
+        }
+        if (s.length > RESUME_LIMITS.MAX_SKILL_NAME_LENGTH) {
+          throw new AppError('VALIDATION_ERROR', `Technical skill at index ${idx} exceeds maximum length of ${RESUME_LIMITS.MAX_SKILL_NAME_LENGTH} characters.`, 400);
+        }
+        return s;
+      });
+    }
+    if (raw.skills.soft !== undefined && raw.skills.soft !== null) {
+      if (!Array.isArray(raw.skills.soft)) {
+        throw new AppError('VALIDATION_ERROR', 'Soft skills must be an array.', 400);
+      }
+      if (raw.skills.soft.length > RESUME_LIMITS.MAX_SOFT_SKILLS) {
+        throw new AppError('VALIDATION_ERROR', `Soft skills exceed maximum allowed limit of ${RESUME_LIMITS.MAX_SOFT_SKILLS}.`, 400);
+      }
+      soft = raw.skills.soft.map((s: unknown, idx: number) => {
+        if (typeof s !== 'string') {
+          throw new AppError('VALIDATION_ERROR', `Soft skill at index ${idx} must be a string.`, 400);
+        }
+        if (s.length > RESUME_LIMITS.MAX_SKILL_NAME_LENGTH) {
+          throw new AppError('VALIDATION_ERROR', `Soft skill at index ${idx} exceeds maximum length of ${RESUME_LIMITS.MAX_SKILL_NAME_LENGTH} characters.`, 400);
+        }
+        return s;
+      });
+    }
+  }
+
+  // Certifications
+  let certifications: CertificationItem[] = [];
+  if (raw.certifications !== undefined && raw.certifications !== null) {
+    if (!Array.isArray(raw.certifications)) {
+      throw new AppError('VALIDATION_ERROR', 'Certifications must be an array.', 400);
+    }
+    if (raw.certifications.length > RESUME_LIMITS.MAX_CERTIFICATIONS) {
+      throw new AppError('VALIDATION_ERROR', `Certifications exceed maximum allowed limit of ${RESUME_LIMITS.MAX_CERTIFICATIONS}.`, 400);
+    }
+    certifications = raw.certifications.map((item: unknown, i: number) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new AppError('VALIDATION_ERROR', `Certification entry at index ${i} must be an object.`, 400);
+      }
+      const cert = item as Record<string, any>;
+      const name = checkStringField(cert.name, `Certification[${i}].name`, RESUME_LIMITS.MAX_CERT_NAME_LENGTH);
+      const issuer = checkOptionalField(cert.issuer, `Certification[${i}].issuer`, RESUME_LIMITS.MAX_CERT_ISSUER_LENGTH);
+      const year = checkOptionalField(cert.year, `Certification[${i}].year`, RESUME_LIMITS.MAX_DATE_LENGTH);
+      const id = typeof cert.id === 'string' && cert.id.length <= 50 ? cert.id : `cert_${i + 1}`;
+      return { id, name, issuer, year };
+    });
+  }
+
+  // Languages
+  let languages: LanguageItem[] = [];
+  if (raw.languages !== undefined && raw.languages !== null) {
+    if (!Array.isArray(raw.languages)) {
+      throw new AppError('VALIDATION_ERROR', 'Languages must be an array.', 400);
+    }
+    if (raw.languages.length > RESUME_LIMITS.MAX_LANGUAGES) {
+      throw new AppError('VALIDATION_ERROR', `Languages exceed maximum allowed limit of ${RESUME_LIMITS.MAX_LANGUAGES}.`, 400);
+    }
+    languages = raw.languages.map((item: unknown, i: number) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new AppError('VALIDATION_ERROR', `Language entry at index ${i} must be an object.`, 400);
+      }
+      const lang = item as Record<string, any>;
+      const name = checkStringField(lang.name, `Language[${i}].name`, RESUME_LIMITS.MAX_LANGUAGE_NAME_LENGTH);
+      const proficiency = checkOptionalField(lang.proficiency, `Language[${i}].proficiency`, RESUME_LIMITS.MAX_LANGUAGE_PROFICIENCY_LENGTH);
+      const id = typeof lang.id === 'string' && lang.id.length <= 50 ? lang.id : `lang_${i + 1}`;
+      return { id, name, proficiency };
+    });
+  }
+
+  // Achievements
+  let achievements: string[] = [];
+  if (raw.achievements !== undefined && raw.achievements !== null) {
+    if (!Array.isArray(raw.achievements)) {
+      throw new AppError('VALIDATION_ERROR', 'Achievements must be an array.', 400);
+    }
+    if (raw.achievements.length > RESUME_LIMITS.MAX_ACHIEVEMENTS) {
+      throw new AppError('VALIDATION_ERROR', `Achievements exceed maximum allowed limit of ${RESUME_LIMITS.MAX_ACHIEVEMENTS}.`, 400);
+    }
+    achievements = raw.achievements.map((ach: unknown, idx: number) => {
+      if (typeof ach !== 'string') {
+        throw new AppError('VALIDATION_ERROR', `Achievement at index ${idx} must be a string.`, 400);
+      }
+      if (ach.length > RESUME_LIMITS.MAX_ACHIEVEMENT_LENGTH) {
+        throw new AppError('VALIDATION_ERROR', `Achievement at index ${idx} exceeds maximum length of ${RESUME_LIMITS.MAX_ACHIEVEMENT_LENGTH} characters.`, 400);
+      }
+      return ach;
+    });
+  }
+
+  // Custom Sections
+  let customSections: CustomSection[] = [];
+  if (raw.customSections !== undefined && raw.customSections !== null) {
+    if (!Array.isArray(raw.customSections)) {
+      throw new AppError('VALIDATION_ERROR', 'Custom sections must be an array.', 400);
+    }
+    if (raw.customSections.length > RESUME_LIMITS.MAX_CUSTOM_SECTIONS) {
+      throw new AppError('VALIDATION_ERROR', `Custom sections exceed maximum allowed limit of ${RESUME_LIMITS.MAX_CUSTOM_SECTIONS}.`, 400);
+    }
+    customSections = raw.customSections.map((item: unknown, i: number) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new AppError('VALIDATION_ERROR', `Custom section entry at index ${i} must be an object.`, 400);
+      }
+      const cs = item as Record<string, any>;
+      const title = checkStringField(cs.title, `CustomSection[${i}].title`, RESUME_LIMITS.MAX_CUSTOM_TITLE_LENGTH);
+      const id = typeof cs.id === 'string' && cs.id.length <= 50 ? cs.id : `custom_${i + 1}`;
+      let bullets: string[] = [];
+      if (cs.bullets !== undefined && cs.bullets !== null) {
+        if (!Array.isArray(cs.bullets)) {
+          throw new AppError('VALIDATION_ERROR', `CustomSection[${i}].bullets must be an array.`, 400);
+        }
+        if (cs.bullets.length > RESUME_LIMITS.MAX_BULLETS_PER_CUSTOM_SECTION) {
+          throw new AppError('VALIDATION_ERROR', `Custom section bullets exceed maximum allowed limit of ${RESUME_LIMITS.MAX_BULLETS_PER_CUSTOM_SECTION}.`, 400);
+        }
+        bullets = cs.bullets.map((b: unknown, bIdx: number) => {
+          if (typeof b !== 'string') {
+            throw new AppError('VALIDATION_ERROR', `Bullet point at index ${bIdx} in custom section[${i}] must be a string.`, 400);
+          }
+          if (b.length > RESUME_LIMITS.MAX_BULLET_LENGTH) {
+            throw new AppError('VALIDATION_ERROR', `Custom section bullet exceeds maximum length of ${RESUME_LIMITS.MAX_BULLET_LENGTH.toLocaleString()} characters.`, 400);
+          }
+          return b;
+        });
+      }
+      return { id, title, bullets };
+    });
+  }
+
+  // Section Order
+  let sectionOrder: SectionKey[] = [
+    'summary',
+    'experience',
+    'projects',
+    'skills',
+    'education',
+    'certifications',
+    'languages',
+    'achievements',
+  ];
+  if (raw.sectionOrder !== undefined && raw.sectionOrder !== null) {
+    if (!Array.isArray(raw.sectionOrder)) {
+      throw new AppError('VALIDATION_ERROR', 'Section order must be an array.', 400);
+    }
+    if (raw.sectionOrder.length > RESUME_LIMITS.MAX_SECTION_ORDER_ITEMS) {
+      throw new AppError('VALIDATION_ERROR', `Section order exceeds maximum allowed limit of ${RESUME_LIMITS.MAX_SECTION_ORDER_ITEMS}.`, 400);
+    }
+    sectionOrder = raw.sectionOrder.map((s: unknown, idx: number) => {
+      if (typeof s !== 'string') {
+        throw new AppError('VALIDATION_ERROR', `Section order item at index ${idx} must be a string.`, 400);
+      }
+      if (s.length > 50) {
+        throw new AppError('VALIDATION_ERROR', `Section order item at index ${idx} exceeds maximum length of 50 characters.`, 400);
+      }
+      return s as SectionKey;
+    });
+  }
+
+  // Hidden Sections
+  let hiddenSections: SectionKey[] = [];
+  if (raw.hiddenSections !== undefined && raw.hiddenSections !== null) {
+    if (!Array.isArray(raw.hiddenSections)) {
+      throw new AppError('VALIDATION_ERROR', 'Hidden sections must be an array.', 400);
+    }
+    if (raw.hiddenSections.length > RESUME_LIMITS.MAX_SECTION_ORDER_ITEMS) {
+      throw new AppError('VALIDATION_ERROR', `Hidden sections exceed maximum allowed limit of ${RESUME_LIMITS.MAX_SECTION_ORDER_ITEMS}.`, 400);
+    }
+    hiddenSections = raw.hiddenSections.map((s: unknown, idx: number) => {
+      if (typeof s !== 'string') {
+        throw new AppError('VALIDATION_ERROR', `Hidden section item at index ${idx} must be a string.`, 400);
+      }
+      if (s.length > 50) {
+        throw new AppError('VALIDATION_ERROR', `Hidden section item at index ${idx} exceeds maximum length of 50 characters.`, 400);
+      }
+      return s as SectionKey;
+    });
+  }
+
+  return {
+    personal,
+    summary,
+    experience,
+    education,
+    projects,
+    skills: { technical, soft },
+    certifications,
+    languages,
+    achievements,
+    customSections,
+    sectionOrder,
+    hiddenSections,
+  };
+}
+
+export function validateCoverLetter(data: unknown): CoverLetter {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new AppError('VALIDATION_ERROR', 'A valid cover letter object is required.', 400);
   }
   const l = data as Record<string, unknown>;
   if (!l.greeting || typeof l.greeting !== 'string') {
     throw new AppError('VALIDATION_ERROR', 'Cover letter must contain a greeting string.', 400);
   }
+  if (l.greeting.length > 200) {
+    throw new AppError('VALIDATION_ERROR', 'Greeting exceeds maximum length of 200 characters.', 400);
+  }
   if (!Array.isArray(l.paragraphs) || l.paragraphs.length === 0) {
     throw new AppError('VALIDATION_ERROR', 'Cover letter must contain an array of paragraphs.', 400);
   }
-  for (const p of l.paragraphs) {
+  if (l.paragraphs.length > 15) {
+    throw new AppError('VALIDATION_ERROR', 'Cover letter paragraphs exceed maximum allowed limit of 15.', 400);
+  }
+  for (let i = 0; i < l.paragraphs.length; i++) {
+    const p = l.paragraphs[i];
     if (typeof p !== 'string' || p.trim().length === 0) {
       throw new AppError('VALIDATION_ERROR', 'Each paragraph in the cover letter must be a non-empty string.', 400);
+    }
+    if (p.length > 3000) {
+      throw new AppError('VALIDATION_ERROR', `Paragraph at index ${i} exceeds maximum length of 3,000 characters.`, 400);
     }
   }
   if (!l.closing || typeof l.closing !== 'string') {
     throw new AppError('VALIDATION_ERROR', 'Cover letter must contain a closing string.', 400);
+  }
+  if (l.closing.length > 200) {
+    throw new AppError('VALIDATION_ERROR', 'Closing exceeds maximum length of 200 characters.', 400);
   }
   return {
     greeting: l.greeting.trim(),
@@ -311,7 +826,7 @@ router.post(
   (req: Request, res: Response) => {
     try {
       const resume = validateResume(req.body.resume);
-      const jobText = typeof req.body.jobText === 'string' ? req.body.jobText.trim() : '';
+      const jobText = validateJobText(req.body.jobText, 'Job description', false);
 
       if (!jobText) {
         res.json({
@@ -342,8 +857,8 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const resume = validateResume(req.body.resume);
-      const jobText = typeof req.body.jobText === 'string' ? req.body.jobText.trim() : '';
-      const explicitRole = typeof req.body.targetRole === 'string' ? req.body.targetRole.trim() : '';
+      const jobText = validateJobText(req.body.jobText, 'Job description', false);
+      const explicitRole = checkOptionalField(req.body.targetRole, 'Target role', RESUME_LIMITS.MAX_TITLE_LENGTH) || '';
 
       let job: JobAnalysis;
       if (jobText) {
@@ -401,11 +916,20 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const details = req.body.details as CreateResumeDetails;
-      if (!details || typeof details !== 'object') {
+      if (!details || typeof details !== 'object' || Array.isArray(details)) {
         throw new AppError('VALIDATION_ERROR', 'Details object is required.', 400);
       }
+      if (details.experience && Array.isArray(details.experience) && details.experience.length > RESUME_LIMITS.MAX_EXPERIENCE_ITEMS) {
+        throw new AppError('VALIDATION_ERROR', 'Experience entries exceed maximum allowed limit of 30.', 400);
+      }
+      if (details.education && Array.isArray(details.education) && details.education.length > RESUME_LIMITS.MAX_EDUCATION_ITEMS) {
+        throw new AppError('VALIDATION_ERROR', 'Education entries exceed maximum allowed limit of 15.', 400);
+      }
+      if (details.projects && Array.isArray(details.projects) && details.projects.length > RESUME_LIMITS.MAX_PROJECT_ITEMS) {
+        throw new AppError('VALIDATION_ERROR', 'Project entries exceed maximum allowed limit of 20.', 400);
+      }
 
-      const jobText = typeof req.body.jobText === 'string' ? req.body.jobText.trim() : undefined;
+      const jobText = req.body.jobText !== undefined ? validateJobText(req.body.jobText, 'Job description', false) : undefined;
       const result = await createResumeFromDetails(details, jobText);
 
       res.json({
@@ -519,8 +1043,8 @@ router.post(
       }
 
       const jdText =
-        typeof req.body.jobDescription === 'string' && req.body.jobDescription.trim().length > 0
-          ? req.body.jobDescription.slice(0, 10_000)
+        req.body.jobDescription !== undefined && req.body.jobDescription !== null && req.body.jobDescription !== ''
+          ? validateJobText(req.body.jobDescription, 'Job description', false)
           : null;
 
       let job: JobAnalysis | null = null;
@@ -536,19 +1060,13 @@ router.post(
       }
 
       const targetRole =
-        typeof req.body.targetRole === 'string' && req.body.targetRole.trim()
-          ? req.body.targetRole.trim().slice(0, 120)
-          : job?.title || '';
+        checkOptionalField(req.body.targetRole, 'Target role', RESUME_LIMITS.MAX_TITLE_LENGTH) || job?.title || '';
 
       const company =
-        typeof req.body.company === 'string' && req.body.company.trim()
-          ? req.body.company.trim().slice(0, 120)
-          : job?.company || '';
+        checkOptionalField(req.body.company, 'Company', RESUME_LIMITS.MAX_COMPANY_LENGTH) || job?.company || '';
 
       const tone =
-        typeof req.body.tone === 'string' && req.body.tone.trim()
-          ? req.body.tone.trim().slice(0, 40)
-          : 'professional';
+        checkOptionalField(req.body.tone, 'Tone', 50) || 'professional';
 
       const result = await generateCoverLetter({
         master: resume,
@@ -722,41 +1240,36 @@ router.post(
 // Helper: safe resume normalization
 // ---------------------------------------------------------------------------
 function getSafeResume(raw: any): ResumeData {
-  if (raw && typeof raw === 'object' && Array.isArray(raw.experience) && Array.isArray(raw.sectionOrder)) {
-    return raw as ResumeData;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {
+      personal: { fullName: '', email: '', phone: '', location: '', headline: '' },
+      summary: '',
+      experience: [],
+      education: [],
+      skills: { technical: [], soft: [] },
+      projects: [],
+      certifications: [],
+      languages: [],
+      achievements: [],
+      customSections: [],
+      sectionOrder: [...DEFAULT_SECTION_ORDER],
+      hiddenSections: [],
+    };
   }
-  return {
+
+  // If personal details with fullName is provided, validate with strict bounds
+  if (raw.personal && typeof raw.personal === 'object' && !Array.isArray(raw.personal) && raw.personal.fullName && typeof raw.personal.fullName === 'string' && raw.personal.fullName.trim()) {
+    return validateResume(raw);
+  }
+
+  // If fullName is missing, supply dummy placeholder so structural bounds are still rigorously validated
+  return validateResume({
+    ...raw,
     personal: {
-      fullName: raw?.personal?.fullName || '',
-      email: raw?.personal?.email || '',
-      phone: raw?.personal?.phone || '',
-      location: raw?.personal?.location || '',
-      headline: raw?.personal?.headline || '',
+      fullName: 'Anonymous Candidate',
+      ...(typeof raw.personal === 'object' && !Array.isArray(raw.personal) ? raw.personal : {}),
     },
-    summary: raw?.summary || '',
-    experience: Array.isArray(raw?.experience) ? raw.experience : [],
-    education: Array.isArray(raw?.education) ? raw.education : [],
-    skills: {
-      technical: Array.isArray(raw?.skills?.technical) ? raw.skills.technical : [],
-      soft: Array.isArray(raw?.skills?.soft) ? raw.skills.soft : [],
-    },
-    projects: Array.isArray(raw?.projects) ? raw.projects : [],
-    certifications: Array.isArray(raw?.certifications) ? raw.certifications : [],
-    languages: Array.isArray(raw?.languages) ? raw.languages : [],
-    achievements: Array.isArray(raw?.achievements) ? raw.achievements : [],
-    customSections: Array.isArray(raw?.customSections) ? raw.customSections : [],
-    sectionOrder: Array.isArray(raw?.sectionOrder) ? raw.sectionOrder : [
-      'summary',
-      'experience',
-      'projects',
-      'skills',
-      'education',
-      'certifications',
-      'languages',
-      'achievements',
-    ],
-    hiddenSections: Array.isArray(raw?.hiddenSections) ? raw.hiddenSections : [],
-  };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -782,11 +1295,10 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const resume = getSafeResume(req.body.resume);
+      const rawJd = req.body.jobDescription !== undefined ? req.body.jobDescription : req.body.jdText;
       const jdText =
-        typeof req.body.jobDescription === 'string' && req.body.jobDescription.trim().length > 0
-          ? req.body.jobDescription.slice(0, 10_000)
-          : typeof req.body.jdText === 'string' && req.body.jdText.trim().length > 0
-          ? req.body.jdText.slice(0, 10_000)
+        rawJd !== undefined && rawJd !== null && rawJd !== ''
+          ? validateJobText(rawJd, 'Job description', false)
           : null;
 
       let job: JobAnalysis | null = null;
@@ -798,14 +1310,10 @@ router.post(
       }
 
       const targetRole =
-        typeof req.body.targetRole === 'string' && req.body.targetRole.trim()
-          ? req.body.targetRole.trim().slice(0, 120)
-          : job?.title || '';
+        checkOptionalField(req.body.targetRole, 'Target role', RESUME_LIMITS.MAX_TITLE_LENGTH) || job?.title || '';
 
       const company =
-        typeof req.body.company === 'string' && req.body.company.trim()
-          ? req.body.company.trim().slice(0, 120)
-          : job?.company || '';
+        checkOptionalField(req.body.company, 'Company', RESUME_LIMITS.MAX_COMPANY_LENGTH) || job?.company || '';
 
       const prep = await generateInterviewPrep({
         master: resume,
@@ -839,18 +1347,18 @@ router.post(
   aiConcurrencyGuard,
   async (req: Request, res: Response) => {
     try {
-      const question = typeof req.body.question === 'string' ? req.body.question.trim().slice(0, 600) : '';
-      if (!question) {
+      const question = checkStringField(req.body.question, 'Interview question', 600);
+      if (!question.trim()) {
         res.status(400).json({ error: { code: 'INVALID_QUESTION', message: 'Interview question is required.' } });
         return;
       }
 
       const starRaw = req.body.star || {};
       const star: StarAnswerInput = {
-        situation: typeof starRaw.situation === 'string' ? starRaw.situation.trim().slice(0, 1500) : '',
-        task: typeof starRaw.task === 'string' ? starRaw.task.trim().slice(0, 1500) : '',
-        action: typeof starRaw.action === 'string' ? starRaw.action.trim().slice(0, 2500) : '',
-        result: typeof starRaw.result === 'string' ? starRaw.result.trim().slice(0, 1500) : '',
+        situation: checkOptionalField(starRaw.situation, 'Situation', 1500) || '',
+        task: checkOptionalField(starRaw.task, 'Task', 1500) || '',
+        action: checkOptionalField(starRaw.action, 'Action', 2500) || '',
+        result: checkOptionalField(starRaw.result, 'Result', 1500) || '',
       };
 
       if (!star.situation && !star.task && !star.action && !star.result) {
@@ -862,8 +1370,8 @@ router.post(
 
       const resume = getSafeResume(req.body.resume);
       const jdText =
-        typeof req.body.jobDescription === 'string' && req.body.jobDescription.trim().length > 0
-          ? req.body.jobDescription.slice(0, 10_000)
+        req.body.jobDescription !== undefined && req.body.jobDescription !== null && req.body.jobDescription !== ''
+          ? validateJobText(req.body.jobDescription, 'Job description', false)
           : null;
 
       let job: JobAnalysis | null = null;
@@ -900,27 +1408,27 @@ router.post(
   aiConcurrencyGuard,
   async (req: Request, res: Response) => {
     try {
-      const question = typeof req.body.question === 'string' ? req.body.question.trim().slice(0, 600) : '';
-      const answer = typeof req.body.answer === 'string' ? req.body.answer.trim().slice(0, 4000) : '';
+      const question = checkStringField(req.body.question, 'Interview question', 600);
+      const answer = checkStringField(req.body.answer, 'Candidate answer', 4000);
 
-      if (!question) {
+      if (!question.trim()) {
         res.status(400).json({ error: { code: 'INVALID_QUESTION', message: 'Interview question is required.' } });
         return;
       }
-      if (!answer) {
+      if (!answer.trim()) {
         res.status(400).json({ error: { code: 'EMPTY_ANSWER', message: 'Candidate answer is required.' } });
         return;
       }
 
       const difficulty =
-        typeof req.body.difficulty === 'string' ? req.body.difficulty.trim().slice(0, 30) : undefined;
+        checkOptionalField(req.body.difficulty, 'Difficulty', 30);
       const questionNumber = typeof req.body.questionNumber === 'number' ? req.body.questionNumber : undefined;
       const totalQuestions = typeof req.body.totalQuestions === 'number' ? req.body.totalQuestions : undefined;
 
       const resume = getSafeResume(req.body.resume);
       const jdText =
-        typeof req.body.jobDescription === 'string' && req.body.jobDescription.trim().length > 0
-          ? req.body.jobDescription.slice(0, 10_000)
+        req.body.jobDescription !== undefined && req.body.jobDescription !== null && req.body.jobDescription !== ''
+          ? validateJobText(req.body.jobDescription, 'Job description', false)
           : null;
 
       let job: JobAnalysis | null = null;
@@ -971,20 +1479,24 @@ router.post(
         return;
       }
 
-      const questionsAndAnswers = rawQa.map((item: any) => ({
-        question: typeof item.question === 'string' ? item.question.slice(0, 600) : '',
-        category: typeof item.category === 'string' ? item.category.slice(0, 50) : 'General',
-        answer: typeof item.answer === 'string' ? item.answer.slice(0, 4000) : '',
-        evaluation: item.evaluation,
+      if (rawQa.length > 25) {
+        throw new AppError('VALIDATION_ERROR', 'Questions and answers transcript exceeds maximum allowed limit of 25 items.', 400);
+      }
+
+      const questionsAndAnswers = rawQa.map((item: any, idx: number) => ({
+        question: checkStringField(item?.question, `Question[${idx}]`, 600),
+        category: checkOptionalField(item?.category, `Category[${idx}]`, 50) || 'General',
+        answer: checkStringField(item?.answer, `Answer[${idx}]`, 4000),
+        evaluation: item?.evaluation,
       }));
 
       const difficulty =
-        typeof req.body.difficulty === 'string' ? req.body.difficulty.trim().slice(0, 30) : undefined;
+        checkOptionalField(req.body.difficulty, 'Difficulty', 30);
 
       const resume = getSafeResume(req.body.resume);
       const jdText =
-        typeof req.body.jobDescription === 'string' && req.body.jobDescription.trim().length > 0
-          ? req.body.jobDescription.slice(0, 10_000)
+        req.body.jobDescription !== undefined && req.body.jobDescription !== null && req.body.jobDescription !== ''
+          ? validateJobText(req.body.jobDescription, 'Job description', false)
           : null;
 
       let job: JobAnalysis | null = null;
@@ -1040,27 +1552,53 @@ router.post(
   aiConcurrencyGuard,
   async (req: Request, res: Response) => {
     try {
-      const headline = typeof req.body.headline === 'string' ? req.body.headline.trim().slice(0, 300) : '';
-      const about = typeof req.body.about === 'string' ? req.body.about.trim().slice(0, 4000) : '';
-      const targetRole = typeof req.body.targetRole === 'string' ? req.body.targetRole.trim().slice(0, 150) : undefined;
-      const industry = typeof req.body.industry === 'string' ? req.body.industry.trim().slice(0, 150) : undefined;
-      const jobDescription = typeof req.body.jobDescription === 'string' ? req.body.jobDescription.trim().slice(0, 10_000) : undefined;
+      const headline = checkOptionalField(req.body.headline, 'Headline', 300) || '';
+      const about = checkOptionalField(req.body.about, 'About summary', 4000) || '';
+      const targetRole = checkOptionalField(req.body.targetRole, 'Target role', RESUME_LIMITS.MAX_TITLE_LENGTH);
+      const industry = checkOptionalField(req.body.industry, 'Industry', 150);
+      const jobDescription =
+        req.body.jobDescription !== undefined && req.body.jobDescription !== null && req.body.jobDescription !== ''
+          ? validateJobText(req.body.jobDescription, 'Job description', false)
+          : undefined;
 
       let experience: Array<{ title: string; company: string; period?: string; bullets: string[] }> | undefined;
-      if (Array.isArray(req.body.experience)) {
-        experience = req.body.experience.map((e: any) => ({
-          title: typeof e.title === 'string' ? e.title.slice(0, 100) : '',
-          company: typeof e.company === 'string' ? e.company.slice(0, 100) : '',
-          period: typeof e.period === 'string' ? e.period.slice(0, 50) : '',
-          bullets: Array.isArray(e.bullets)
-            ? e.bullets.map((b: any) => (typeof b === 'string' ? b.slice(0, 600) : '')).filter(Boolean)
-            : [],
-        }));
+      if (req.body.experience !== undefined) {
+        if (!Array.isArray(req.body.experience)) {
+          throw new AppError('VALIDATION_ERROR', 'Experience must be an array.', 400);
+        }
+        if (req.body.experience.length > RESUME_LIMITS.MAX_EXPERIENCE_ITEMS) {
+          throw new AppError('VALIDATION_ERROR', `Experience entries exceed maximum allowed limit of ${RESUME_LIMITS.MAX_EXPERIENCE_ITEMS}.`, 400);
+        }
+        experience = req.body.experience.map((e: any, idx: number) => {
+          if (!e || typeof e !== 'object' || Array.isArray(e)) {
+            throw new AppError('VALIDATION_ERROR', `Experience entry at index ${idx} must be an object.`, 400);
+          }
+          const rawBullets = Array.isArray(e.bullets) ? e.bullets : [];
+          if (rawBullets.length > RESUME_LIMITS.MAX_BULLETS_PER_EXPERIENCE) {
+            throw new AppError('VALIDATION_ERROR', `Experience[${idx}] bullets exceed maximum allowed limit of ${RESUME_LIMITS.MAX_BULLETS_PER_EXPERIENCE}.`, 400);
+          }
+          const bullets = rawBullets
+            .map((b: any, bIdx: number) => checkStringField(b, `Experience[${idx}].bullets[${bIdx}]`, RESUME_LIMITS.MAX_BULLET_LENGTH))
+            .filter(Boolean);
+
+          return {
+            title: checkStringField(e.title, `Experience[${idx}].title`, RESUME_LIMITS.MAX_TITLE_LENGTH),
+            company: checkStringField(e.company, `Experience[${idx}].company`, RESUME_LIMITS.MAX_COMPANY_LENGTH),
+            period: checkOptionalField(e.period, `Experience[${idx}].period`, RESUME_LIMITS.MAX_DATE_LENGTH),
+            bullets,
+          };
+        });
       }
 
       let skills: string[] | undefined;
-      if (Array.isArray(req.body.skills)) {
-        skills = req.body.skills.map((s: any) => (typeof s === 'string' ? s.trim().slice(0, 80) : '')).filter(Boolean);
+      if (req.body.skills !== undefined) {
+        if (!Array.isArray(req.body.skills)) {
+          throw new AppError('VALIDATION_ERROR', 'Skills must be an array.', 400);
+        }
+        if (req.body.skills.length > RESUME_LIMITS.MAX_TECHNICAL_SKILLS) {
+          throw new AppError('VALIDATION_ERROR', `Skills exceed maximum allowed limit of ${RESUME_LIMITS.MAX_TECHNICAL_SKILLS}.`, 400);
+        }
+        skills = req.body.skills.map((s: any, idx: number) => checkStringField(s, `Skill[${idx}]`, RESUME_LIMITS.MAX_SKILL_NAME_LENGTH)).filter(Boolean);
       }
 
       const resume = getSafeResume(req.body.resume);
@@ -1116,9 +1654,8 @@ router.post(
   aiConcurrencyGuard,
   async (req: Request, res: Response) => {
     try {
-      const company =
-        typeof req.body.company === 'string' ? req.body.company.trim().slice(0, 200) : '';
-      if (!company) {
+      const company = checkStringField(req.body.company, 'Company', RESUME_LIMITS.MAX_COMPANY_LENGTH);
+      if (!company.trim()) {
         res.status(400).json({
           error: {
             code: 'INVALID_COMPANY',
@@ -1129,8 +1666,8 @@ router.post(
       }
 
       const jdText =
-        typeof req.body.jobDescription === 'string' && req.body.jobDescription.trim().length > 0
-          ? req.body.jobDescription.slice(0, 5000)
+        req.body.jobDescription !== undefined && req.body.jobDescription !== null && req.body.jobDescription !== ''
+          ? validateJobText(req.body.jobDescription, 'Job description', false)
           : null;
 
       const research = await researchCompany({ company, jdText });
