@@ -365,8 +365,8 @@ export function generateDeterministicLinkedin(
     },
     recruiterKeywords,
     unsupportedClaimsDetected: [],
-    provider: 'deterministic-engine',
-    model: 'curevo-rules-v1',
+    provider: 'deterministic',
+    model: 'rules-v1',
     isFallback: true,
   };
 }
@@ -453,8 +453,8 @@ export async function optimizePublicLinkedin(
 
     return {
       ...sanitised,
-      provider: provider.name,
-      model: provider.model,
+      provider: 'AI Engine',
+      model: 'AI Engine',
       isFallback: false,
     };
   } catch (err) {

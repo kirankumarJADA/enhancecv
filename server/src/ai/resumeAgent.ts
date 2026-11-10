@@ -512,12 +512,12 @@ export async function runResumeAgent(
   const provider = getAiProvider();
 
   if (options.requireAi && !aiEnabled) {
-    throw new AiUnavailableError('AI_NOT_CONFIGURED', 'AI provider is not configured. NVIDIA API key required.', false);
+    throw new AiUnavailableError('AI_NOT_CONFIGURED', 'AI provider is not configured on the server.', false);
   }
 
   const meta: AgentMeta = {
-    provider: provider.name,
-    model: provider.model,
+    provider: aiEnabled ? 'AI Engine' : 'deterministic',
+    model: aiEnabled ? 'AI Engine' : 'rules-v1',
     usedAi: false,
     iterations: 0,
     repairCount: 0,

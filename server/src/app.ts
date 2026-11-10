@@ -11,7 +11,7 @@ import { rateLimit } from './middleware/rateLimit';
 import { newRequestId } from './lib/monitoring';
 import { corsOriginCheck } from './lib/cors';
 import { csrfProtection } from './middleware/csrf';
-import { getAiProvider } from './ai/provider';
+import { getAiProvider, getAiStatus } from './ai/provider';
 import publicRoutes from './routes/public';
 import authRoutes from './routes/auth';
 import profileRoutes from './routes/profile';
@@ -53,6 +53,11 @@ export async function buildApp(): Promise<express.Express> {
 
   app.get('/api/health', rateLimit({ windowMs: 60_000, max: 120 }), (_req, res) => {
     res.json({ ok: true, service: 'curevo-ai', time: new Date().toISOString() });
+  });
+
+  // Public AI status alias for frontend consumers (/api/ai/status -> getAiStatus())
+  app.get('/api/ai/status', rateLimit({ windowMs: 60_000, max: 120 }), (_req, res) => {
+    res.json(getAiStatus());
   });
 
   // Public stateless resume routes (NVIDIA Nemotron powered, in-memory, no database)

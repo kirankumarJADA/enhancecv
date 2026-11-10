@@ -1086,8 +1086,8 @@ router.post(
         company: company || undefined,
         rejectedCount: result.rejectedCount,
         warnings: result.warnings || [],
-        provider: result.provider,
-        model: result.model,
+        provider: result.isFallback ? 'deterministic' : 'AI Engine',
+        model: result.isFallback ? 'rules-v1' : 'AI Engine',
         isFallback: Boolean(result.isFallback),
       });
     } catch (err) {

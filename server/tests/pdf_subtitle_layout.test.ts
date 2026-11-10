@@ -77,6 +77,8 @@ const TEST_RESUME_LONG_SUBTITLES: ResumeData = {
   languages: [],
   achievements: [],
   customSections: [],
+  sectionOrder: ['summary', 'experience', 'projects', 'education', 'skills', 'certifications', 'languages', 'achievements'],
+  hiddenSections: [],
 };
 
 describe('PDF Subtitle Positioning & Margin Integrity Regression Suite', () => {

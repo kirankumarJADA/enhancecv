@@ -313,7 +313,7 @@ export async function createResumeFromDetails(
   if (!isAiEnabled()) {
     throw new AiUnavailableError(
       'AI_NOT_CONFIGURED',
-      'AI resume creation is not configured. NVIDIA API key required.',
+      'AI resume creation is not configured on the server.',
       false
     );
   }
@@ -441,8 +441,8 @@ export async function createResumeFromDetails(
     changeLog,
     truth,
     agent: {
-      provider: provider.name,
-      model: provider.model,
+      provider: 'AI Engine',
+      model: 'AI Engine',
       usedAi: true,
     },
   };

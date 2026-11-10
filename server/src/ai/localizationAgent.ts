@@ -166,5 +166,5 @@ export async function translateResume(
   }
 
   const warnings = validateTranslation(resume, translated);
-  return { resume: translated, warnings, provider: provider.name, model: provider.model, language };
+  return { resume: translated, warnings, provider: 'AI Engine', model: 'AI Engine', language };
 }

@@ -75,8 +75,6 @@ describe('AI Tailoring End-to-End Verification & Contract', () => {
         enabled: false,
         provider: 'deterministic',
         model: 'rules-v1',
-        baseUrl: '',
-        timeoutMs: 0,
         maxIterations: 2,
       });
       // Verify no secret keys exist in the response
@@ -215,8 +213,8 @@ describe('AI Tailoring End-to-End Verification & Contract', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.agent.usedAi).toBe(true);
-      expect(res.body.agent.provider).toBe('nvidia');
-      expect(res.body.agent.model).toBe('nvidia/nemotron-3.5-lightning-30b-a3b');
+      expect(res.body.agent.provider).toBe('AI Engine');
+      expect(res.body.agent.model).toBe('AI Engine');
       expect(res.body.agent.iterations).toBeGreaterThanOrEqual(1);
 
       // Tailored resume checks

@@ -350,16 +350,14 @@ export function getAiMaxIterations(): number {
   return boundedInt(process.env.AI_MAX_ITERATIONS, 2, 1, 4);
 }
 
-/** Public status for the frontend — never includes credentials. */
-export function getAiStatus(): { enabled: boolean; provider: string; model: string; baseUrl: string; timeoutMs: number; maxIterations: number } {
+/** Public status for the frontend — never includes credentials or internal provider details. */
+export function getAiStatus(): { enabled: boolean; provider: string; model: string; maxIterations: number; baseUrl?: string; timeoutMs?: number } {
   const p = getAiProvider();
-  const cfg = readAiConfigFromEnv();
+  const isReal = !(p instanceof RuleBasedProvider);
   return {
-    enabled: !(p instanceof RuleBasedProvider),
-    provider: p.name,
-    model: p.model,
-    baseUrl: cfg?.baseUrl || '',
-    timeoutMs: cfg?.timeoutMs || 0,
+    enabled: isReal,
+    provider: isReal ? 'AI Engine' : 'deterministic',
+    model: isReal ? 'AI Engine' : 'rules-v1',
     maxIterations: getAiMaxIterations(),
   };
 }

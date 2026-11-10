@@ -506,8 +506,8 @@ export async function generateInterviewPrep(input: EvidenceInput): Promise<Inter
       questions,
       studyPlan: prep.studyPlan,
       rejectedCount,
-      provider: provider.name,
-      model: provider.model,
+      provider: 'AI Engine',
+      model: 'AI Engine',
       isFallback: false,
       aiConfigured: true,
     };
@@ -555,8 +555,8 @@ export async function evaluateStarAnswer(
     return {
       ...evaluation,
       unsupportedClaims: unsupported,
-      provider: provider.name,
-      model: provider.model,
+      provider: 'AI Engine',
+      model: 'AI Engine',
       isFallback: false,
     };
   } catch (err) {
@@ -604,8 +604,8 @@ export async function evaluateMockAnswer(
     return {
       ...evaluation,
       unsupportedClaims: unsupported,
-      provider: provider.name,
-      model: provider.model,
+      provider: 'AI Engine',
+      model: 'AI Engine',
       isFallback: false,
     };
   } catch (err) {
@@ -655,8 +655,8 @@ export async function generateFinalMockReport(
 
     return {
       ...report,
-      provider: provider.name,
-      model: provider.model,
+      provider: 'AI Engine',
+      model: 'AI Engine',
       isFallback: false,
     };
   } catch (err) {

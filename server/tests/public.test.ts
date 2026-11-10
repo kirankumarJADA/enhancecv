@@ -610,8 +610,8 @@ describe('Phase 2 — Public Stateless API & NVIDIA Nemotron Backend', () => {
       expect(res.status).toBe(200);
       expect(res.body.resume).toBeDefined();
       expect(res.body.agent.usedAi).toBe(true);
-      expect(res.body.agent.provider).toBe('nvidia');
-      expect(res.body.agent.model).toBe('nvidia/nemotron-3.5-lightning-30b-a3b');
+      expect(res.body.agent.provider).toBe('AI Engine');
+      expect(res.body.agent.model).toBe('AI Engine');
       expect(res.body.atsAfter).toBeDefined();
       expect(res.body.truth).toBeDefined();
       expect(Array.isArray(res.body.changeLog)).toBe(true);
@@ -764,7 +764,8 @@ describe('Phase 2 — Public Stateless API & NVIDIA Nemotron Backend', () => {
       expect(res.body.ats).toBeDefined();
       expect(res.body.ats.overallScore).toBeGreaterThan(0);
       expect(res.body.agent.usedAi).toBe(true);
-      expect(res.body.agent.model).toBe('nvidia/nemotron-3.5-lightning-30b-a3b');
+      expect(res.body.agent.provider).toBe('AI Engine');
+      expect(res.body.agent.model).toBe('AI Engine');
     });
 
     it('Truth Guard rejects ungrounded qualifications or fabricated numbers in creation', async () => {

@@ -200,7 +200,7 @@ describe('Curevo AI — Cover Letter Generator Integration Suite', () => {
       expect(res.letter.paragraphs).toHaveLength(4);
       expect(res.rejectedCount).toBe(0);
       expect(res.isFallback).toBe(false);
-      expect(res.provider).toBe('mock-nemotron');
+      expect(res.provider).toBe('AI Engine');
     });
   });
 

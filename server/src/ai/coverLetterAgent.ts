@@ -274,8 +274,8 @@ export async function generateCoverLetter(input: {
     return {
       letter: sanitised.letter,
       rejectedCount: sanitised.rejectedCount,
-      provider: provider.name,
-      model: provider.model,
+      provider: 'AI Engine',
+      model: 'AI Engine',
       isFallback: false,
     };
   } catch (err) {

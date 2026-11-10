@@ -36,7 +36,7 @@ const PIPELINE_STAGES = [
   { label: 'Reviewing the final resume', detail: 'Critique pass on clarity, relevance and alignment…' },
 ];
 
-function TailoringProgress({ aiEnabled, provider, model }: { aiEnabled: boolean; provider?: string; model?: string }) {
+function TailoringProgress({ aiEnabled }: { aiEnabled: boolean }) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setElapsed((e) => e + 1), 2200);
@@ -48,7 +48,7 @@ function TailoringProgress({ aiEnabled, provider, model }: { aiEnabled: boolean;
     <div className="mx-auto max-w-xl py-16 text-center">
       <Spinner className="h-10 w-10 text-brand-500" />
       <h2 className="mt-6 text-lg font-semibold text-ink-900" aria-live="polite">
-        {aiEnabled ? `AI agent tailoring your CV${provider ? ` (${provider}${model ? ` · ${model}` : ''})` : ''}…` : 'Tailoring your CV…'}
+        {aiEnabled ? 'AI Engine tailoring your CV…' : 'Tailoring your CV…'}
       </h2>
       <div className="mx-auto mt-8 max-w-sm rounded-2xl border border-ink-100 bg-white p-5 text-left">
         <p className="text-sm font-medium text-ink-800">{stage.label}</p>
@@ -168,7 +168,7 @@ export default function Tailor() {
   // ---------------- GENERATING ----------------
   if (stage === 'generating') {
     const ai = aiStatus?.enabled;
-    return <TailoringProgress aiEnabled={!!ai} provider={aiStatus?.provider} model={aiStatus?.model} />;
+    return <TailoringProgress aiEnabled={!!ai} />;
   }
 
   // ---------------- RESULT ----------------
@@ -213,7 +213,7 @@ export default function Tailor() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-ink-900">AI agent</h2>
               <span className={`chip ${result.agent.usedAi ? 'bg-brand-50 text-brand-700' : 'bg-ink-100 text-ink-600'}`}>
-                {result.agent.usedAi ? `${result.agent.provider} · ${result.agent.model}` : 'Deterministic engine only'}
+                {result.agent.usedAi ? 'AI Engine' : 'Deterministic engine only'}
               </span>
             </div>
             <p className="mt-2 text-xs text-ink-500">

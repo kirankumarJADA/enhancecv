@@ -40,17 +40,17 @@ function masterClaimTokens(master: ResumeData): Set<string> {
   const addText = (t: string) => {
     for (const s of findSkillsInText(t)) tokens.add(s.canonical);
   };
-  addText(master.summary);
-  for (const e of master.experience) {
-    addText(`${e.title} ${e.company} ${e.location || ''} ${e.bullets.join(' ')}`);
+  addText(master.summary || '');
+  for (const e of master.experience || []) {
+    addText(`${e.title || ''} ${e.company || ''} ${e.location || ''} ${(e.bullets || []).join(' ')}`);
   }
-  for (const p of master.projects) {
-    addText(`${p.name} ${p.description || ''} ${(p.tech || []).join(' ')} ${p.bullets.join(' ')}`);
+  for (const p of master.projects || []) {
+    addText(`${p.name || ''} ${p.description || ''} ${(p.tech || []).join(' ')} ${(p.bullets || []).join(' ')}`);
   }
-  addText(master.skills.technical.join(' '));
-  addText(master.skills.soft.join(' '));
-  for (const ed of master.education) addText(`${ed.degree} ${ed.field || ''}`);
-  for (const c of master.certifications) addText(`${c.name} ${c.issuer || ''}`);
+  addText((master.skills?.technical || []).join(' '));
+  addText((master.skills?.soft || []).join(' '));
+  for (const ed of master.education || []) addText(`${ed.degree || ''} ${ed.field || ''}`);
+  for (const c of master.certifications || []) addText(`${c.name || ''} ${c.issuer || ''}`);
   return tokens;
 }
 
@@ -63,21 +63,313 @@ function claimsInText(text: string): string[] {
 function masterNumbers(master: ResumeData): Set<string> {
   const nums = new Set<string>();
   const text = [
-    master.summary,
-    ...master.experience.flatMap((e) => [e.title, e.company, ...e.bullets]),
-    ...master.projects.flatMap((p) => [p.name, p.description || '', ...p.bullets]),
-    ...master.achievements,
-    ...master.education.map((e) => `${e.degree} ${e.startDate} ${e.endDate} ${e.grade || ''}`),
+    master.summary || '',
+    ...(master.experience || []).flatMap((e) => [
+      e.title || '',
+      e.company || '',
+      e.startDate || '',
+      e.endDate || '',
+      e.dateDisplay || '',
+      (e as any).dates || '',
+      ...(e.bullets || []),
+    ]),
+    ...(master.projects || []).flatMap((p) => [p.name || '', p.description || '', ...(p.tech || []), ...(p.bullets || [])]),
+    ...(master.achievements || []),
+    ...(master.education || []).map((e) => `${e.degree || ''} ${e.startDate || ''} ${e.endDate || ''} ${e.dateDisplay || ''} ${e.grade || ''}`),
   ].join(' ');
-  for (const m of text.matchAll(/\d+(?:[.,]\d+)?%?/g)) nums.add(m[0]);
+  for (const m of text.matchAll(/(?:[\$€£¥]\s*)?\d+(?:[.,]\d+)?(?:\s*[kKmMbBtT%])?/g)) {
+    const raw = m[0].trim();
+    if (raw) {
+      nums.add(raw);
+      const core = raw.replace(/[^\d.,]/g, '');
+      if (core) nums.add(core);
+    }
+  }
+  const { maxYears, hasEvidence } = getSupportedExperienceYears(master);
+  if (hasEvidence) {
+    nums.add(Math.floor(maxYears).toString());
+    nums.add(maxYears.toString());
+  }
   return nums;
+}
+
+interface DateInterval {
+  startMonth: number; // continuous months from epoch: year * 12 + (month - 1)
+  endMonth: number;
+}
+
+const MONTH_MAP: Record<string, number> = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+};
+
+function parseDateToContinuousMonth(
+  raw: string | undefined,
+  isEnd: boolean,
+  isCurrent: boolean
+): number | null {
+  const now = new Date();
+  const currentTotalMonth = now.getFullYear() * 12 + now.getMonth();
+  if (isCurrent) return currentTotalMonth;
+  if (!raw || !raw.trim()) return null;
+  const t = raw.trim().toLowerCase();
+  if (/^(present|current|now|ongoing)$/i.test(t)) return currentTotalMonth;
+
+  // 1. "YYYY-MM" or "MM/YYYY"
+  const mIso = t.match(/^(\d{4})-(0?[1-9]|1[0-2])$/);
+  if (mIso) return parseInt(mIso[1], 10) * 12 + (parseInt(mIso[2], 10) - 1);
+
+  const mSlash = t.match(/^(0?[1-9]|1[0-2])\/(\d{4})$/);
+  if (mSlash) return parseInt(mSlash[2], 10) * 12 + (parseInt(mSlash[1], 10) - 1);
+
+  // 2. "Jan 2024" or "January 2024"
+  const mName = t.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{4})\b/i);
+  if (mName) {
+    const month = MONTH_MAP[mName[1].toLowerCase().slice(0, 3)] ?? 0;
+    return parseInt(mName[2], 10) * 12 + month;
+  }
+
+  // 3. Year only "2024": Start defaults to Jan (0), End defaults to Dec (11)
+  const mYear = t.match(/\b(19\d{2}|20\d{2})\b/);
+  if (mYear) {
+    const y = parseInt(mYear[1], 10);
+    return isEnd ? y * 12 + 11 : y * 12 + 0;
+  }
+  return null;
+}
+
+/** Calculate true accumulated months across union of intervals, excluding gaps and merging overlaps. */
+export function calculateIntervalUnionYears(intervals: DateInterval[]): number {
+  if (intervals.length === 0) return 0;
+  // Discard invalid / reversed intervals (start > end)
+  const valid = intervals.filter((i) => i.startMonth <= i.endMonth);
+  if (valid.length === 0) return 0;
+
+  // Sort by startMonth ascending, then endMonth ascending
+  valid.sort((a, b) => a.startMonth - b.startMonth || a.endMonth - b.endMonth);
+
+  // Merge overlapping and contiguous intervals
+  const merged: DateInterval[] = [valid[0]];
+  for (let i = 1; i < valid.length; i++) {
+    const cur = valid[i];
+    const prev = merged[merged.length - 1];
+    if (cur.startMonth <= prev.endMonth + 1) {
+      prev.endMonth = Math.max(prev.endMonth, cur.endMonth);
+    } else {
+      merged.push(cur);
+    }
+  }
+
+  // Sum durations across merged intervals
+  let totalMonths = 0;
+  for (const interval of merged) {
+    totalMonths += (interval.endMonth - interval.startMonth + 1);
+  }
+  return Math.round((totalMonths / 12) * 10) / 10;
+}
+
+const LEADERSHIP_TITLE_RE = /\b(lead|leader|manager|director|head|vp|vice president|chief|principal|supervisor|architect|founder|co-founder)\b/i;
+const LEADERSHIP_BULLET_RE = /\b(?:managed|led|directed|supervised)\s+(?:a\s+team|engineers|developers|people|staff|direct reports|\d+)/i;
+
+function isLeadershipExperience(e: ExperienceItem): boolean {
+  if (LEADERSHIP_TITLE_RE.test(e.title || '')) return true;
+  for (const b of e.bullets || []) {
+    if (LEADERSHIP_BULLET_RE.test(b)) return true;
+  }
+  return false;
+}
+
+/**
+ * Context-aware helper to derive maximum supported general and leadership experience (in years)
+ * from Master CV explicit statements and conservative interval unions.
+ */
+export function getSupportedExperienceYears(master: ResumeData): {
+  maxYears: number;
+  maxLeadershipYears: number;
+  hasEvidence: boolean;
+  hasLeadershipEvidence: boolean;
+} {
+  const generalIntervals: DateInterval[] = [];
+  const leadershipIntervals: DateInterval[] = [];
+
+  for (const e of master.experience || []) {
+    const raw = `${e.startDate || ''} ${e.endDate || ''} ${e.dateDisplay || ''} ${(e as any).dates || ''}`;
+    const isCurrent = Boolean(e.current || /\b(present|current|now|ongoing)\b/i.test(raw));
+    const start = parseDateToContinuousMonth(e.startDate || e.dateDisplay || (e as any).dates, false, false);
+    const end = parseDateToContinuousMonth(e.endDate || e.dateDisplay || (e as any).dates, true, isCurrent);
+
+    if (start !== null && end !== null && start <= end) {
+      generalIntervals.push({ startMonth: start, endMonth: end });
+      if (isLeadershipExperience(e)) {
+        leadershipIntervals.push({ startMonth: start, endMonth: end });
+      }
+    }
+  }
+
+  const derivedGeneralYears = calculateIntervalUnionYears(generalIntervals);
+  const derivedLeadershipYears = calculateIntervalUnionYears(leadershipIntervals);
+
+  let statedGeneralMax: number | null = null;
+  let statedLeadershipMax: number | null = null;
+  const masterTexts = [
+    master.summary || '',
+    ...master.experience.flatMap((e) => [e.title, e.company, ...(e.bullets || [])]),
+    ...master.projects.flatMap((p) => [p.name, p.description || '', ...(p.bullets || [])]),
+    ...(master.achievements || []),
+  ].join(' ');
+
+  for (const m of masterTexts.matchAll(/\b(\d+(?:\.\d+)?)\+?\s*(?:-|\s+)?(?:years?|yrs?)(?:\s+of)?(?:\s+(?:professional|hands-on|industry|software|engineering|technical|work))?\s+(?:experience|career|tenure|working)\b/gi)) {
+    const y = parseFloat(m[1]);
+    if (!Number.isNaN(y) && y > 0 && y < 70) {
+      if (statedGeneralMax === null || y > statedGeneralMax) statedGeneralMax = y;
+    }
+  }
+  for (const m of masterTexts.matchAll(/\b(\d+(?:\.\d+)?)\+?\s*(?:-|\s+)?(?:years?|yrs?)\s+experience\b/gi)) {
+    const y = parseFloat(m[1]);
+    if (!Number.isNaN(y) && y > 0 && y < 70) {
+      if (statedGeneralMax === null || y > statedGeneralMax) statedGeneralMax = y;
+    }
+  }
+
+  for (const m of masterTexts.matchAll(/\b(\d+(?:\.\d+)?)\+?\s*(?:-|\s+)?(?:years?|yrs?)(?:\s+of)?\s+(?:engineering\s+|technical\s+|team\s+|executive\s+)?(?:leadership|management|supervising|leading)\b/gi)) {
+    const y = parseFloat(m[1]);
+    if (!Number.isNaN(y) && y > 0 && y < 70) {
+      if (statedLeadershipMax === null || y > statedLeadershipMax) statedLeadershipMax = y;
+    }
+  }
+
+  const maxYears = Math.max(statedGeneralMax ?? 0, derivedGeneralYears);
+  const maxLeadershipYears = Math.max(statedLeadershipMax ?? 0, derivedLeadershipYears);
+
+  return {
+    maxYears,
+    maxLeadershipYears,
+    hasEvidence: generalIntervals.length > 0 || statedGeneralMax !== null,
+    hasLeadershipEvidence: leadershipIntervals.length > 0 || statedLeadershipMax !== null,
+  };
+}
+
+/** Check if text claims an unsupported leadership duration. */
+export function checkLeadershipDuration(text: string, master: ResumeData): string[] {
+  const unsupported: string[] = [];
+  const { maxLeadershipYears, hasLeadershipEvidence } = getSupportedExperienceYears(master);
+
+  const leadershipPatterns = [
+    /\b(\d+(?:\.\d+)?)\+?\s*(?:-|\s+)?(?:years?|yrs?)\s+(?:of\s+)?(?:engineering\s+|technical\s+|team\s+|executive\s+)?(?:leadership|management|managing|leading)\b/gi,
+    /\b(?:led|managed|directed|supervised)\s+.*?\bfor\s+(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?)\b/gi,
+    /\b(\d+(?:\.\d+)?)\+?-year\s+(?:leadership|management|lead)\b/gi,
+  ];
+
+  for (const pat of leadershipPatterns) {
+    for (const m of text.matchAll(pat)) {
+      const claimed = parseFloat(m[1]);
+      if (Number.isNaN(claimed)) continue;
+      if (!hasLeadershipEvidence || claimed > maxLeadershipYears) {
+        unsupported.push(m[0].trim());
+      }
+    }
+  }
+  return unsupported;
+}
+
+/** Check if text claims an unsupported general or leadership experience duration. */
+export function checkExperienceDuration(text: string, master: ResumeData): string[] {
+  const unsupported: string[] = [];
+  const { maxYears, hasEvidence } = getSupportedExperienceYears(master);
+
+  // Check leadership duration first: cannot infer leadership from general experience
+  const leadershipClaims = checkLeadershipDuration(text, master);
+  unsupported.push(...leadershipClaims);
+
+  const generalPatterns = [
+    /\b(\d+(?:\.\d+)?)\+?\s*(?:-|\s+)?(?:years?|yrs?)\b/gi,
+    /\b(\d+(?:\.\d+)?)\+?-year\b/gi,
+  ];
+
+  for (const pat of generalPatterns) {
+    for (const m of text.matchAll(pat)) {
+      // If already flagged under leadership claims, skip duplicate
+      if (leadershipClaims.some((l) => l.includes(m[0].trim()))) continue;
+      const claimed = parseFloat(m[1]);
+      if (Number.isNaN(claimed)) continue;
+      if (!hasEvidence || claimed > maxYears) {
+        unsupported.push(m[0].trim());
+      }
+    }
+  }
+  return unsupported;
+}
+
+/** Extract supported leadership / team size headcount from Master CV. */
+export function getSupportedHeadcount(master: ResumeData): { maxHeadcount: number; hasHeadcountEvidence: boolean } {
+  let maxCount = 0;
+  let hasEvidence = false;
+  const masterTexts = [
+    master.summary || '',
+    ...master.experience.flatMap((e) => [e.title, e.company, ...(e.bullets || [])]),
+    ...master.projects.flatMap((p) => [p.name, p.description || '', ...(p.bullets || [])]),
+    ...(master.achievements || []),
+  ].join(' ');
+
+  const headcountPatterns = [
+    /\b(?:team|department|group|squad|pod)\s+of\s+(\d+)\b/gi,
+    /\b(\d+)\+?\s*(?:engineers?|developers?|direct reports?|people|staff|employees?|team members?)\b/gi,
+    /\b(?:managed|led|directed|supervised|guided)\s+(?:a\s+team\s+of\s+)?(\d+)\b/gi,
+  ];
+
+  for (const pat of headcountPatterns) {
+    for (const m of masterTexts.matchAll(pat)) {
+      const n = parseInt(m[1], 10);
+      if (!Number.isNaN(n) && n > 0 && n < 10000) {
+        hasEvidence = true;
+        if (n > maxCount) maxCount = n;
+      }
+    }
+  }
+  return { maxHeadcount: maxCount, hasHeadcountEvidence: hasEvidence };
+}
+
+/** Check if text claims an unsupported team size or leadership scale. */
+export function checkHeadcountClaims(text: string, master: ResumeData): string[] {
+  const unsupported: string[] = [];
+  const { maxHeadcount, hasHeadcountEvidence } = getSupportedHeadcount(master);
+  const patterns = [
+    /\b(?:team|department|group|squad|pod)\s+of\s+(\d+)\b/gi,
+    /\b(\d+)\+?\s*(?:engineers?|developers?|direct reports?|people|staff|employees?|team members?)\b/gi,
+    /\b(?:managed|led|directed|supervised|guided)\s+(?:a\s+team\s+of\s+)?(\d+)\b/gi,
+  ];
+
+  for (const pat of patterns) {
+    for (const m of text.matchAll(pat)) {
+      const claimed = parseInt(m[1], 10);
+      if (Number.isNaN(claimed) || claimed <= 1) continue; // "team of 1" or innocuous count
+      if (!hasHeadcountEvidence || claimed > maxHeadcount) {
+        unsupported.push(m[0].trim());
+      }
+    }
+  }
+
+  // When candidate has no verified management or leadership history, reject ungrounded management claims
+  const hasLeadershipEvidence = hasHeadcountEvidence || (master.experience || []).some(isLeadershipExperience);
+  if (!hasLeadershipEvidence) {
+    const ungroundedPatterns = [
+      /\b(?:managed|directed|supervised)\s+(?:a\s+)?(?:cross-functional\s+)?(?:team|department|squad|group)\b/gi,
+    ];
+    for (const pat of ungroundedPatterns) {
+      for (const m of text.matchAll(pat)) {
+        unsupported.push(m[0].trim());
+      }
+    }
+  }
+
+  return unsupported;
 }
 
 /**
  * Check one candidate bullet against the Master CV without mutating anything.
  * Used by the AI agent's Truth Guard to pre-validate AI-proposed rewrites:
- * technologies/claims must exist in the master, and no new numbers may appear
- * (small ints 1–2 digits are tolerated as list indices/counts).
+ * technologies/claims must exist in the master, duration/headcount claims must
+ * be grounded in evidence, and no unevidenced metrics may appear.
  */
 export function isBulletTruthful(
   bullet: string,
@@ -87,25 +379,51 @@ export function isBulletTruthful(
 ): { ok: boolean; unsupported: string[] } {
   const skills = masterSkills ?? masterClaimTokens(master);
   const nums = masterNums ?? masterNumbers(master);
-  const unsupported = [
+  const unsupported: string[] = [
     ...claimsInText(bullet).filter((c) => !skills.has(c)),
   ];
-  const bulletNums = [...bullet.matchAll(/\d+(?:[.,]\d+)?%?/g)].map((m) => m[0]);
-  unsupported.push(...bulletNums.filter((n) => !nums.has(n) && !/^\d{1,2}$/.test(n)));
+
+  // Context-aware checks:
+  // 1. Duration / years of experience
+  unsupported.push(...checkExperienceDuration(bullet, master));
+
+  // 2. Headcount / leadership scale
+  unsupported.push(...checkHeadcountClaims(bullet, master));
+
+  // Helper: whitelist semantic version numbers (e.g. Python 3.11, OAuth 2.0, PostgreSQL 14)
+  const isSemanticVersion = (token: string, fullStr: string) => {
+    const idx = fullStr.indexOf(token);
+    if (idx <= 0) return false;
+    const prefix = fullStr.slice(Math.max(0, idx - 18), idx).trim();
+    return /\b(python|java|node(?:\.js)?|postgres(?:ql)?|vue|angular|react|oauth|tls|http|version|v\.?)$/i.test(prefix);
+  };
+
+  // 3. Financial and magnitude metrics
+  const bulletMetrics = [...bullet.matchAll(/(?:[\$€£¥]\s*)?\d+(?:[.,]\d+)?(?:\s*[kKmMbBtT%])?/g)]
+    .map((m) => m[0].trim())
+    .filter(Boolean);
+
+  for (const m of bulletMetrics) {
+    if (isSemanticVersion(m, bullet)) continue;
+    const core = m.replace(/[^\d.,]/g, '');
+    const hasSymbolOrSuffix = /[^\d]/.test(m);
+    if (hasSymbolOrSuffix) {
+      if (!nums.has(m) && !nums.has(core)) {
+        unsupported.push(m);
+      }
+    } else {
+      if (!nums.has(m) && !/^\d{1,2}$/.test(m)) {
+        unsupported.push(m);
+      }
+    }
+  }
+
   return { ok: unsupported.length === 0, unsupported: [...new Set(unsupported)] };
 }
 
 function yearsOfExperience(master: ResumeData): number | null {
-  let earliest: number | null = null;
-  for (const e of master.experience) {
-    const m = (e.startDate || '').match(/(\d{4})/);
-    if (m) {
-      const y = parseInt(m[1], 10);
-      if (y > 1950 && y <= new Date().getFullYear() && (earliest === null || y < earliest)) earliest = y;
-    }
-  }
-  if (earliest === null) return null;
-  return Math.max(0, new Date().getFullYear() - earliest);
+  const { maxYears, hasEvidence } = getSupportedExperienceYears(master);
+  return hasEvidence ? Math.floor(maxYears) : null;
 }
 
 /** Rewrite a weak bullet opener. Only rewords — never adds technology or numbers. */
@@ -439,15 +757,11 @@ export function validateTruth(
   const autoFixed: string[] = [];
 
   const checkAndFix = (section: string, bullet: string, masterVersion: string | undefined): TruthCheck => {
-    const claims = claimsInText(bullet);
-    const unsupported = claims.filter((c) => !skills.has(c));
-    // numbers that the master never mentions (excluding innocuous small ints and dates)
-    const bulletNums = [...bullet.matchAll(/\d+(?:[.,]\d+)?%?/g)].map((m) => m[0]);
-    const unsupportedNums = bulletNums.filter((n) => !nums.has(n) && !/^\d{1,2}$/.test(n));
-    const problems = [...unsupported, ...unsupportedNums];
-    if (problems.length === 0) {
+    const check = isBulletTruthful(bullet, master, skills, nums);
+    if (check.ok) {
       return { bullet, status: 'supported', unsupportedClaims: [], note: section };
     }
+    const problems = check.unsupported;
     // Auto-fix: revert to master version if available
     if (masterVersion !== undefined && masterVersion.trim()) {
       autoFixed.push(`"${bullet.slice(0, 80)}${bullet.length > 80 ? '…' : ''}" → reverted to Master CV version`);
@@ -483,14 +797,14 @@ export function validateTruth(
     });
   }
 
-  // Summary check: every claim in the summary must exist in the master
-  const summaryClaims = claimsInText(candidate.summary).filter((c) => !skills.has(c));
-  if (summaryClaims.length > 0) {
+  // Summary check: every claim in the summary must exist in the master and satisfy Truth Guard
+  const summaryCheck = isBulletTruthful(candidate.summary, master, skills, nums);
+  if (!summaryCheck.ok) {
     checks.push({
       bullet: candidate.summary,
       status: 'warning',
-      unsupportedClaims: summaryClaims,
-      note: 'Summary mentions content not present in the Master CV — please verify.',
+      unsupportedClaims: summaryCheck.unsupported,
+      note: 'Summary mentions content or metrics not present in the Master CV — please verify.',
     });
   }
 

@@ -137,5 +137,5 @@ export async function generateLinkedinSuggestions(input: {
   });
 
   const sanitised = sanitiseLinkedin(suggestions, master);
-  return { suggestions: sanitised.suggestions, rejectedCount: sanitised.rejectedCount, provider: provider.name, model: provider.model };
+  return { suggestions: sanitised.suggestions, rejectedCount: sanitised.rejectedCount, provider: 'AI Engine', model: 'AI Engine' };
 }

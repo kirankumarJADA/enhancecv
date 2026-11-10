@@ -95,5 +95,5 @@ export async function suggestGrammarImprovements(input: EvidenceInput): Promise<
     });
   }
 
-  return { suggestions, rejectedCount, provider: provider.name, model: provider.model };
+  return { suggestions, rejectedCount, provider: 'AI Engine', model: 'AI Engine' };
 }

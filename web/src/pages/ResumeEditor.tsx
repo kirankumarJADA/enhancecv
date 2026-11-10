@@ -312,7 +312,7 @@ export default function ResumeEditor() {
 
           {aiStatus?.enabled && (
             <button className="btn-secondary w-full" onClick={() => void runAiCritique()} disabled={aiBusy}>
-              {aiBusy && <Spinner className="h-4 w-4" />} AI Review ({aiStatus.model})
+              {aiBusy && <Spinner className="h-4 w-4" />} AI Review (AI Engine)
             </button>
           )}
 
