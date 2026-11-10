@@ -9,6 +9,7 @@ import type { Express } from 'express';
 const FORBIDDEN_TOKENS = [
   'nvidia/nemotron',
   'nemotron-3.5-lightning-30b-a3b',
+  'nemotron-3-ultra-550b-a55b',
   'integrate.api.nvidia.com',
   'api.openai.com',
   'gpt-4o',

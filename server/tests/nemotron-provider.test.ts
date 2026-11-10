@@ -1,14 +1,26 @@
-// Curevo AI — NVIDIA Nemotron Provider & Empty Response Regression Test Suite
+// Curevo AI — NVIDIA Nemotron Provider & Robustness Regression Test Suite
 //
 // Verifies:
-// 1. Request payload contract: stream: false, chat_template_kwargs: { enable_thinking: false },
-//    adequate max_tokens (4000), low temperature (0.2), and messages.
-// 2. Empty response handling: choices[0].message.content empty/missing triggers sanitized
-//    diagnostics and raises AI_MALFORMED without logging prompts or PII.
-// 3. Truncation / finish_reason="length" handling: triggers adaptive retry with increased
-//    max_tokens budget.
-// 4. Resilience: JSON repair for trailing commas, code fences, and surrounding prose.
-// 5. Error handling: timeouts, 429 rate limits, 401/403 auth errors, and 5xx server errors.
+// 1. Target model configuration: nvidia/nemotron-3-ultra-550b-a55b default for NVIDIA provider.
+// 2. Request payload contract for Ultra:
+//    - stream: false
+//    - reasoning_effort: 'medium'
+//    - initial max_tokens: 8192
+//    - temperature: 0.2
+//    - top_p: omitted (endpoint default retained)
+//    - chat_template_kwargs: omitted (not sent for Ultra)
+// 3. Backward compatibility:
+//    - Legacy Lightning sends chat_template_kwargs: { enable_thinking: false } and omits reasoning_effort.
+// 4. Reasoning trace isolation:
+//    - choice.message.reasoning_content is isolated and ignored.
+//    - <think>...</think> tags embedded in choice.message.content are stripped before parsing.
+// 5. Truncation / finish_reason="length" handling:
+//    - Adaptive retry expands max_tokens up to 32,768 for Ultra.
+// 6. Empty response handling:
+//    - choices[0].message.content empty/missing triggers sanitized diagnostics and raises AI_MALFORMED
+//      without logging prompts or PII.
+// 7. Error handling:
+//    - Timeouts, 429 rate limits, 401/403 auth errors, and 5xx server errors.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { z } from 'zod';
@@ -35,7 +47,32 @@ describe('NVIDIA Nemotron Provider Configuration & Robustness', () => {
     global.fetch = originalFetch;
   });
 
-  it('sets stream: false and chat_template_kwargs: { enable_thinking: false } for nvidia provider', async () => {
+  it('reads default model as nvidia/nemotron-3-ultra-550b-a55b and timeout as 120000ms from env', () => {
+    const origNvidia = process.env.NVIDIA_API_KEY;
+    const origModel = process.env.AI_MODEL;
+    const origTimeout = process.env.AI_TIMEOUT_MS;
+
+    try {
+      process.env.NVIDIA_API_KEY = 'nvapi-test-key-550b';
+      delete process.env.AI_MODEL;
+      delete process.env.AI_TIMEOUT_MS;
+
+      const cfg = readAiConfigFromEnv();
+      expect(cfg).not.toBeNull();
+      expect(cfg!.providerId).toBe('nvidia');
+      expect(cfg!.model).toBe('nvidia/nemotron-3-ultra-550b-a55b');
+      expect(cfg!.baseUrl).toBe('https://integrate.api.nvidia.com/v1');
+      expect(cfg!.timeoutMs).toBe(120_000);
+      expect(cfg!.maxRetries).toBe(1);
+      expect(cfg!.maxIterations).toBe(2);
+    } finally {
+      if (origNvidia !== undefined) process.env.NVIDIA_API_KEY = origNvidia; else delete process.env.NVIDIA_API_KEY;
+      if (origModel !== undefined) process.env.AI_MODEL = origModel; else delete process.env.AI_MODEL;
+      if (origTimeout !== undefined) process.env.AI_TIMEOUT_MS = origTimeout; else delete process.env.AI_TIMEOUT_MS;
+    }
+  });
+
+  it('sets stream: false, reasoning_effort: "medium", max_tokens: 8192, and omits chat_template_kwargs for Nemotron Ultra', async () => {
     let capturedBody: Record<string, unknown> | null = null;
     let capturedHeaders: Record<string, string> | null = null;
 
@@ -51,12 +88,12 @@ describe('NVIDIA Nemotron Provider Configuration & Robustness', () => {
               {
                 message: {
                   role: 'assistant',
-                  content: JSON.stringify({ summary: 'A great summary', skills: ['TypeScript', 'Node.js'] }),
+                  content: JSON.stringify({ summary: 'Ultra summary', skills: ['TypeScript', 'Kubernetes'] }),
                 },
                 finish_reason: 'stop',
               },
             ],
-            usage: { completion_tokens: 35, total_tokens: 150 },
+            usage: { completion_tokens: 45, total_tokens: 220 },
           }),
       } as Response;
     });
@@ -64,10 +101,63 @@ describe('NVIDIA Nemotron Provider Configuration & Robustness', () => {
     const provider = new OpenAiCompatibleProvider({
       providerId: 'nvidia',
       apiKey: 'nvapi-test-key-12345',
+      model: 'nvidia/nemotron-3-ultra-550b-a55b',
+      baseUrl: 'https://integrate.api.nvidia.com/v1',
+      timeoutMs: 120_000,
+      maxRetries: 1,
+      maxIterations: 2,
+    });
+
+    const result = await provider.completeJson({
+      system: 'You are Curevo AI',
+      user: 'Generate a resume summary',
+      schema: testSchema,
+      temperature: 0.2,
+    });
+
+    expect(result.summary).toBe('Ultra summary');
+    expect(capturedBody).toBeDefined();
+    expect(capturedBody!.model).toBe('nvidia/nemotron-3-ultra-550b-a55b');
+    expect(capturedBody!.stream).toBe(false);
+    expect(capturedBody!.reasoning_effort).toBe('medium');
+    expect(capturedBody!.chat_template_kwargs).toBeUndefined();
+    expect(capturedBody!.top_p).toBeUndefined(); // endpoint default retained
+    expect(capturedBody!.max_tokens).toBe(8192);
+    expect(capturedBody!.temperature).toBe(0.2);
+    expect(capturedHeaders!['Accept']).toBe('application/json');
+    expect(capturedHeaders!['Authorization']).toBe('Bearer nvapi-test-key-12345');
+  });
+
+  it('maintains backward compatibility: sends chat_template_kwargs: { enable_thinking: false } for legacy Lightning', async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+
+    global.fetch = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+      capturedBody = JSON.parse(init.body as string);
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  role: 'assistant',
+                  content: JSON.stringify({ summary: 'Lightning summary', skills: ['TypeScript'] }),
+                },
+                finish_reason: 'stop',
+              },
+            ],
+          }),
+      } as Response;
+    });
+
+    const provider = new OpenAiCompatibleProvider({
+      providerId: 'nvidia',
+      apiKey: 'nvapi-test-key-lightning',
       model: 'nvidia/nemotron-3.5-lightning-30b-a3b',
       baseUrl: 'https://integrate.api.nvidia.com/v1',
-      timeoutMs: 15000,
-      maxRetries: 2,
+      timeoutMs: 65_000,
+      maxRetries: 1,
       maxIterations: 2,
     });
 
@@ -79,15 +169,57 @@ describe('NVIDIA Nemotron Provider Configuration & Robustness', () => {
       temperature: 0.2,
     });
 
-    expect(result.summary).toBe('A great summary');
+    expect(result.summary).toBe('Lightning summary');
     expect(capturedBody).toBeDefined();
-    expect(capturedBody!.stream).toBe(false);
-    expect(capturedBody!.chat_template_kwargs).toEqual({ enable_thinking: false });
-    expect(capturedBody!.max_tokens).toBe(4000);
-    expect(capturedBody!.temperature).toBe(0.2);
     expect(capturedBody!.model).toBe('nvidia/nemotron-3.5-lightning-30b-a3b');
-    expect(capturedHeaders!['Accept']).toBe('application/json');
-    expect(capturedHeaders!['Authorization']).toBe('Bearer nvapi-test-key-12345');
+    expect(capturedBody!.chat_template_kwargs).toEqual({ enable_thinking: false });
+    expect(capturedBody!.reasoning_effort).toBeUndefined();
+    expect(capturedBody!.max_tokens).toBe(4000);
+  });
+
+  it('isolates reasoning traces: strips <think> tags and ignores reasoning_content', async () => {
+    global.fetch = vi.fn().mockImplementation(async () => {
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  role: 'assistant',
+                  reasoning_content: 'Chain of thought: candidate has 5 years experience, emphasize TypeScript.',
+                  content: `<think>\nThinking about candidate strengths...\nFinalizing output format...\n</think>\n{\n  "summary": "Accomplished engineer with 5 years experience.",\n  "skills": ["TypeScript", "Node.js"]\n}`,
+                },
+                finish_reason: 'stop',
+              },
+            ],
+            usage: { completion_tokens: 120, total_tokens: 300 },
+          }),
+      } as Response;
+    });
+
+    const provider = new OpenAiCompatibleProvider({
+      providerId: 'nvidia',
+      apiKey: 'nvapi-ultra-key',
+      model: 'nvidia/nemotron-3-ultra-550b-a55b',
+      baseUrl: 'https://integrate.api.nvidia.com/v1',
+      timeoutMs: 120_000,
+      maxRetries: 1,
+      maxIterations: 2,
+    });
+
+    const result = await provider.completeJson({
+      system: 'You are Curevo AI',
+      user: 'Tailor resume',
+      schema: testSchema,
+    });
+
+    expect(result.summary).toBe('Accomplished engineer with 5 years experience.');
+    expect(result.skills).toEqual(['TypeScript', 'Node.js']);
+    // Verify no thinking tags or chain of thought leaked into the output
+    expect(JSON.stringify(result)).not.toContain('think');
+    expect(JSON.stringify(result)).not.toContain('Chain of thought');
   });
 
   it('handles empty choices[0].message.content gracefully and raises AI_MALFORMED', async () => {
@@ -119,7 +251,7 @@ describe('NVIDIA Nemotron Provider Configuration & Robustness', () => {
     const provider = new OpenAiCompatibleProvider({
       providerId: 'nvidia',
       apiKey: 'nvapi-secret-key-999',
-      model: 'nvidia/nemotron-3.5-lightning-30b-a3b',
+      model: 'nvidia/nemotron-3-ultra-550b-a55b',
       baseUrl: 'https://integrate.api.nvidia.com/v1',
       timeoutMs: 10000,
       maxRetries: 1,
@@ -141,7 +273,7 @@ describe('NVIDIA Nemotron Provider Configuration & Robustness', () => {
     consoleSpy.mockRestore();
   });
 
-  it('detects finish_reason="length" and executes adaptive retry with increased max_tokens', async () => {
+  it('detects finish_reason="length" and executes adaptive retry with increased max_tokens up to 32768 for Ultra', async () => {
     const requestedTokenLimits: number[] = [];
 
     global.fetch = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
@@ -164,7 +296,7 @@ describe('NVIDIA Nemotron Provider Configuration & Robustness', () => {
                   finish_reason: 'length',
                 },
               ],
-              usage: { completion_tokens: 4000, total_tokens: 4200 },
+              usage: { completion_tokens: 8192, total_tokens: 8500 },
             }),
         } as Response;
       }
@@ -184,7 +316,7 @@ describe('NVIDIA Nemotron Provider Configuration & Robustness', () => {
                 finish_reason: 'stop',
               },
             ],
-            usage: { completion_tokens: 4500, total_tokens: 4700 },
+            usage: { completion_tokens: 9500, total_tokens: 10000 },
           }),
       } as Response;
     });
@@ -192,10 +324,10 @@ describe('NVIDIA Nemotron Provider Configuration & Robustness', () => {
     const provider = new OpenAiCompatibleProvider({
       providerId: 'nvidia',
       apiKey: 'nvapi-test',
-      model: 'nvidia/nemotron-3.5-lightning-30b-a3b',
+      model: 'nvidia/nemotron-3-ultra-550b-a55b',
       baseUrl: 'https://integrate.api.nvidia.com/v1',
-      timeoutMs: 10000,
-      maxRetries: 2,
+      timeoutMs: 120_000,
+      maxRetries: 1,
       maxIterations: 1,
     });
 
@@ -203,14 +335,13 @@ describe('NVIDIA Nemotron Provider Configuration & Robustness', () => {
       system: 'System prompt',
       user: 'User prompt',
       schema: testSchema,
-      maxTokens: 4000,
     });
 
     expect(result.summary).toBe('Fully completed summary on retry');
     expect(requestedTokenLimits.length).toBe(2);
-    expect(requestedTokenLimits[0]).toBe(4000);
-    // Adaptive retry increased token limit
-    expect(requestedTokenLimits[1]).toBe(5500);
+    expect(requestedTokenLimits[0]).toBe(8192);
+    // Adaptive retry increased token limit by 4096 to 12288
+    expect(requestedTokenLimits[1]).toBe(12288);
   });
 
   it('parseStructured handles trailing commas produced by LLMs', () => {
@@ -254,7 +385,7 @@ Hope this is helpful!`;
     const provider = new OpenAiCompatibleProvider({
       providerId: 'nvidia',
       apiKey: 'nvapi-test',
-      model: 'nvidia/nemotron-3.5-lightning-30b-a3b',
+      model: 'nvidia/nemotron-3-ultra-550b-a55b',
       baseUrl: 'https://integrate.api.nvidia.com/v1',
       timeoutMs: 5000,
       maxRetries: 1,
@@ -285,7 +416,7 @@ Hope this is helpful!`;
     const provider = new OpenAiCompatibleProvider({
       providerId: 'nvidia',
       apiKey: 'nvapi-test',
-      model: 'nvidia/nemotron-3.5-lightning-30b-a3b',
+      model: 'nvidia/nemotron-3-ultra-550b-a55b',
       baseUrl: 'https://integrate.api.nvidia.com/v1',
       timeoutMs: 50, // Short timeout for test
       maxRetries: 0,

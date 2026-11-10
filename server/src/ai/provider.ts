@@ -94,7 +94,7 @@ export function readAiConfigFromEnv(): AiConfig | null {
   if (!providerId || providerId === 'none' || providerId === 'off' || !apiKey) return null;
 
   const isNvidia = providerId === 'nvidia';
-  const defaultModel = isNvidia ? 'nvidia/nemotron-3.5-lightning-30b-a3b' : 'gpt-4o-mini';
+  const defaultModel = isNvidia ? 'nvidia/nemotron-3-ultra-550b-a55b' : 'gpt-4o-mini';
   const defaultBaseUrl = isNvidia ? 'https://integrate.api.nvidia.com/v1' : 'https://api.openai.com/v1';
 
   return {
@@ -102,7 +102,7 @@ export function readAiConfigFromEnv(): AiConfig | null {
     apiKey,
     model: (process.env.AI_MODEL || defaultModel).trim(),
     baseUrl: (process.env.AI_BASE_URL || defaultBaseUrl).replace(/\/$/, ''),
-    timeoutMs: boundedInt(process.env.AI_TIMEOUT_MS, 65_000, 1_000, 120_000),
+    timeoutMs: boundedInt(process.env.AI_TIMEOUT_MS, 120_000, 1_000, 300_000),
     maxRetries: boundedInt(process.env.AI_MAX_RETRIES, 1, 0, 5),
     maxIterations: boundedInt(process.env.AI_MAX_ITERATIONS, 2, 1, 4),
   };
@@ -170,8 +170,11 @@ export class OpenAiCompatibleProvider implements AiProvider {
           lastError = err;
           if (!err.retryable) throw err;
           if (err.message.includes('token limit') || err.message.includes('truncated')) {
-            const currentMax = currentReq.maxTokens ?? 4000;
-            currentReq = { ...currentReq, maxTokens: Math.min(8192, currentMax + 1500) };
+            const isUltra = this.model.toLowerCase().includes('ultra');
+            const currentMax = currentReq.maxTokens ?? (isUltra ? 8192 : 4000);
+            const step = isUltra ? 4096 : 1500;
+            const maxCap = isUltra ? 32768 : 8192;
+            currentReq = { ...currentReq, maxTokens: Math.min(maxCap, currentMax + step) };
           }
         } else {
           lastError = new AiUnavailableError('AI_UNAVAILABLE', 'AI request failed unexpectedly.', true);
@@ -186,18 +189,23 @@ export class OpenAiCompatibleProvider implements AiProvider {
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     const started = Date.now();
     try {
+      const isUltra = this.model.toLowerCase().includes('ultra');
+      const isLightning = this.model.toLowerCase().includes('lightning');
+
+      const defaultMaxTokens = isUltra ? 8192 : 4000;
       const payload: Record<string, unknown> = {
         model: this.model,
         stream: false,
         temperature: req.temperature ?? 0.2,
-        top_p: 0.95,
-        max_tokens: req.maxTokens ?? 4000,
+        max_tokens: req.maxTokens ?? defaultMaxTokens,
         messages: [
           { role: 'system', content: req.system },
           { role: 'user', content: req.user },
         ],
       };
-      if (this.name === 'nvidia' || this.model.toLowerCase().includes('nemotron')) {
+      if (isUltra) {
+        payload.reasoning_effort = 'medium';
+      } else if (isLightning || this.name === 'nvidia') {
         payload.chat_template_kwargs = { enable_thinking: false };
       }
       if (this.name === 'openai') {
@@ -273,7 +281,13 @@ export class OpenAiCompatibleProvider implements AiProvider {
 
       const finishReason = choice.finish_reason ?? null;
       const rawContent = choice.message?.content ?? (typeof choice.text === 'string' ? choice.text : null);
-      const content = typeof rawContent === 'string' ? rawContent.trim() : '';
+      let content = typeof rawContent === 'string' ? rawContent.trim() : '';
+
+      // Strip embedded reasoning traces (<think>...</think>) if present in content
+      if (content.includes('<think>')) {
+        content = content.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '').trim();
+      }
+
       const hasReasoning = Boolean(choice.message?.reasoning_content);
 
       if (!content) {
@@ -726,7 +740,10 @@ function calculateContentScore(obj: unknown): number {
 
 /** Robust JSON extraction and parsing helper. */
 export function parseStructured<T>(raw: string, schema: ZodType<T>): T {
-  const text = (raw || '').trim();
+  let text = (raw || '').trim();
+  if (text.includes('<think>')) {
+    text = text.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '').trim();
+  }
   if (!text) {
     throw new AiUnavailableError('AI_MALFORMED', 'AI returned an empty response.', true);
   }
