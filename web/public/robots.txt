@@ -1,0 +1,18 @@
+# Curevo AI — Robots.txt
+# Live domain: https://curevo.dpdns.org
+
+User-agent: *
+Allow: /
+Allow: /builder
+Allow: /prepare-application
+Allow: /jobs
+Allow: /applications
+Allow: /interview
+Allow: /linkedin
+
+# Disallow API endpoints and private or session-specific instances
+Disallow: /api/
+Disallow: /interview/
+
+# Canonical Sitemap Reference
+Sitemap: https://curevo.dpdns.org/sitemap.xml
