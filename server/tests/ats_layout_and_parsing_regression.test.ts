@@ -12,6 +12,7 @@ import { describe, it, expect } from 'vitest';
 import pdfParse from 'pdf-parse';
 import { extractResumeFromText } from '../src/engine/extract';
 import { renderResumePdf, ATS_STANDARD_ORDER } from '../src/engine/pdf';
+import { validateResume } from '../src/routes/public';
 import type { ResumeData } from '../src/types';
 
 async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
@@ -287,5 +288,66 @@ English (Native), Telugu (Fluent), Hindi, Shell, YAML, Frameworks, JPA, Ingress,
     expect(parsed.text).not.toMatch(/\|\s*2025/);
     expect(parsed.text).toContain('Bachelor of Technology, Computer Science');
     expect(parsed.text).toContain('Vardhaman College of Engineering  |  GPA: 3.8 / 4.0');
+  });
+
+  it('deduplicates case-insensitively and gracefully caps >100 skills without throwing validation errors', () => {
+    const { resume } = extractResumeFromText(STRUCTURED_MULTI_CATEGORY_RESUME_TEXT);
+
+    // Create 150 skills with case duplicates ("Java" vs "java") and oversized strings
+    const rawSkills = [
+      'Java', 'java', 'JAVA',
+      'Python', 'python', 'PYTHON',
+      'Experienced in delivering complex mission critical software architectures across large enterprises and distributed teams',
+      ...Array.from({ length: 140 }, (_, i) => `Skill Token ${i + 1}`),
+    ];
+
+    resume.skills.technical = rawSkills;
+
+    // Must not throw "Technical skills exceed maximum allowed limit of 100"
+    let validated!: ResumeData;
+    expect(() => {
+      validated = validateResume(resume);
+    }).not.toThrow();
+
+    // Must be capped to at most 100 unique items
+    expect(validated.skills.technical.length).toBeLessThanOrEqual(100);
+
+    // Must be case-insensitively deduplicated (only one 'Java' / 'java')
+    const javaMatches = validated.skills.technical.filter((s) => s.toLowerCase() === 'java');
+    expect(javaMatches.length).toBe(1);
+
+    const pythonMatches = validated.skills.technical.filter((s) => s.toLowerCase() === 'python');
+    expect(pythonMatches.length).toBe(1);
+
+    // Oversized sentences must be trimmed to <= MAX_SKILL_NAME_LENGTH characters
+    for (const skill of validated.skills.technical) {
+      expect(skill.length).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it('extracts and parses CV text with >100 skills without exceeding limits or failing validation', () => {
+    // Generate text with 120 distinct skills
+    const manySkillsList = Array.from({ length: 120 }, (_, i) => `Tool_${i + 1}`).join(', ');
+    const resumeTextWithManySkills = `
+Alex Morgan
+Austin, TX | alex@example.com
+
+SKILLS
+${manySkillsList}
+
+EXPERIENCE
+Software Engineer | Acme Corp | 2021 - Present
+• Engineered distributed software platforms.
+`;
+
+    const { resume } = extractResumeFromText(resumeTextWithManySkills);
+
+    expect(resume.skills.technical.length).toBeLessThanOrEqual(100);
+
+    // Validating the extracted resume must pass cleanly
+    expect(() => {
+      const validated = validateResume(resume);
+      expect(validated.skills.technical.length).toBeLessThanOrEqual(100);
+    }).not.toThrow();
   });
 });

@@ -721,8 +721,16 @@ export function parseSkills(
   const categories: SkillCategory[] = [];
 
   const push = (arr: string[], token: string) => {
-    const clean = cleanStrayPipes(token.replace(/\s{2,}/g, ' '));
-    if (clean && clean.length <= 60 && !arr.some((t) => t.toLowerCase() === clean.toLowerCase())) {
+    let clean = cleanStrayPipes(token.replace(/\s{2,}/g, ' '));
+    // Trim oversized entries (sentences accidentally parsed as skills)
+    if (clean.length > 50) {
+      clean = clean.slice(0, 50).trim().replace(/[,\-;:\s]+$/, '');
+    }
+    // Reject full sentences or long prose paragraphs
+    if (clean.split(/\s+/).length > 5 || /^(?:experienced|responsible|demonstrated|skilled|worked|developed|built|managed)\b/i.test(clean)) {
+      return;
+    }
+    if (clean && clean.length >= 2 && !arr.some((t) => t.toLowerCase() === clean.toLowerCase())) {
       arr.push(clean);
     }
   };
@@ -742,8 +750,12 @@ export function parseSkills(
 
         const catItems: string[] = [];
         for (const token of splitSkillList(body)) {
-          const cleanedToken = cleanStrayPipes(token);
-          if (!cleanedToken) continue;
+          let cleanedToken = cleanStrayPipes(token);
+          if (cleanedToken.length > 50) {
+            cleanedToken = cleanedToken.slice(0, 50).trim().replace(/[,\-;:\s]+$/, '');
+          }
+          if (!cleanedToken || cleanedToken.length < 2 || cleanedToken.split(/\s+/).length > 5) continue;
+          if (/^(?:experienced|responsible|demonstrated|skilled|worked|developed|built|managed)\b/i.test(cleanedToken)) continue;
           const isSoft = SOFT_SKILLS.some((s) => s.toLowerCase() === cleanedToken.toLowerCase());
           push(isSoft && target === technical ? soft : target, cleanedToken);
           if (!catItems.some((x) => x.toLowerCase() === cleanedToken.toLowerCase())) {
@@ -779,7 +791,14 @@ export function parseSkills(
     }
   }
 
-  return { technical, soft, categories };
+  // Gracefully cap skills to at most 100 unique items (and categories items cleanly)
+  const cappedTechnical = technical.slice(0, 100);
+  const cappedSoft = soft.slice(0, 30);
+  for (const cat of categories) {
+    cat.items = cat.items.slice(0, 50);
+  }
+
+  return { technical: cappedTechnical, soft: cappedSoft, categories };
 }
 
 // ---------------------------------------------------------------- projects

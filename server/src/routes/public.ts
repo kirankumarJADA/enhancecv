@@ -527,46 +527,68 @@ export function validateResume(data: unknown): ResumeData {
       if (!Array.isArray(raw.skills.technical)) {
         throw new AppError('VALIDATION_ERROR', 'Technical skills must be an array.', 400);
       }
-      if (raw.skills.technical.length > RESUME_LIMITS.MAX_TECHNICAL_SKILLS) {
-        throw new AppError('VALIDATION_ERROR', `Technical skills exceed maximum allowed limit of ${RESUME_LIMITS.MAX_TECHNICAL_SKILLS}.`, 400);
-      }
-      technical = raw.skills.technical.map((s: unknown, idx: number) => {
+      const seenTech = new Set<string>();
+      const dedupedTech: string[] = [];
+      raw.skills.technical.forEach((s: unknown, idx: number) => {
         if (typeof s !== 'string') {
           throw new AppError('VALIDATION_ERROR', `Technical skill at index ${idx} must be a string.`, 400);
         }
-        if (s.length > RESUME_LIMITS.MAX_SKILL_NAME_LENGTH) {
-          throw new AppError('VALIDATION_ERROR', `Technical skill at index ${idx} exceeds maximum length of ${RESUME_LIMITS.MAX_SKILL_NAME_LENGTH} characters.`, 400);
+        const trimmed = s.trim().slice(0, RESUME_LIMITS.MAX_SKILL_NAME_LENGTH);
+        if (!trimmed) return;
+        const lower = trimmed.toLowerCase();
+        if (!seenTech.has(lower)) {
+          seenTech.add(lower);
+          dedupedTech.push(trimmed);
         }
-        return s;
       });
+      technical = dedupedTech.slice(0, RESUME_LIMITS.MAX_TECHNICAL_SKILLS);
     }
     if (raw.skills.soft !== undefined && raw.skills.soft !== null) {
       if (!Array.isArray(raw.skills.soft)) {
         throw new AppError('VALIDATION_ERROR', 'Soft skills must be an array.', 400);
       }
-      if (raw.skills.soft.length > RESUME_LIMITS.MAX_SOFT_SKILLS) {
-        throw new AppError('VALIDATION_ERROR', `Soft skills exceed maximum allowed limit of ${RESUME_LIMITS.MAX_SOFT_SKILLS}.`, 400);
-      }
-      soft = raw.skills.soft.map((s: unknown, idx: number) => {
+      const seenSoft = new Set<string>();
+      const dedupedSoft: string[] = [];
+      raw.skills.soft.forEach((s: unknown, idx: number) => {
         if (typeof s !== 'string') {
           throw new AppError('VALIDATION_ERROR', `Soft skill at index ${idx} must be a string.`, 400);
         }
-        if (s.length > RESUME_LIMITS.MAX_SKILL_NAME_LENGTH) {
-          throw new AppError('VALIDATION_ERROR', `Soft skill at index ${idx} exceeds maximum length of ${RESUME_LIMITS.MAX_SKILL_NAME_LENGTH} characters.`, 400);
+        const trimmed = s.trim().slice(0, RESUME_LIMITS.MAX_SKILL_NAME_LENGTH);
+        if (!trimmed) return;
+        const lower = trimmed.toLowerCase();
+        if (!seenSoft.has(lower)) {
+          seenSoft.add(lower);
+          dedupedSoft.push(trimmed);
         }
-        return s;
       });
+      soft = dedupedSoft.slice(0, RESUME_LIMITS.MAX_SOFT_SKILLS);
     }
     if (raw.skills.categories !== undefined && raw.skills.categories !== null) {
       if (Array.isArray(raw.skills.categories)) {
         categories = raw.skills.categories
           .filter((c: unknown) => c && typeof c === 'object' && !Array.isArray(c))
-          .map((c: any) => ({
-            category: typeof c.category === 'string' ? c.category.slice(0, 100) : 'Skills',
-            items: Array.isArray(c.items)
-              ? c.items.filter((it: unknown) => typeof it === 'string').map((it: string) => it.slice(0, 100))
-              : [],
-          }));
+          .slice(0, 20)
+          .map((c: any) => {
+            const catName = typeof c.category === 'string' ? c.category.slice(0, 100) : 'Skills';
+            const catSeen = new Set<string>();
+            const catItems: string[] = [];
+            if (Array.isArray(c.items)) {
+              for (const it of c.items) {
+                if (typeof it !== 'string') continue;
+                const trimmed = it.trim().slice(0, RESUME_LIMITS.MAX_SKILL_NAME_LENGTH);
+                if (!trimmed) continue;
+                const lower = trimmed.toLowerCase();
+                if (!catSeen.has(lower)) {
+                  catSeen.add(lower);
+                  catItems.push(trimmed);
+                }
+              }
+            }
+            return {
+              category: catName,
+              items: catItems.slice(0, 50),
+            };
+          });
       }
     }
   }
@@ -1629,10 +1651,19 @@ router.post(
         if (!Array.isArray(req.body.skills)) {
           throw new AppError('VALIDATION_ERROR', 'Skills must be an array.', 400);
         }
-        if (req.body.skills.length > RESUME_LIMITS.MAX_TECHNICAL_SKILLS) {
-          throw new AppError('VALIDATION_ERROR', `Skills exceed maximum allowed limit of ${RESUME_LIMITS.MAX_TECHNICAL_SKILLS}.`, 400);
+        const seen = new Set<string>();
+        const deduped: string[] = [];
+        for (const s of req.body.skills) {
+          if (typeof s !== 'string') continue;
+          const trimmed = s.trim().slice(0, RESUME_LIMITS.MAX_SKILL_NAME_LENGTH);
+          if (!trimmed) continue;
+          const lower = trimmed.toLowerCase();
+          if (!seen.has(lower)) {
+            seen.add(lower);
+            deduped.push(trimmed);
+          }
         }
-        skills = req.body.skills.map((s: any, idx: number) => checkStringField(s, `Skill[${idx}]`, RESUME_LIMITS.MAX_SKILL_NAME_LENGTH)).filter(Boolean);
+        skills = deduped.slice(0, RESUME_LIMITS.MAX_TECHNICAL_SKILLS);
       }
 
       const resume = getSafeResume(req.body.resume);
