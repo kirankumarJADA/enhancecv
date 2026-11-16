@@ -83,6 +83,11 @@ router.get('/status', (_req: Request, res: Response) => {
   res.json(getAiStatus());
 });
 
+// Alias for /api/public/ai/status matching /api/ai/status
+router.get('/ai/status', (_req: Request, res: Response) => {
+  res.json(getAiStatus());
+});
+
 // ---------------------------------------------------------------------------
 // Upload Configuration: Memory storage only, 8MB max, PDF/DOCX/TXT only
 // ---------------------------------------------------------------------------

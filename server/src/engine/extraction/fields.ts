@@ -4,6 +4,7 @@
 // Everything is deterministic: keyword lists + positional heuristics, no AI.
 
 import type { ParsedLine, SectionSpan } from './types';
+import type { SkillCategory } from '../../types';
 import { findDateRange } from './dates';
 import { isBulletLine, stripBulletPrefix, normalizeWhitespace } from '../../lib/text';
 import { splitSkillList, SOFT_SKILLS, findSkillsInText } from '../../lib/skills';
@@ -91,6 +92,81 @@ function isYearRangeCandidate(candidate: string): boolean {
 }
 
 /**
+ * Strips stray table and column pipe artifacts ('|', ' | | ', ' | 2025', 'Location | ')
+ * while preserving internal text.
+ */
+export function cleanStrayPipes(val?: string): string {
+  if (!val) return '';
+  return val
+    .replace(/(?:^|\s)\|+(?:\s*\|*)*(?=$|\s)/g, ' ')
+    .replace(/^[|\s•·\-–—]+/, '')
+    .replace(/[|\s•·\-–—]+$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const COMMON_ACTION_VERBS = new Set([
+  'built', 'developed', 'created', 'designed', 'implemented', 'engineered',
+  'spearheaded', 'led', 'managed', 'architected', 'maintained', 'optimized',
+  'automated', 'configured', 'deployed', 'integrated', 'reduced', 'increased',
+  'achieved', 'improved', 'facilitated', 'collaborated', 'delivered', 'executed',
+  'authored', 'resolved', 'analyzed', 'conducted', 'directed', 'established',
+  'launched', 'programmed', 'researched', 'tested', 'wrote', 'coordinated',
+]);
+
+/**
+ * Splits lines formatted as '• Project Title. Description...' or '• Project Title: Description...'
+ * into { title, description } while preserving titles and avoiding false splits on action verbs.
+ */
+export function splitTitleAndDescription(text: string): { title: string; description: string } | null {
+  const clean = text.replace(/^[\s•·\-–—*]+\s*/, '').trim();
+  if (!clean || clean.length < 5) return null;
+
+  // 1. Colon split: "Project Title: Description..."
+  const colonMatch = clean.match(/^([A-Z0-9][A-Za-z0-9\s&/+\-()]{1,60}?)\s*[:]\s*(.+)$/);
+  if (colonMatch) {
+    const rawTitle = colonMatch[1].trim();
+    const rawDesc = colonMatch[2].trim();
+    if (!/^(technolog|tech|tools?|stack|built with|responsibilities|achievements)\b/i.test(rawTitle) && rawDesc.length > 0) {
+      return {
+        title: cleanStrayPipes(rawTitle),
+        description: cleanStrayPipes(rawDesc),
+      };
+    }
+  }
+
+  // 2. Period split: "Project Title. Description..."
+  const dotMatch = clean.match(/^([A-Z0-9][A-Za-z0-9\s&/+\-()]{1,45}?)\.\s+([A-Z0-9].+)$/);
+  if (dotMatch) {
+    const rawTitle = dotMatch[1].trim();
+    const rawDesc = dotMatch[2].trim();
+    const firstWord = rawTitle.split(/\s+/)[0].toLowerCase();
+    if (!COMMON_ACTION_VERBS.has(firstWord) && rawTitle.split(/\s+/).length <= 6 && rawDesc.length > 0) {
+      return {
+        title: cleanStrayPipes(rawTitle),
+        description: cleanStrayPipes(rawDesc),
+      };
+    }
+  }
+
+  // 3. Dash / En-dash / Pipe split: "Project Title – Description..." or "Project Title | Description..."
+  const dashMatch = clean.match(/^([A-Z0-9][A-Za-z0-9\s&/+\-()]{1,45}?)\s*[–—|-]\s+([A-Z0-9].+)$/);
+  if (dashMatch) {
+    const rawTitle = dashMatch[1].trim();
+    const rawDesc = dashMatch[2].trim();
+    const firstWord = rawTitle.split(/\s+/)[0].toLowerCase();
+    if (!COMMON_ACTION_VERBS.has(firstWord) && rawTitle.split(/\s+/).length <= 6 && rawDesc.length > 0) {
+      return {
+        title: cleanStrayPipes(rawTitle),
+        description: cleanStrayPipes(rawDesc),
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
  * Stitches a phone number out of adjacent visual tokens so formatting never
  * loses digits: '+91 98765 43210', '(+44) 7700-900-123', '0161 496 0008'.
  * Year ranges ('2022 - 2026') and date-bearing tokens are rejected.
@@ -154,8 +230,8 @@ function domainOf(url: string): string {
  * as otherLinks for user review.
  */
 export function extractLinks(text: string): { linkedin: string; github: string; portfolio: string; otherLinks: string[] } {
-  let linkedin = text.match(LINKEDIN_RE)?.[0]?.replace(/[.,;)]+$/, '') || '';
-  let github = text.match(GITHUB_RE)?.[0]?.replace(/[.,;)]+$/, '') || '';
+  let linkedin = text.match(LINKEDIN_RE)?.[0]?.replace(/^https?:\/\/(?:www\.)?/i, '').replace(/[/.,;)]+$/, '') || '';
+  let github = text.match(GITHUB_RE)?.[0]?.replace(/^https?:\/\/(?:www\.)?/i, '').replace(/[/.,;)]+$/, '') || '';
 
   // Remove emails FIRST so an email address can never leak into link fields.
   const emailDomain = domainOf(text.match(EMAIL_RE)?.[0] || '');
@@ -169,6 +245,9 @@ export function extractLinks(text: string): { linkedin: string; github: string; 
     const labeled = scrubbed.match(GITHUB_LABELED_RE);
     if (labeled && !/\.github\.io$/i.test(labeled[1])) github = `github.com/${labeled[1]}`;
   }
+
+  linkedin = cleanStrayPipes(linkedin.replace(/[/.,;)]+$/, ''));
+  github = cleanStrayPipes(github.replace(/[/.,;)]+$/, ''));
 
   const candidates: string[] = [];
   for (const m of scrubbed.matchAll(URL_TOKEN_RE)) candidates.push(m[0]);
@@ -251,13 +330,33 @@ export function parseContact(sections: SectionSpan[], fullText: string): { conta
   }
   if (!phone) warnings.push('No phone number detected — please add it.');
 
-  // Personal location: only from the contact header (never from section bodies,
-  // where e.g. "NEAT Cell, AICTE" would falsely match a City, Country pattern).
+  // Personal location: check header lines. Resumes frequently combine contact
+  // items on a single line (e.g. "Austin, TX | user@email.com | +1 555-0199").
   let location = '';
   for (const line of headerLines) {
-    const m = line.match(LOCATION_INLINE_RE);
-    if (m && !EMAIL_RE.test(line)) {
-      location = m[0];
+    // 1. Try segmented tokens first
+    const segments = line.split(/[|•·]/).map((s) => s.trim()).filter(Boolean);
+    for (const seg of segments) {
+      if (EMAIL_RE.test(seg) || PHONE_TOKEN_RE.test(seg) || GITHUB_RE.test(seg) || LINKEDIN_RE.test(seg)) continue;
+      const cleanSeg = cleanStrayPipes(seg);
+      if (CITY_LOCATION_RE.test(cleanSeg) || LOCATION_INLINE_RE.test(cleanSeg)) {
+        const m = cleanSeg.match(LOCATION_INLINE_RE);
+        location = cleanStrayPipes(m ? m[0] : cleanSeg);
+        break;
+      }
+    }
+    if (location) break;
+
+    // 2. Scrub email, URLs, and phone numbers from the line and match location
+    const scrubbed = line
+      .replace(EMAIL_RE_G, ' ')
+      .replace(URL_TOKEN_RE, ' ')
+      .replace(BARE_DOMAIN_RE, ' ');
+    const phoneInLine = extractPhoneFromLine(line);
+    const scrubbedWithoutPhone = phoneInLine ? scrubbed.replace(phoneInLine, ' ') : scrubbed;
+    const m = scrubbedWithoutPhone.match(LOCATION_INLINE_RE);
+    if (m) {
+      location = cleanStrayPipes(m[0]);
       break;
     }
   }
@@ -265,14 +364,14 @@ export function parseContact(sections: SectionSpan[], fullText: string): { conta
   const links = extractLinks(fullText);
   return {
     contact: {
-      fullName,
-      email,
-      phone,
-      location,
-      linkedin: links.linkedin,
-      github: links.github,
-      portfolio: links.portfolio,
-      otherLinks: links.otherLinks,
+      fullName: cleanStrayPipes(fullName),
+      email: cleanStrayPipes(email),
+      phone: cleanStrayPipes(phone),
+      location: cleanStrayPipes(location),
+      linkedin: cleanStrayPipes(links.linkedin),
+      github: cleanStrayPipes(links.github),
+      portfolio: cleanStrayPipes(links.portfolio),
+      otherLinks: links.otherLinks.map(cleanStrayPipes).filter(Boolean),
     },
     warnings,
   };
@@ -429,9 +528,9 @@ export function parseExperience(sections: SectionSpan[], warnings: string[]): Ra
     const current = entries[entries.length - 1];
     if (collectingPost && current && postLines.length > 0) {
       const assigned = assignRoleCompany(postLines);
-      if (!current.company) current.company = assigned.company;
-      if (!current.location) current.location = assigned.location;
-      if (!current.title && assigned.title) current.title = assigned.title;
+      if (!current.company) current.company = cleanStrayPipes(assigned.company);
+      if (!current.location) current.location = cleanStrayPipes(assigned.location);
+      if (!current.title && assigned.title) current.title = cleanStrayPipes(assigned.title);
       if (assigned.ambiguous && !current.title) current.ambiguous = true;
     }
     postLines = [];
@@ -445,13 +544,13 @@ export function parseExperience(sections: SectionSpan[], warnings: string[]): Ra
     pending = [];
     const { title, company, location, ambiguous } = assignRoleCompany(candidates);
     entries.push({
-      title,
-      company,
-      location,
+      title: cleanStrayPipes(title),
+      company: cleanStrayPipes(company),
+      location: cleanStrayPipes(location),
       startDate: range.start,
       endDate: range.end,
       current: range.current,
-      dateDisplay: range.display,
+      dateDisplay: cleanStrayPipes(range.display),
       bullets: [],
       ambiguous,
     });
@@ -463,12 +562,12 @@ export function parseExperience(sections: SectionSpan[], warnings: string[]): Ra
     if (!text) continue;
     if (line.isListItem || isBulletLine(text)) {
       flushPost(); // bullets close the post-date header block
-      if (entries.length > 0) entries[entries.length - 1].bullets.push(stripBulletPrefix(text));
+      if (entries.length > 0) entries[entries.length - 1].bullets.push(cleanStrayPipes(stripBulletPrefix(text)));
       continue;
     }
     const range = findDateRange(text);
     if (range) {
-      const inline = text.replace(range.display, '').replace(/^[\s|,;•·\-–—]+|[\s|,;•·\-–—]+$/g, '').trim();
+      const inline = cleanStrayPipes(text.replace(range.display, ''));
       // A date range also appears inside long bullet sentences; treat it as an
       // entry anchor only when the line itself looks like a header.
       const looksLikeBulletSentence = isBulletLine(text) || (text.length > 140 && entries.length > 0);
@@ -490,7 +589,7 @@ export function parseExperience(sections: SectionSpan[], warnings: string[]): Ra
       !findDateRange(text) &&
       (/^[a-z]/.test(text) || /[,:]$/.test(lastBullet));
     if (continuesPreviousBullet) {
-      lastEntry.bullets[lastEntry.bullets.length - 1] = `${lastBullet} ${text}`.replace(/\s+/g, ' ');
+      lastEntry.bullets[lastEntry.bullets.length - 1] = cleanStrayPipes(`${lastBullet} ${text}`.replace(/\s+/g, ' '));
       continue;
     }
     if (collectingPost) {
@@ -561,41 +660,41 @@ export function parseEducation(sections: SectionSpan[], warnings: string[]): Raw
     const degreeMatch = text.match(DEGREE_RE);
     const range = findDateRange(text);
     if (degreeMatch) {
-      const degree = degreeMatch[0].replace(/\s+/g, ' ').trim();
+      const degree = cleanStrayPipes(degreeMatch[0].replace(/\s+/g, ' '));
       const after = text.replace(degreeMatch[0], '').replace(range?.display || '', '');
-      const parts = after.split(/[|,•·]|\s+[–—]\s+/).map((p) => p.trim()).filter(Boolean);
+      const parts = after.split(/[|,•·]|\s+[–—]\s+/).map((p) => cleanStrayPipes(p)).filter(Boolean);
       let field = '';
       let institution = '';
       const institutionPart = parts.find((p) => INSTITUTION_RE.test(p));
       if (institutionPart) {
-        institution = institutionPart.replace(range?.display || '', '').replace(/[\s\-–—]+$/, '').trim();
-        field = parts.filter((p) => p !== institutionPart).join(', ');
+        institution = cleanStrayPipes(institutionPart.replace(range?.display || '', '').replace(/[\s\-–—]+$/, ''));
+        field = parts.filter((p) => p !== institutionPart).map(cleanStrayPipes).join(', ');
       } else {
-        field = parts.join(', ');
+        field = parts.map(cleanStrayPipes).join(', ');
       }
       items.push({
         degree: degree.charAt(0).toUpperCase() + degree.slice(1),
-        field,
-        institution,
+        field: cleanStrayPipes(field),
+        institution: cleanStrayPipes(institution),
         startDate: range?.start || '',
         endDate: range?.end || '',
         grade: '',
-        dateDisplay: range?.display || '',
+        dateDisplay: cleanStrayPipes(range?.display || ''),
       });
     } else if (range && items.length > 0) {
       const last = items[items.length - 1];
       if (!last.startDate) {
         last.startDate = range.start;
         last.endDate = range.end;
-        last.dateDisplay = range.display;
+        last.dateDisplay = cleanStrayPipes(range.display);
       }
     } else if (items.length > 0) {
       const last = items[items.length - 1];
       const gradeMatch = text.match(/((?:cgpa|gpa|percentage|aggregate)\s*[:\-]?\s*(\d{1,3}(?:\.\d+)?)(?:\s*\/\s*(?:10|100))?|(\d{1,2}(?:\.\d+)?)\s*\/\s*10|\d{1,3}(?:\.\d+)?\s*%)/i);
       if (!last.institution && text.length < 120 && !isBulletLine(text)) {
-        last.institution = text;
+        last.institution = cleanStrayPipes(text);
       } else if (gradeMatch && !last.grade) {
-        last.grade = gradeMatch[0].trim();
+        last.grade = cleanStrayPipes(gradeMatch[0]);
       }
     }
   }
@@ -607,38 +706,75 @@ export function parseEducation(sections: SectionSpan[], warnings: string[]): Raw
 
 // ---------------------------------------------------------------- skills
 
-export function parseSkills(sections: SectionSpan[], fullText: string, warnings: string[]): { technical: string[]; soft: string[] } {
+export function parseSkills(
+  sections: SectionSpan[],
+  fullText: string,
+  warnings: string[],
+): { technical: string[]; soft: string[]; categories?: SkillCategory[] } {
   const technical: string[] = [];
   const soft: string[] = [];
+  const categories: SkillCategory[] = [];
+
   const push = (arr: string[], token: string) => {
-    const clean = token.replace(/\s{2,}/g, ' ').trim().replace(/^[\s•·\-–—]+/, '');
-    if (clean && clean.length <= 60 && !arr.some((t) => t.toLowerCase() === clean.toLowerCase())) arr.push(clean);
+    const clean = cleanStrayPipes(token.replace(/\s{2,}/g, ' '));
+    if (clean && clean.length <= 60 && !arr.some((t) => t.toLowerCase() === clean.toLowerCase())) {
+      arr.push(clean);
+    }
   };
+
   for (const span of sections.filter((s) => s.key.split('+').includes('skills') || s.key.split('+').includes('soft'))) {
     const parts = span.key.split('+').filter((p) => p === 'skills' || p === 'soft');
     for (const part of parts) {
       for (const raw of linesForPart(span, part)) {
         const text = stripBulletPrefix(raw.text.trim());
         if (!text) continue;
-        const categorized = text.match(/^([A-Za-z][A-Za-z &/+-]{1,30}):\s*(.+)$/);
+
+        // Matches "Languages | Java, Python", "Frameworks: React, Spring", "Cloud & DevOps - AWS, Docker", etc.
+        const categorized = text.match(/^([A-Za-z][A-Za-z0-9\s&/+\-()]{1,35}?)\s*[:|–—\-]\s*(.+)$/);
+        const categoryName = categorized ? cleanStrayPipes(categorized[1]) : '';
         const body = categorized ? categorized[2] : text;
         const target = part === 'soft' ? soft : technical;
+
+        const catItems: string[] = [];
         for (const token of splitSkillList(body)) {
-          const isSoft = SOFT_SKILLS.some((s) => s.toLowerCase() === token.trim().toLowerCase());
-          push(isSoft && target === technical ? soft : target, token);
+          const cleanedToken = cleanStrayPipes(token);
+          if (!cleanedToken) continue;
+          const isSoft = SOFT_SKILLS.some((s) => s.toLowerCase() === cleanedToken.toLowerCase());
+          push(isSoft && target === technical ? soft : target, cleanedToken);
+          if (!catItems.some((x) => x.toLowerCase() === cleanedToken.toLowerCase())) {
+            catItems.push(cleanedToken);
+          }
+        }
+
+        if (categoryName && catItems.length > 0) {
+          const existing = categories.find((c) => c.category.toLowerCase() === categoryName.toLowerCase());
+          if (existing) {
+            for (const item of catItems) {
+              if (!existing.items.some((x) => x.toLowerCase() === item.toLowerCase())) {
+                existing.items.push(item);
+              }
+            }
+          } else {
+            categories.push({ category: categoryName, items: catItems });
+          }
         }
       }
     }
   }
+
   if (technical.length === 0) {
     for (const s of findSkillsInText(fullText)) {
-      if (!technical.some((t) => t.toLowerCase() === s.canonical.toLowerCase())) technical.push(s.canonical);
+      if (!technical.some((t) => t.toLowerCase() === s.canonical.toLowerCase())) {
+        technical.push(s.canonical);
+      }
     }
     if (technical.length > 0) {
       warnings.push('No dedicated skills section was found — technical skills were harvested from your document text. Please review.');
+      categories.push({ category: 'Technical Skills', items: [...technical] });
     }
   }
-  return { technical, soft };
+
+  return { technical, soft, categories };
 }
 
 // ---------------------------------------------------------------- projects
@@ -657,29 +793,59 @@ export function parseProjects(sections: SectionSpan[]): RawProject[] {
     for (const raw of span.lines) {
       const text = stripBulletPrefix(raw.text.trim());
       if (!text) continue;
-      if (raw.isListItem || isBulletLine(raw.text)) {
-        if (projects.length > 0) projects[projects.length - 1].bullets.push(text);
-        continue;
-      }
+      const isBullet = raw.isListItem || isBulletLine(raw.text);
+
       const techMatch = text.match(/^(?:tech(?:nolog(?:y|ies))?|tech\s*stack|built\s+with|stack)\s*[:\-]\s*(.+)$/i);
       if (techMatch && projects.length > 0) {
         for (const t of splitSkillList(techMatch[1])) {
           const cur = projects[projects.length - 1];
-          if (!cur.tech.some((x) => x.toLowerCase() === t.toLowerCase())) cur.tech.push(t);
+          const cleanT = cleanStrayPipes(t);
+          if (cleanT && !cur.tech.some((x) => x.toLowerCase() === cleanT.toLowerCase())) {
+            cur.tech.push(cleanT);
+          }
         }
         continue;
       }
+
       const linkMatch = text.match(/https?:\/\/[^\s,|]+/i);
+      const split = splitTitleAndDescription(text);
+
+      if (split) {
+        projects.push({
+          name: cleanStrayPipes(split.title),
+          link: linkMatch ? cleanStrayPipes(linkMatch[0]) : '',
+          description: cleanStrayPipes(split.description),
+          bullets: [],
+          tech: [],
+        });
+        continue;
+      }
+
+      if (isBullet) {
+        if (projects.length > 0) {
+          projects[projects.length - 1].bullets.push(cleanStrayPipes(text));
+        } else if (text.length < 90) {
+          projects.push({
+            name: cleanStrayPipes(text.replace(/^\d+[.)]\s*/, '')),
+            link: linkMatch ? cleanStrayPipes(linkMatch[0]) : '',
+            description: '',
+            bullets: [],
+            tech: [],
+          });
+        }
+        continue;
+      }
+
       if (text.length < 90) {
         projects.push({
-          name: text.replace(/^\d+[.)]\s*/, ''),
-          link: linkMatch ? linkMatch[0] : '',
+          name: cleanStrayPipes(text.replace(/^\d+[.)]\s*/, '')),
+          link: linkMatch ? cleanStrayPipes(linkMatch[0]) : '',
           description: '',
           bullets: [],
           tech: [],
         });
       } else if (projects.length > 0 && !projects[projects.length - 1].description) {
-        projects[projects.length - 1].description = text;
+        projects[projects.length - 1].description = cleanStrayPipes(text);
       }
     }
   }

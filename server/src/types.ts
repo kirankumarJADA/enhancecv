@@ -95,9 +95,15 @@ export interface LanguageItem {
   proficiency?: string;
 }
 
+export interface SkillCategory {
+  category: string;
+  items: string[];
+}
+
 export interface SkillsData {
   technical: string[];
   soft: string[];
+  categories?: SkillCategory[];
 }
 
 export interface CustomSection {

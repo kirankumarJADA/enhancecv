@@ -166,7 +166,13 @@ export function extractFromLines(input: ParsedLine[], meta: ExtractionMeta): Ext
     year: c.year,
   }));
 
-  const languages = parseLanguages(sections).map((l, i) => ({
+  const rawLanguages = parseLanguages(sections);
+  const techLower = new Set(skills.technical.map((t) => t.toLowerCase()));
+  const filteredLanguages = rawLanguages.filter((l) => {
+    const isTech = techLower.has(l.name.toLowerCase());
+    return !isTech || Boolean(l.proficiency);
+  });
+  const languages = filteredLanguages.map((l, i) => ({
     id: makeId('lang', i + 1),
     name: l.name,
     proficiency: l.proficiency,

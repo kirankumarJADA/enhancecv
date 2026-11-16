@@ -66,6 +66,10 @@ export interface AiProvider {
    * panel. Implementations must only reword; output is truth-checked anyway.
    */
   improveBullet?(bullet: string, allowedSkills: string[]): { text: string; reason: string } | null;
+  /**
+   * Returns the count of distinct API keys configured in the rotation pool.
+   */
+  getKeyPoolCount?(): number;
 }
 
 export interface AiConfig {
@@ -79,11 +83,15 @@ export interface AiConfig {
   maxIterations: number;
 }
 
-function parseKeyList(raw?: string): string[] {
+/**
+ * Parse a comma- or newline-separated list of API keys from an environment variable.
+ * Trims whitespace and strips accidental leading/trailing quotes (' or ") around each key.
+ */
+export function parseKeyList(raw?: string): string[] {
   if (!raw) return [];
   return raw
     .split(/[,\n]/)
-    .map((k) => k.trim())
+    .map((k) => k.trim().replace(/^['"]+|['"]+$/g, '').trim())
     .filter((k) => k.length > 0);
 }
 
@@ -165,6 +173,13 @@ export class OpenAiCompatibleProvider implements AiProvider {
     this.baseUrl = cfg.baseUrl;
     this.timeoutMs = cfg.timeoutMs;
     this.maxRetries = cfg.maxRetries;
+  }
+
+  /**
+   * Returns the count of distinct configured API keys in the rotation pool.
+   */
+  getKeyPoolCount(): number {
+    return this.apiKeys.length;
   }
 
   /**
@@ -421,6 +436,9 @@ class RuleBasedProvider implements AiProvider {
   async completeJson<T>(): Promise<T> {
     throw new AiUnavailableError('AI_NOT_CONFIGURED', 'No AI provider is configured.', false);
   }
+  getKeyPoolCount(): number {
+    return 0;
+  }
 }
 
 let provider: AiProvider | null = null;
@@ -446,6 +464,14 @@ export function getAiProvider(): AiProvider {
 
 export function isAiEnabled(): boolean {
   return !(getAiProvider() instanceof RuleBasedProvider);
+}
+
+export function getAiProviderKeyCount(): number {
+  const p = getAiProvider();
+  if (typeof p.getKeyPoolCount === 'function') {
+    return p.getKeyPoolCount();
+  }
+  return 0;
 }
 
 export function getAiMaxIterations(): number {

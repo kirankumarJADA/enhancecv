@@ -5,8 +5,8 @@
 // MM/YYYY dates, machine-selectable text, no graphics or tables.
 
 import PDFDocument from 'pdfkit';
-import { ResumeData, PageSize } from '../types';
-import { ALL_SECTIONS } from '../types';
+import { ResumeData, PageSize, SectionKey, ALL_SECTIONS } from '../types';
+import { cleanStrayPipes } from './extraction/fields';
 
 export type { PageSize };
 
@@ -16,6 +16,17 @@ export const PAGE_DIMENSIONS: Record<PageSize, { width: number; height: number }
 };
 
 export const DEFAULT_PAGE_SIZE: PageSize = 'A4';
+
+export const ATS_STANDARD_ORDER: SectionKey[] = [
+  'summary',
+  'education',
+  'skills',
+  'experience',
+  'projects',
+  'certifications',
+  'languages',
+  'achievements',
+];
 
 const COLOR_INK = '#1a2233';
 const COLOR_MUTED = '#4a5568';
@@ -28,6 +39,8 @@ export interface RenderOpts {
   template?: string;
   marginDensity?: MarginDensity;
   pageSize?: PageSize;
+  enforceAtsOrder?: boolean;
+  preserveOrder?: boolean;
 }
 
 /**
@@ -86,26 +99,44 @@ function formatDateRange(start: string, end: string, current: boolean): string {
   return s || e;
 }
 
-export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): NodeJS.ReadableStream {
+function generateResumeDoc(resume: ResumeData, opts: RenderOpts = {}, fitTight = false): PDFKit.PDFDocument {
   const style = styleFor(opts.template);
   const density = opts.marginDensity || 'normal';
-  const margin = density === 'compact' ? 36 : density === 'spacious' ? 64 : 54;
+  let margin = density === 'compact' ? 36 : density === 'spacious' ? 64 : 54;
+  if (fitTight) {
+    margin = 36;
+  }
 
   const rawPageSize = opts.pageSize ? String(opts.pageSize).trim().toUpperCase() : DEFAULT_PAGE_SIZE;
   const pageSize: PageSize = rawPageSize === 'LETTER' ? 'LETTER' : 'A4';
   const dimensions = PAGE_DIMENSIONS[pageSize];
   const contentWidth = dimensions.width - margin * 2;
-  const lineGapMultiplier = density === 'compact' ? 0.85 : density === 'spacious' ? 1.15 : 1.0;
-  const sectionGapMultiplier = density === 'compact' ? 0.8 : density === 'spacious' ? 1.15 : 1.0;
-  const effectiveLineGap = style.lineGap * lineGapMultiplier;
-  const effectiveSectionGap = style.sectionGap * sectionGapMultiplier;
+
+  let lineGapMultiplier = density === 'compact' ? 0.85 : density === 'spacious' ? 1.15 : 1.0;
+  let sectionGapMultiplier = density === 'compact' ? 0.8 : density === 'spacious' ? 1.15 : 1.0;
+  let bodySize = style.bodySize;
+  let headingSize = style.headingSize;
+  let nameSize = style.nameSize;
+  let minHeadingFollower = 45;
+
+  if (fitTight) {
+    lineGapMultiplier = 0.65;
+    sectionGapMultiplier = 0.5;
+    bodySize = Math.min(style.bodySize, 9.5);
+    headingSize = Math.min(style.headingSize, 10);
+    nameSize = Math.min(style.nameSize, 18);
+    minHeadingFollower = 28;
+  }
+
+  const effectiveLineGap = Math.max(0.6, style.lineGap * lineGapMultiplier);
+  const effectiveSectionGap = Math.max(0.3, style.sectionGap * sectionGapMultiplier);
 
   const doc = new PDFDocument({
     size: pageSize,
     margins: { top: margin, bottom: margin, left: margin, right: margin },
     info: {
-      Title: `${sanitizePdfText(resume.personal.fullName) || 'Resume'}${opts.titleSuffix ? ` — ${sanitizePdfText(opts.titleSuffix)}` : ''}`,
-      Author: sanitizePdfText(resume.personal.fullName) || 'Curevo AI',
+      Title: `${sanitizePdfText(cleanStrayPipes(resume.personal.fullName)) || 'Resume'}${opts.titleSuffix ? ` — ${sanitizePdfText(opts.titleSuffix)}` : ''}`,
+      Author: sanitizePdfText(cleanStrayPipes(resume.personal.fullName)) || 'Curevo AI',
       Creator: 'Curevo AI',
     },
     bufferPages: true,
@@ -122,24 +153,30 @@ export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): Node
   };
 
   const p = resume.personal;
-  const visible: string[] = (resume.sectionOrder && resume.sectionOrder.length > 0 ? resume.sectionOrder : [...ALL_SECTIONS]).filter(
-    (k) => !(resume.hiddenSections || []).includes(k)
-  );
+  const visible: string[] = (
+    opts.enforceAtsOrder
+      ? [...(resume.sectionOrder && resume.sectionOrder.length > 0 ? resume.sectionOrder : ATS_STANDARD_ORDER)].sort((a, b) => {
+          const rankA = ATS_STANDARD_ORDER.indexOf(a as SectionKey);
+          const rankB = ATS_STANDARD_ORDER.indexOf(b as SectionKey);
+          return (rankA === -1 ? 999 : rankA) - (rankB === -1 ? 999 : rankB);
+        })
+      : resume.sectionOrder && resume.sectionOrder.length > 0
+      ? resume.sectionOrder
+      : ATS_STANDARD_ORDER
+  ).filter((k) => !(resume.hiddenSections || []).includes(k));
 
-  const heading = (title: string, minFollower = 45) => {
-    // Only apply section gap if not at the very top of a new page
+  const heading = (title: string, minFollower = minHeadingFollower) => {
     const isTop = doc.y <= margin + 1;
     if (!isTop) {
       doc.moveDown(effectiveSectionGap);
     }
 
-    doc.font(style.headingFont).fontSize(style.headingSize);
+    doc.font(style.headingFont).fontSize(headingSize);
     const cleanTitle = style.capsHeadings ? sanitizePdfText(title).toUpperCase() : sanitizePdfText(title);
     const textHeight = doc.heightOfString(cleanTitle, {
       width: contentWidth,
       characterSpacing: style.capsHeadings ? 1.2 : 0.2,
     });
-    // Ensure heading + rule + spacing + minimum follower content fits before page bottom
     ensureSpace(textHeight + 8 + minFollower);
 
     const y = doc.y;
@@ -155,19 +192,18 @@ export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): Node
       .lineWidth(0.75)
       .strokeColor(style.ruleColor)
       .stroke();
-    doc.moveDown(0.35);
+    doc.moveDown(fitTight ? 0.2 : 0.35);
   };
 
   const bodyText = (text: string, textOpts: PDFKit.Mixins.TextOptions = {}) => {
-    const clean = sanitizePdfText(text);
+    const clean = sanitizePdfText(cleanStrayPipes(text));
     if (!clean) return;
-    doc.font(style.bodyFont).fontSize(style.bodySize).fillColor(COLOR_INK);
+    doc.font(style.bodyFont).fontSize(bodySize).fillColor(COLOR_INK);
     const textHeight = doc.heightOfString(clean, {
       width: contentWidth,
       lineGap: effectiveLineGap,
       ...textOpts,
     });
-    // If less than ~2 lines fit before bottom, break to new page
     if (doc.y + Math.min(textHeight, 26) > pageBottom) {
       doc.addPage();
       doc.y = margin;
@@ -181,9 +217,9 @@ export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): Node
   };
 
   const bullet = (text: string) => {
-    const clean = sanitizePdfText(text.replace(/\s+\u2022\s+/g, ' ').trim());
+    const clean = sanitizePdfText(cleanStrayPipes(text.replace(/\s+\u2022\s+/g, ' ').trim()));
     if (!clean) return;
-    doc.font(style.bodyFont).fontSize(style.bodySize).fillColor(COLOR_INK);
+    doc.font(style.bodyFont).fontSize(bodySize).fillColor(COLOR_INK);
     const bulletTextWidth = contentWidth - 14;
     const bulletHeight = doc.heightOfString(clean, { width: bulletTextWidth, lineGap: effectiveLineGap });
     ensureSpace(bulletHeight + 2);
@@ -199,20 +235,19 @@ export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): Node
     const leftWidth = contentWidth * 0.72;
     const rightWidth = contentWidth * 0.28;
     const leftFont = leftBold ? style.headingFont : style.bodyFont;
-    const leftSize = style.bodySize + 0.5;
-    const rightSize = style.bodySize - 0.5;
+    const leftSize = bodySize + 0.5;
+    const rightSize = bodySize - 0.5;
 
     doc.font(leftFont).fontSize(leftSize);
-    const cleanLeft = sanitizePdfText(left);
+    const cleanLeft = sanitizePdfText(cleanStrayPipes(left));
     const leftHeight = doc.heightOfString(cleanLeft, { width: leftWidth });
 
     doc.font(style.bodyFont).fontSize(rightSize);
-    const cleanRight = sanitizePdfText(right);
+    const cleanRight = sanitizePdfText(cleanStrayPipes(right));
     const rightHeight = doc.heightOfString(cleanRight, { width: rightWidth });
     const rowHeight = Math.max(leftHeight, rightHeight);
 
-    // Keep entry title together with following subtitle/bullet
-    ensureSpace(rowHeight + 28);
+    ensureSpace(rowHeight + (fitTight ? 16 : 28));
 
     const y = doc.y;
     doc.font(leftFont).fontSize(leftSize).fillColor(COLOR_INK);
@@ -226,145 +261,249 @@ export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): Node
   };
 
   // ---- Header ----
-  const name = sanitizePdfText(p.fullName || 'Your Name');
-  doc.font(style.nameFont).fontSize(style.nameSize).fillColor(style.accentColor).text(name, margin, margin, { width: contentWidth });
-  doc.moveDown(0.15);
+  const name = sanitizePdfText(cleanStrayPipes(p.fullName || 'Your Name'));
+  doc.font(style.nameFont).fontSize(nameSize).fillColor(style.accentColor).text(name, margin, margin, { width: contentWidth });
+  doc.moveDown(0.12);
+
+  // Standard ATS Contact Order: Name, Location, Phone, Email, LinkedIn, GitHub
   const contactBits: string[] = [];
-  if (p.headline) contactBits.push(p.headline);
-  if (p.email) contactBits.push(p.email);
-  if (p.phone) contactBits.push(p.phone);
-  if (p.location) contactBits.push(p.location);
-  doc.font(style.bodyFont).fontSize(style.bodySize).fillColor(COLOR_MUTED).text(sanitizePdfText(contactBits.filter(Boolean).join('  |  ')), margin, doc.y, {
-    width: contentWidth,
-  });
-  const linkBits = [p.linkedin, p.github, p.portfolio].filter(Boolean) as string[];
-  if (linkBits.length > 0) {
-    doc.moveDown(0.1);
-    doc.font(style.bodyFont).fontSize(style.bodySize - 0.5).fillColor('#2b6cb0').text(sanitizePdfText(linkBits.join('  |  ')), margin, doc.y, { width: contentWidth });
+  if (p.location) contactBits.push(cleanStrayPipes(p.location));
+  if (p.phone) contactBits.push(cleanStrayPipes(p.phone));
+  if (p.email) contactBits.push(cleanStrayPipes(p.email));
+  if (p.headline) contactBits.push(cleanStrayPipes(p.headline));
+
+  const linkBits: string[] = [];
+  if (p.linkedin) linkBits.push(cleanStrayPipes(p.linkedin));
+  if (p.github) linkBits.push(cleanStrayPipes(p.github));
+  if (p.portfolio) linkBits.push(cleanStrayPipes(p.portfolio));
+
+  if (contactBits.length > 0) {
+    doc.font(style.bodyFont).fontSize(bodySize).fillColor(COLOR_MUTED).text(sanitizePdfText(contactBits.join('  |  ')), margin, doc.y, {
+      width: contentWidth,
+    });
   }
+  if (linkBits.length > 0) {
+    doc.moveDown(0.08);
+    doc.font(style.bodyFont).fontSize(bodySize - 0.5).fillColor('#2b6cb0').text(sanitizePdfText(linkBits.join('  |  ')), margin, doc.y, {
+      width: contentWidth,
+    });
+  }
+
+  // Deduplication tracker
+  const renderedSections = new Set<string>();
 
   // ---- Sections ----
   for (const key of visible) {
-    switch (key) {
+    const normKey = key.toLowerCase();
+    if (renderedSections.has(normKey)) continue;
+
+    switch (normKey) {
       case 'summary': {
         if (!resume.summary?.trim()) break;
+        renderedSections.add('summary');
         heading('Professional Summary');
         bodyText(resume.summary.trim());
         break;
       }
-      case 'experience': {
-        if (resume.experience.length === 0) break;
-        heading('Professional Experience');
-        for (const e of resume.experience) {
-          twoColRow(e.title || e.company, true, formatDateRange(e.startDate, e.endDate, e.current));
-          if (e.title && e.company) {
-            doc.font(style.bodyFont).fontSize(style.bodySize).fillColor(COLOR_MUTED).text(
-              `${sanitizePdfText(e.company)}${e.location ? `, ${sanitizePdfText(e.location)}` : ''}`,
+      case 'education': {
+        if (!resume.education || resume.education.length === 0) break;
+        renderedSections.add('education');
+        heading('Education');
+        for (const ed of resume.education) {
+          const degField = [cleanStrayPipes(ed.degree), cleanStrayPipes(ed.field)].filter(Boolean).join(', ');
+          twoColRow(degField, true, formatDateRange(ed.startDate, ed.endDate, false));
+          const instGrade = [cleanStrayPipes(ed.institution), cleanStrayPipes(ed.grade)].filter(Boolean).join('  |  ');
+          if (instGrade) {
+            doc.font(style.bodyFont).fontSize(bodySize).fillColor(COLOR_MUTED).text(
+              sanitizePdfText(instGrade),
               margin,
               doc.y,
               { width: contentWidth }
             );
           }
-          doc.moveDown(0.15);
-          for (const b of e.bullets.filter((x) => x.trim())) bullet(b);
-          doc.moveDown(0.35);
-        }
-        break;
-      }
-      case 'projects': {
-        if (resume.projects.length === 0) break;
-        heading('Projects');
-        for (const pr of resume.projects) {
-          const tech = pr.tech && pr.tech.length > 0 ? `  |  ${pr.tech.join(', ')}` : '';
-          twoColRow(pr.name || 'Project', true, pr.link || '');
-          if (pr.description?.trim()) bodyText(pr.description.trim());
-          if (tech) {
-            doc.font('Helvetica-Oblique').fontSize(style.bodySize - 0.5).fillColor(COLOR_MUTED).text(
-              sanitizePdfText(tech.trim()),
-              margin,
-              doc.y,
-              { width: contentWidth }
-            );
-          }
-          for (const b of pr.bullets.filter((x) => x.trim())) bullet(b);
-          doc.moveDown(0.3);
+          doc.moveDown(fitTight ? 0.18 : 0.3);
         }
         break;
       }
       case 'skills': {
-        const tech = resume.skills.technical.filter((s) => s.trim());
-        const soft = resume.skills.soft.filter((s) => s.trim());
-        if (tech.length === 0 && soft.length === 0) break;
-        heading('Skills');
-        if (tech.length > 0) {
-          doc.font(style.headingFont).fontSize(style.bodySize).fillColor(COLOR_INK).text('Technical Skills: ', {
-            width: contentWidth,
-            continued: true,
-          });
-          doc.font(style.bodyFont).text(sanitizePdfText(tech.join(', ')), { width: contentWidth });
-          doc.moveDown(0.15);
-        }
-        if (soft.length > 0) {
-          doc.font(style.headingFont).fontSize(style.bodySize).fillColor(COLOR_INK).text('Soft Skills: ', {
-            width: contentWidth,
-            continued: true,
-          });
-          doc.font(style.bodyFont).text(sanitizePdfText(soft.join(', ')), { width: contentWidth });
+        if (renderedSections.has('skills')) break;
+        const hasCategories = Boolean(resume.skills?.categories && resume.skills.categories.length > 0);
+        const tech = (resume.skills?.technical || []).map(cleanStrayPipes).filter(Boolean);
+        const soft = (resume.skills?.soft || []).map(cleanStrayPipes).filter(Boolean);
+        if (!hasCategories && tech.length === 0 && soft.length === 0) break;
+
+        renderedSections.add('skills');
+        heading('Technical Skills');
+
+        if (hasCategories) {
+          for (const cat of resume.skills.categories!) {
+            const catItems = (cat.items || []).map(cleanStrayPipes).filter(Boolean);
+            if (catItems.length === 0) continue;
+            doc.font(style.headingFont).fontSize(bodySize).fillColor(COLOR_INK).text(`${sanitizePdfText(cleanStrayPipes(cat.category))}: `, {
+              width: contentWidth,
+              continued: true,
+            });
+            doc.font(style.bodyFont).text(sanitizePdfText(catItems.join(', ')), { width: contentWidth });
+            doc.moveDown(0.12);
+          }
+          if (soft.length > 0 && !resume.skills.categories!.some((c) => c.category.toLowerCase().includes('soft'))) {
+            doc.font(style.headingFont).fontSize(bodySize).fillColor(COLOR_INK).text('Soft Skills: ', {
+              width: contentWidth,
+              continued: true,
+            });
+            doc.font(style.bodyFont).text(sanitizePdfText(soft.join(', ')), { width: contentWidth });
+            doc.moveDown(0.12);
+          }
+        } else {
+          if (tech.length > 0) {
+            doc.font(style.headingFont).fontSize(bodySize).fillColor(COLOR_INK).text('Technical Skills: ', {
+              width: contentWidth,
+              continued: true,
+            });
+            doc.font(style.bodyFont).text(sanitizePdfText(tech.join(', ')), { width: contentWidth });
+            doc.moveDown(0.12);
+          }
+          if (soft.length > 0) {
+            doc.font(style.headingFont).fontSize(bodySize).fillColor(COLOR_INK).text('Soft Skills: ', {
+              width: contentWidth,
+              continued: true,
+            });
+            doc.font(style.bodyFont).text(sanitizePdfText(soft.join(', ')), { width: contentWidth });
+            doc.moveDown(0.12);
+          }
         }
         break;
       }
-      case 'education': {
-        if (resume.education.length === 0) break;
-        heading('Education');
-        for (const ed of resume.education) {
-          twoColRow(`${ed.degree}${ed.field ? `, ${ed.field}` : ''}`, true, formatDateRange(ed.startDate, ed.endDate, false));
-          doc.font(style.bodyFont).fontSize(style.bodySize).fillColor(COLOR_MUTED).text(
-            sanitizePdfText([ed.institution, ed.grade].filter(Boolean).join('  |  ')),
-            margin,
-            doc.y,
-            { width: contentWidth }
-          );
-          doc.moveDown(0.3);
+      case 'experience': {
+        if (!resume.experience || resume.experience.length === 0) break;
+        renderedSections.add('experience');
+        heading('Professional Experience');
+        for (const e of resume.experience) {
+          twoColRow(cleanStrayPipes(e.title || e.company), true, formatDateRange(e.startDate, e.endDate, e.current));
+          if (e.title && e.company) {
+            const compLoc = [cleanStrayPipes(e.company), cleanStrayPipes(e.location)].filter(Boolean).join(', ');
+            doc.font(style.bodyFont).fontSize(bodySize).fillColor(COLOR_MUTED).text(
+              sanitizePdfText(compLoc),
+              margin,
+              doc.y,
+              { width: contentWidth }
+            );
+          }
+          doc.moveDown(0.12);
+          for (const b of e.bullets.map(cleanStrayPipes).filter(Boolean)) bullet(b);
+          doc.moveDown(fitTight ? 0.2 : 0.35);
+        }
+        break;
+      }
+      case 'projects': {
+        if (!resume.projects || resume.projects.length === 0) break;
+        renderedSections.add('projects');
+        heading('Projects');
+        for (const pr of resume.projects) {
+          const tech = pr.tech && pr.tech.length > 0 ? `  |  ${pr.tech.map(cleanStrayPipes).join(', ')}` : '';
+          twoColRow(cleanStrayPipes(pr.name || 'Project'), true, cleanStrayPipes(pr.link || ''));
+          if (pr.description?.trim()) bodyText(cleanStrayPipes(pr.description.trim()));
+          if (tech) {
+            doc.font('Helvetica-Oblique').fontSize(bodySize - 0.5).fillColor(COLOR_MUTED).text(
+              sanitizePdfText(cleanStrayPipes(tech.trim())),
+              margin,
+              doc.y,
+              { width: contentWidth }
+            );
+          }
+          for (const b of pr.bullets.map(cleanStrayPipes).filter(Boolean)) bullet(b);
+          doc.moveDown(fitTight ? 0.18 : 0.3);
         }
         break;
       }
       case 'certifications': {
-        if (resume.certifications.length === 0) break;
+        if (!resume.certifications || resume.certifications.length === 0) break;
+        renderedSections.add('certifications');
         heading('Certifications');
         for (const c of resume.certifications) {
-          bullet([c.name, c.issuer, c.year].filter(Boolean).join(' — '));
+          bullet([cleanStrayPipes(c.name), cleanStrayPipes(c.issuer), cleanStrayPipes(c.year)].filter(Boolean).join(' — '));
         }
-        doc.moveDown(0.2);
+        doc.moveDown(fitTight ? 0.12 : 0.2);
         break;
       }
       case 'languages': {
-        if (resume.languages.length === 0) break;
+        if (renderedSections.has('languages')) break;
+        if (!resume.languages || resume.languages.length === 0) break;
+
+        // Deduplicate: If all items in languages are programming languages or already present in technical skills, skip!
+        const techSkills = new Set((resume.skills?.technical || []).map((t) => t.toLowerCase()));
+        if (resume.skills?.categories) {
+          for (const cat of resume.skills.categories) {
+            for (const it of cat.items) techSkills.add(it.toLowerCase());
+          }
+        }
+        const nonDuplicateLanguages = resume.languages.filter((l) => {
+          const isTech = techSkills.has(l.name.toLowerCase());
+          return !isTech || Boolean(l.proficiency);
+        });
+        if (nonDuplicateLanguages.length === 0) break;
+
+        renderedSections.add('languages');
         heading('Languages');
-        bodyText(resume.languages.map((l) => (l.proficiency ? `${l.name} (${l.proficiency})` : l.name)).join(', '));
+        bodyText(nonDuplicateLanguages.map((l) => (l.proficiency ? `${cleanStrayPipes(l.name)} (${cleanStrayPipes(l.proficiency)})` : cleanStrayPipes(l.name))).join(', '));
         break;
       }
       case 'achievements': {
-        if (resume.achievements.length === 0) break;
+        if (!resume.achievements || resume.achievements.length === 0) break;
+        renderedSections.add('achievements');
         heading('Achievements');
-        for (const a of resume.achievements.filter((x) => x.trim())) bullet(a);
-        doc.moveDown(0.2);
+        for (const a of resume.achievements.map(cleanStrayPipes).filter(Boolean)) bullet(a);
+        doc.moveDown(fitTight ? 0.12 : 0.2);
         break;
       }
       default: {
-        // Custom sections (Publications, Volunteering, Interests, …) — same
-        // heading/bullet treatment, fully ATS-safe.
         const custom = (resume.customSections || []).find((c) => c.id === key);
-        if (!custom || custom.bullets.filter((b) => b.trim()).length === 0) break;
-        heading(custom.title);
-        for (const b of custom.bullets.filter((x) => x.trim())) bullet(b);
-        doc.moveDown(0.2);
+        if (!custom || custom.bullets.map(cleanStrayPipes).filter(Boolean).length === 0) break;
+        renderedSections.add(key);
+        heading(cleanStrayPipes(custom.title));
+        for (const b of custom.bullets.map(cleanStrayPipes).filter(Boolean)) bullet(b);
+        doc.moveDown(fitTight ? 0.12 : 0.2);
         break;
       }
     }
   }
 
-  doc.end();
   return doc;
+}
+
+export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): NodeJS.ReadableStream {
+  if (opts.marginDensity === 'compact') {
+    const doc = generateResumeDoc(resume, opts, true);
+    doc.end();
+    return doc;
+  }
+
+  const trialDoc = generateResumeDoc(resume, opts, false);
+  const pageCount = trialDoc.bufferedPageRange().count;
+  const lastY = trialDoc.y;
+  const standardMargin = opts.marginDensity === 'spacious' ? 64 : 54;
+
+  // A resume with 4+ experience entries or 11+ experience bullets is an established multi-page candidate profile
+  const isMultiPageProfile =
+    (resume.experience && resume.experience.length >= 4) ||
+    (resume.experience && resume.experience.reduce((n, e) => n + (e.bullets?.length || 0), 0) >= 11);
+
+  // Smart Single-Page Fit:
+  // If a standard candidate profile overflows by ~6 lines onto page 2 (within ~1.15 pages: pageCount === 2 and lastY - standardMargin < 140),
+  // dynamically tighten vertical spacing so it fits cleanly onto 1 full page.
+  if (!isMultiPageProfile && pageCount === 2 && (lastY - standardMargin) < 140) {
+    const tightDoc = generateResumeDoc(resume, opts, true);
+    const tightCount = tightDoc.bufferedPageRange().count;
+    if (tightCount === 1) {
+      tightDoc.end();
+      return tightDoc;
+    }
+    tightDoc.end();
+    return tightDoc;
+  }
+
+  trialDoc.end();
+  return trialDoc;
 }
 
 export function pdfFileName(resume: ResumeData, role?: string): string {

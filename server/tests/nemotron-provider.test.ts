@@ -23,7 +23,9 @@
 //    - Timeouts, 429 rate limits, 401/403 auth errors, and 5xx server errors.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import request from 'supertest';
 import { z } from 'zod';
+import { buildApp } from '../src/app';
 import {
   OpenAiCompatibleProvider,
   parseStructured,
@@ -31,8 +33,13 @@ import {
   AiUnavailableError,
   readAiConfigFromEnv,
   aiRequestContext,
+  parseKeyList,
+  getAiProvider,
+  isAiEnabled,
+  __setAiProviderForTests,
+  getAiProviderKeyCount,
 } from '../src/ai/provider';
-import { getAiKeyPoolCount } from '../src/config';
+import { getAiKeyPoolCount, isAiConfiguredInEnv } from '../src/config';
 
 const testSchema = z.object({
   summary: z.string(),
@@ -548,6 +555,104 @@ Hope this is helpful!`;
       });
 
       expect(sentHeaders).toEqual(['Bearer nvapi-custom-user-key']);
+    });
+
+    it('trims whitespace and strips accidental quotes around each comma-separated key', () => {
+      expect(parseKeyList(' "nvapi-1" , \'nvapi-2\' ')).toEqual(['nvapi-1', 'nvapi-2']);
+      expect(parseKeyList('"nvapi-1, nvapi-2"')).toEqual(['nvapi-1', 'nvapi-2']);
+      expect(parseKeyList('\'nvapi-1, nvapi-2\'')).toEqual(['nvapi-1', 'nvapi-2']);
+      expect(parseKeyList('"nvapi-1", "nvapi-2", "nvapi-3"')).toEqual(['nvapi-1', 'nvapi-2', 'nvapi-3']);
+      expect(parseKeyList(' """nvapi-1""" , nvapi-2 ')).toEqual(['nvapi-1', 'nvapi-2']);
+      expect(parseKeyList(' "" , \'\' ,   ')).toEqual([]);
+      expect(parseKeyList(undefined)).toEqual([]);
+    });
+
+    it('unifies singular and plural env vars across config.ts and provider.ts', () => {
+      const origKeys = process.env.NVIDIA_API_KEYS;
+      const origKey = process.env.NVIDIA_API_KEY;
+      const origAiKeys = process.env.AI_API_KEYS;
+      const origAiKey = process.env.AI_API_KEY;
+
+      try {
+        // When only plural AI_API_KEYS is set
+        delete process.env.NVIDIA_API_KEYS;
+        delete process.env.NVIDIA_API_KEY;
+        delete process.env.AI_API_KEY;
+        process.env.AI_API_KEYS = ' "generic-key-1", "generic-key-2" ';
+
+        expect(isAiConfiguredInEnv(process.env)).toBe(true);
+        expect(getAiKeyPoolCount(process.env)).toBe(2);
+        const cfg = readAiConfigFromEnv();
+        expect(cfg).not.toBeNull();
+        expect(cfg?.apiKeys).toEqual(['generic-key-1', 'generic-key-2']);
+      } finally {
+        if (origKeys) process.env.NVIDIA_API_KEYS = origKeys;
+        else delete process.env.NVIDIA_API_KEYS;
+        if (origKey) process.env.NVIDIA_API_KEY = origKey;
+        else delete process.env.NVIDIA_API_KEY;
+        if (origAiKeys) process.env.AI_API_KEYS = origAiKeys;
+        else delete process.env.AI_API_KEYS;
+        if (origAiKey) process.env.AI_API_KEY = origAiKey;
+        else delete process.env.AI_API_KEY;
+      }
+    });
+
+    it('initializes AI provider as configured with 2 keys when only NVIDIA_API_KEYS="nvapi-1, nvapi-2" is set and NVIDIA_API_KEY is empty', async () => {
+      const origKeys = process.env.NVIDIA_API_KEYS;
+      const origKey = process.env.NVIDIA_API_KEY;
+      const origAiKeys = process.env.AI_API_KEYS;
+      const origAiKey = process.env.AI_API_KEY;
+      const origOpenAiKey = process.env.OPENAI_API_KEY;
+
+      try {
+        process.env.NVIDIA_API_KEYS = '"nvapi-1, nvapi-2"';
+        process.env.NVIDIA_API_KEY = '';
+        delete process.env.AI_API_KEYS;
+        delete process.env.AI_API_KEY;
+        delete process.env.OPENAI_API_KEY;
+
+        // Reset singleton so it re-reads environment variables
+        __setAiProviderForTests(null);
+
+        const app = await buildApp();
+        const res = await request(app).get('/api/ai/status');
+
+        expect(res.status).toBe(200);
+        expect(res.body.enabled).toBe(true);
+        expect(res.body.provider).toBe('AI Engine');
+        expect(res.body.model).toBe('AI Engine');
+
+        // Verify underlying provider initialized as configured with 2 keys
+        expect(isAiEnabled()).toBe(true);
+        const provider = getAiProvider();
+        expect(provider).toBeInstanceOf(OpenAiCompatibleProvider);
+        const openAiProvider = provider as OpenAiCompatibleProvider;
+        expect(openAiProvider.getKeyPoolCount()).toBe(2);
+        expect(getAiProviderKeyCount()).toBe(2);
+        expect(getAiKeyPoolCount(process.env)).toBe(2);
+        expect(isAiConfiguredInEnv(process.env)).toBe(true);
+
+        // Verify both aliases: /api/public/status and /api/public/ai/status
+        const pubRes = await request(app).get('/api/public/status');
+        expect(pubRes.status).toBe(200);
+        expect(pubRes.body.enabled).toBe(true);
+
+        const pubAiRes = await request(app).get('/api/public/ai/status');
+        expect(pubAiRes.status).toBe(200);
+        expect(pubAiRes.body.enabled).toBe(true);
+      } finally {
+        if (origKeys) process.env.NVIDIA_API_KEYS = origKeys;
+        else delete process.env.NVIDIA_API_KEYS;
+        if (origKey) process.env.NVIDIA_API_KEY = origKey;
+        else delete process.env.NVIDIA_API_KEY;
+        if (origAiKeys) process.env.AI_API_KEYS = origAiKeys;
+        else delete process.env.AI_API_KEYS;
+        if (origAiKey) process.env.AI_API_KEY = origAiKey;
+        else delete process.env.AI_API_KEY;
+        if (origOpenAiKey) process.env.OPENAI_API_KEY = origOpenAiKey;
+        else delete process.env.OPENAI_API_KEY;
+        __setAiProviderForTests(null);
+      }
     });
   });
 

@@ -339,22 +339,36 @@ export function assertProductionAuthConfigIsSafe(env: NodeJS.ProcessEnv = proces
 }
 
 /**
+ * Parse a comma- or newline-separated list of API keys from an environment variable.
+ * Trims whitespace and strips accidental leading/trailing quotes (' or ") around each key.
+ */
+export function parseKeyList(raw?: string): string[] {
+  if (!raw) return [];
+  return raw
+    .split(/[,\n]/)
+    .map((k) => k.trim().replace(/^['"]+|['"]+$/g, '').trim())
+    .filter((k) => k.length > 0);
+}
+
+/**
  * Returns the count of distinct AI API keys configured across environment variables
  * for multi-key round-robin rotation and quota resilience.
+ * Unifies both plural (NVIDIA_API_KEYS, AI_API_KEYS) and singular (NVIDIA_API_KEY, AI_API_KEY, OPENAI_API_KEY) variables.
  */
 export function getAiKeyPoolCount(env: NodeJS.ProcessEnv = process.env): number {
-  const parseKeys = (raw?: string) =>
-    (raw || '')
-      .split(/[,\n]/)
-      .map((k) => k.trim())
-      .filter((k) => k.length > 0);
-
   const keys = new Set([
-    ...parseKeys(env.NVIDIA_API_KEYS),
-    ...parseKeys(env.NVIDIA_API_KEY),
-    ...parseKeys(env.AI_API_KEYS),
-    ...parseKeys(env.AI_API_KEY),
-    ...parseKeys(env.OPENAI_API_KEY),
+    ...parseKeyList(env.NVIDIA_API_KEYS),
+    ...parseKeyList(env.NVIDIA_API_KEY),
+    ...parseKeyList(env.AI_API_KEYS),
+    ...parseKeyList(env.AI_API_KEY),
+    ...parseKeyList(env.OPENAI_API_KEY),
   ]);
   return keys.size;
+}
+
+/**
+ * Returns true if at least one AI API key is configured across singular or plural env vars.
+ */
+export function isAiConfiguredInEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  return getAiKeyPoolCount(env) > 0;
 }
