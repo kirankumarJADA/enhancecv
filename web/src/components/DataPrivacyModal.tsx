@@ -8,6 +8,7 @@ import {
   downloadAllCurevoDataJson,
   importAllCurevoData,
   clearAllCurevoData,
+  CUSTOM_AI_KEY_STORAGE,
 } from '../lib/userDataExport';
 
 export interface DataPrivacyModalProps {
@@ -24,6 +25,15 @@ export default function DataPrivacyModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [statusMessage, setStatusMessage] = useState<{ text: string; kind: 'ok' | 'err' } | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [customKey, setCustomKey] = useState<string>(() => {
+    try {
+      return localStorage.getItem(CUSTOM_AI_KEY_STORAGE) || '';
+    } catch {
+      return '';
+    }
+  });
+  const [editingKey, setEditingKey] = useState(false);
+  const [keyInput, setKeyInput] = useState('');
 
   if (!isOpen) return null;
 
@@ -57,6 +67,7 @@ export default function DataPrivacyModal({
 
   const handleClear = () => {
     clearAllCurevoData();
+    setCustomKey('');
     setConfirmClear(false);
     setStatusMessage({ text: 'All local Curevo AI data has been completely erased.', kind: 'ok' });
     onDataChanged?.();
@@ -137,6 +148,91 @@ export default function DataPrivacyModal({
                 Import JSON
               </button>
             </div>
+          </div>
+
+          {/* Action 2.5: Custom AI API Key (BYOK) */}
+          <div className="rounded-xl border border-ink-100 p-4 bg-ink-50/60">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h4 className="text-xs font-bold text-ink-900">Custom AI Key (BYOK)</h4>
+                <p className="text-2xs text-ink-500">
+                  Optional: Use your personal NVIDIA or OpenAI key for unrestricted quota. Stored only in this browser.
+                </p>
+              </div>
+              {!editingKey && (
+                customKey ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        localStorage.removeItem(CUSTOM_AI_KEY_STORAGE);
+                      } catch {
+                        // Safe ignore
+                      }
+                      setCustomKey('');
+                      setStatusMessage({ text: 'Custom AI key removed. Standard limits apply.', kind: 'ok' });
+                    }}
+                    className="rounded-lg border border-ink-200 bg-white px-2.5 py-1 text-2xs font-semibold text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                  >
+                    Remove Key
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setKeyInput('');
+                      setEditingKey(true);
+                    }}
+                    className="rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50 transition cursor-pointer shadow-xs"
+                  >
+                    Set Key...
+                  </button>
+                )
+              )}
+            </div>
+            {customKey && !editingKey && (
+              <div className="text-2xs font-mono text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 inline-block">
+                Active: {customKey.slice(0, 6)}...{customKey.slice(-4)}
+              </div>
+            )}
+            {editingKey && (
+              <div className="mt-2 space-y-2">
+                <input
+                  type="password"
+                  placeholder="nvapi-... or sk-..."
+                  value={keyInput}
+                  onChange={(e) => setKeyInput(e.target.value)}
+                  className="w-full text-xs font-mono px-3 py-1.5 border border-ink-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-brand-500 bg-white"
+                />
+                <div className="flex items-center gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setEditingKey(false)}
+                    className="px-2.5 py-1 text-2xs text-ink-600 hover:bg-ink-100 rounded-md cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!keyInput.trim()}
+                    onClick={() => {
+                      if (!keyInput.trim()) return;
+                      try {
+                        localStorage.setItem(CUSTOM_AI_KEY_STORAGE, keyInput.trim());
+                      } catch {
+                        // Safe ignore
+                      }
+                      setCustomKey(keyInput.trim());
+                      setEditingKey(false);
+                      setStatusMessage({ text: 'Custom AI key saved securely in browser localStorage.', kind: 'ok' });
+                    }}
+                    className="px-3 py-1 text-2xs font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-md disabled:opacity-50 cursor-pointer"
+                  >
+                    Save Key
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Action 3: Clear */}

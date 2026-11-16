@@ -44,7 +44,7 @@ export async function buildApp(): Promise<express.Express> {
     origin: corsOriginCheck,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Custom-AI-Key'],
     maxAge: 86400,
   }));
 
@@ -71,12 +71,26 @@ export async function buildApp(): Promise<express.Express> {
   app.use('/api/master', csrfProtection, masterRoutes);
   app.use('/api/resumes', csrfProtection, resumesRoutes);
 
-  // Future database-backed routes safely unmounted until Phase 9D / 9E:
-  // - /api/master, /api/resumes, /api/dashboard, /api/ai
-  // - /api/billing, /api/applications, /api/templates, /api/admin, /api/interview
-  // - /api/jobs, /api/import, /api/analytics
-  // These routes safely resolve to 404 NOT FOUND via notFoundHandler without attempting
-  // PostgreSQL connection, session verification or account persistence.
+  // ---------------------------------------------------------------------------
+  // ARCHITECTURAL ROUTE HYGIENE: Intentionally Unmounted Route Controllers
+  // ---------------------------------------------------------------------------
+  // Curevo AI's core operating principle is stateless, anonymous, client-side first.
+  // The following 11 database-dependent route controllers located in server/src/routes/
+  // are deliberately kept unmounted with zero dead bundle imports:
+  //   1. admin.ts        - Multi-tenant tenant/user administrative dashboard
+  //   2. ai.ts           - Legacy authenticated AI pipeline (superseded by /api/public)
+  //   3. applications.ts - Remote job application tracking (handled in browser localStorage)
+  //   4. billing.ts      - Stripe subscriptions & webhooks (100% free release model)
+  //   5. dashboard.ts    - User analytics & metric aggregation
+  //   6. discovery.ts    - Legacy career discovery crawler
+  //   7. imports.ts      - External LinkedIn/JSON-LD sync
+  //   8. insights.ts     - Proprietary career telemetry & ATS scoring insights
+  //   9. interview.ts    - Legacy database interview sessions (handled in browser localStorage)
+  //  10. jobs.ts         - Legacy authenticated job persistence (handled in browser localStorage)
+  //  11. templates.ts    - Server-side template repository (rendered directly by pdf.ts)
+  //
+  // Unmounted endpoints cleanly return 404 NOT FOUND via notFoundHandler without
+  // querying PostgreSQL, touching database connection pools, or leaking account data.
 
   // Serve the built web app in production / combined mode
   if (config.webDist) {

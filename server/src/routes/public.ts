@@ -24,7 +24,7 @@ import { generateCoverLetter, CoverLetter } from '../ai/coverLetterAgent';
 import { renderResumePdf, pdfFileName, renderCoverLetterPdf, coverLetterFileName } from '../engine/pdf';
 import { rateLimit } from '../middleware/rateLimit';
 import { AppError } from '../middleware/errors';
-import { AiUnavailableError, getAiStatus } from '../ai/provider';
+import { AiUnavailableError, getAiStatus, aiRequestContext } from '../ai/provider';
 import { getJobSourceProvider, isJobSourceConfigured, searchJobsWithCache } from '../lib/jobSource';
 import { CURATED_JOBS } from '../data/curatedJobs';
 import {
@@ -62,6 +62,21 @@ import type {
 import { DEFAULT_SECTION_ORDER } from '../types';
 
 const router = Router();
+
+// BYOK (Bring Your Own Key) Middleware: Scopes custom client AI keys to the request lifecycle
+// without logging or persistent storage.
+router.use((req: Request, _res: Response, next: NextFunction) => {
+  const rawCustomKey = req.headers['x-custom-ai-key'];
+  const customApiKey =
+    typeof rawCustomKey === 'string' && rawCustomKey.trim().length > 0 && rawCustomKey.trim().length <= 512
+      ? rawCustomKey.trim()
+      : undefined;
+  if (customApiKey) {
+    aiRequestContext.run({ customApiKey }, () => next());
+  } else {
+    next();
+  }
+});
 
 // Public status endpoint reporting provider, model and timeout (no secrets)
 router.get('/status', (_req: Request, res: Response) => {

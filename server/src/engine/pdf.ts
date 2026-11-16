@@ -111,19 +111,43 @@ export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): Node
     bufferPages: true,
   });
 
+  const pageBottom = dimensions.height - margin;
+
+  const ensureSpace = (needed: number) => {
+    if (doc.y + needed > pageBottom) {
+      doc.addPage();
+      doc.y = margin;
+      doc.x = margin;
+    }
+  };
+
   const p = resume.personal;
   const visible: string[] = (resume.sectionOrder && resume.sectionOrder.length > 0 ? resume.sectionOrder : [...ALL_SECTIONS]).filter(
     (k) => !(resume.hiddenSections || []).includes(k)
   );
 
-  const heading = (title: string) => {
-    doc.moveDown(effectiveSectionGap);
+  const heading = (title: string, minFollower = 45) => {
+    // Only apply section gap if not at the very top of a new page
+    const isTop = doc.y <= margin + 1;
+    if (!isTop) {
+      doc.moveDown(effectiveSectionGap);
+    }
+
+    doc.font(style.headingFont).fontSize(style.headingSize);
+    const cleanTitle = style.capsHeadings ? sanitizePdfText(title).toUpperCase() : sanitizePdfText(title);
+    const textHeight = doc.heightOfString(cleanTitle, {
+      width: contentWidth,
+      characterSpacing: style.capsHeadings ? 1.2 : 0.2,
+    });
+    // Ensure heading + rule + spacing + minimum follower content fits before page bottom
+    ensureSpace(textHeight + 8 + minFollower);
+
     const y = doc.y;
-    doc.font(style.headingFont).fontSize(style.headingSize).fillColor(style.accentColor).text(
-      style.capsHeadings ? sanitizePdfText(title).toUpperCase() : sanitizePdfText(title),
+    doc.fillColor(style.accentColor).text(
+      cleanTitle,
       margin,
       y,
-      { characterSpacing: style.capsHeadings ? 1.2 : 0.2 }
+      { characterSpacing: style.capsHeadings ? 1.2 : 0.2, width: contentWidth }
     );
     doc
       .moveTo(margin, doc.y + 3)
@@ -135,7 +159,21 @@ export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): Node
   };
 
   const bodyText = (text: string, textOpts: PDFKit.Mixins.TextOptions = {}) => {
-    doc.font(style.bodyFont).fontSize(style.bodySize).fillColor(COLOR_INK).text(sanitizePdfText(text), margin, doc.y, {
+    const clean = sanitizePdfText(text);
+    if (!clean) return;
+    doc.font(style.bodyFont).fontSize(style.bodySize).fillColor(COLOR_INK);
+    const textHeight = doc.heightOfString(clean, {
+      width: contentWidth,
+      lineGap: effectiveLineGap,
+      ...textOpts,
+    });
+    // If less than ~2 lines fit before bottom, break to new page
+    if (doc.y + Math.min(textHeight, 26) > pageBottom) {
+      doc.addPage();
+      doc.y = margin;
+      doc.x = margin;
+    }
+    doc.text(clean, margin, doc.y, {
       width: contentWidth,
       lineGap: effectiveLineGap,
       ...textOpts,
@@ -144,21 +182,46 @@ export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): Node
 
   const bullet = (text: string) => {
     const clean = sanitizePdfText(text.replace(/\s+\u2022\s+/g, ' ').trim());
+    if (!clean) return;
     doc.font(style.bodyFont).fontSize(style.bodySize).fillColor(COLOR_INK);
+    const bulletTextWidth = contentWidth - 14;
+    const bulletHeight = doc.heightOfString(clean, { width: bulletTextWidth, lineGap: effectiveLineGap });
+    ensureSpace(bulletHeight + 2);
+
+    const startY = doc.y;
     const bx = margin + 4;
-    doc.text('\u2022', margin, doc.y, { continued: false, width: 12 });
-    doc.text(clean, bx + 8, doc.y, { width: contentWidth - 12, lineGap: effectiveLineGap });
+    doc.text('\u2022', margin, startY, { width: 12, lineGap: effectiveLineGap });
+    doc.text(clean, bx + 8, startY, { width: bulletTextWidth, lineGap: effectiveLineGap });
     doc.x = margin;
   };
 
   const twoColRow = (left: string, leftBold: boolean, right: string) => {
+    const leftWidth = contentWidth * 0.72;
+    const rightWidth = contentWidth * 0.28;
+    const leftFont = leftBold ? style.headingFont : style.bodyFont;
+    const leftSize = style.bodySize + 0.5;
+    const rightSize = style.bodySize - 0.5;
+
+    doc.font(leftFont).fontSize(leftSize);
+    const cleanLeft = sanitizePdfText(left);
+    const leftHeight = doc.heightOfString(cleanLeft, { width: leftWidth });
+
+    doc.font(style.bodyFont).fontSize(rightSize);
+    const cleanRight = sanitizePdfText(right);
+    const rightHeight = doc.heightOfString(cleanRight, { width: rightWidth });
+    const rowHeight = Math.max(leftHeight, rightHeight);
+
+    // Keep entry title together with following subtitle/bullet
+    ensureSpace(rowHeight + 28);
+
     const y = doc.y;
-    doc.font(leftBold ? style.headingFont : style.bodyFont).fontSize(style.bodySize + 0.5).fillColor(COLOR_INK);
-    doc.text(sanitizePdfText(left), margin, y, { width: contentWidth * 0.72, continued: false });
+    doc.font(leftFont).fontSize(leftSize).fillColor(COLOR_INK);
+    doc.text(cleanLeft, margin, y, { width: leftWidth, continued: false });
     const afterLeft = doc.y;
-    doc.font(style.bodyFont).fontSize(style.bodySize - 0.5).fillColor(COLOR_MUTED);
-    doc.text(sanitizePdfText(right), margin + contentWidth * 0.72, y, { width: contentWidth * 0.28, align: 'right' });
-    doc.y = Math.max(afterLeft, doc.y);
+
+    doc.font(style.bodyFont).fontSize(rightSize).fillColor(COLOR_MUTED);
+    doc.text(cleanRight, margin + leftWidth, y, { width: rightWidth, align: 'right' });
+    doc.y = Math.max(afterLeft, doc.y, y + rowHeight);
     doc.x = margin;
   };
 
@@ -322,20 +385,48 @@ export interface CoverLetterContent {
 
 export function renderCoverLetterPdf(letter: CoverLetterContent, ownerName: string, pageSize: PageSize = 'A4'): NodeJS.ReadableStream {
   const normSize: PageSize = String(pageSize).trim().toUpperCase() === 'LETTER' ? 'LETTER' : 'A4';
+  const margin = 72;
   const doc = new PDFDocument({
     size: normSize,
-    margins: { top: 72, bottom: 72, left: 72, right: 72 },
+    margins: { top: margin, bottom: margin, left: margin, right: margin },
     info: { Title: 'Cover letter', Author: sanitizePdfText(ownerName) || 'Curevo AI', Creator: 'Curevo AI' },
+    bufferPages: true,
   });
+
+  const contentWidth = doc.page.width - margin * 2;
+  const pageBottom = doc.page.height - margin;
+
+  const ensureSpace = (needed: number) => {
+    if (doc.y + needed > pageBottom) {
+      doc.addPage();
+      doc.y = margin;
+      doc.x = margin;
+    }
+  };
+
   doc.font('Helvetica').fontSize(11).fillColor('#1a2233');
-  doc.text(sanitizePdfText(letter.greeting), { lineGap: 3 });
+  doc.text(sanitizePdfText(letter.greeting), margin, doc.y, { width: contentWidth, lineGap: 3 });
   doc.moveDown(0.8);
+
   for (const paragraph of letter.paragraphs) {
-    doc.text(sanitizePdfText(paragraph), { lineGap: 3 });
+    const pText = sanitizePdfText(paragraph);
+    if (!pText) continue;
+    const pHeight = doc.heightOfString(pText, { width: contentWidth, lineGap: 3 });
+    // Keep at least the beginning of paragraph from breaking right at page bottom
+    ensureSpace(Math.min(pHeight, 36));
+    doc.text(pText, margin, doc.y, { width: contentWidth, lineGap: 3 });
     doc.moveDown(0.8);
   }
-  doc.moveDown(0.6);
-  doc.text(sanitizePdfText(letter.closing));
+
+  const closingText = sanitizePdfText(letter.closing);
+  if (closingText) {
+    const closingHeight = doc.heightOfString(closingText, { width: contentWidth, lineGap: 2 });
+    // Prevent orphan closing / sign-off on an isolated line
+    ensureSpace(closingHeight + 16);
+    doc.moveDown(0.6);
+    doc.text(closingText, margin, doc.y, { width: contentWidth, lineGap: 2 });
+  }
+
   doc.end();
   return doc;
 }

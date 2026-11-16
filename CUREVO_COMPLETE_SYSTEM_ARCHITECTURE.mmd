@@ -1,0 +1,159 @@
+graph TB
+%% CUREVO AI — COMPLETE SYSTEM TOPOLOGY & ARCHITECTURE
+%% Generated via Exhaustive Codebase Reverse-Engineering & Source Audit
+
+  subgraph CLIENT_TIER["CLIENT TIER: Browser / Chrome Extension"]
+    direction TB
+    subgraph SPA["React 18 SPA (web/src)"]
+      MAIN["main.tsx<br/>React 18 Concurrent Root<br/>StrictMode + Error Monitoring"]
+      ROUTER["App.tsx (React Router DOM v7)<br/>Public Workflows & Canonical Redirects"]
+      
+      subgraph PAGES["Active Public Pages"]
+        P_LANDING["Landing.tsx (/)<br/>Hero, Demos, FAQ, Extension DL"]
+        P_BUILDER["PublicBuilder.tsx (/builder)<br/>Flagship CV Editor, ATS & Tailor"]
+        P_PREPARE["PrepareApplication.tsx (/prepare-application)<br/>5-Step Unified Prep Orchestrator"]
+        P_JOBS["Jobs.tsx (/jobs)<br/>Job Discovery & Match Engine"]
+        P_APPS["Applications.tsx (/applications)<br/>5-Stage Client Kanban Tracker"]
+        P_INTERVIEW["Interview.tsx (/interview & /interview/:id)<br/>Prep Pack, STAR Bank, Mock Coach"]
+        P_LINKEDIN["LinkedIn.tsx (/linkedin)<br/>Headlines, About, Recruiter Keywords"]
+      end
+
+      subgraph FRONTEND_STORAGE["Client-Side LocalStorage Sovereignty (web/src/lib)"]
+        LS_DRAFT[("curevo_builder_draft_v1_anonymous<br/>Account-Isolated CV Draft")]
+        LS_JOBS[("curevo_saved_jobs_v1<br/>Bookmarked Roles & Match Scores")]
+        LS_APPS[("curevo_applications_v1<br/>Kanban Pipeline Applications")]
+        LS_IV_SESS[("curevo_interview_sessions_v1<br/>Mock Interview Transcripts")]
+        LS_IV_STAR[("curevo_star_stories_v1<br/>STAR Story Bank")]
+        LS_LI_PROF[("curevo_linkedin_profile_v1<br/>LinkedIn Profile Draft")]
+        LS_LI_HIST[("curevo_linkedin_history_v1<br/>Optimization Runs (Max 30)")]
+        LS_RESEARCH[("curevo_company_research_v1<br/>Verified Employer Cache")]
+      end
+
+      subgraph BROWSER_APIS["Native Browser Hardware & Web APIs"]
+        API_SPEECH["Web Speech API<br/>SpeechRecognition (STT)<br/>SpeechSynthesis (TTS)"]
+        API_FILES["Browser File API<br/>FileReader (JSON Restore)<br/>Blob + ObjectURL (PDF/CSV/JSON DL)"]
+      end
+    end
+
+    subgraph EXTENSION["Chrome Job Saver Extension (extension/)"]
+      EXT_POPUP["popup.html / popup.js<br/>1-Click Job Description Extractor"]
+      EXT_CONTENT["content.js<br/>DOM Job Scraper & Autofill"]
+      EXT_STORAGE["chrome.storage.local<br/>Target API URL & Preferences"]
+    end
+  end
+
+  subgraph NETWORK_TIER["SECURITY, NETWORKING & EDGE GATEWAY"]
+    direction TB
+    CORS_GW["CORS Policy (server/src/lib/cors.ts)<br/>Strict Origin Whitelist + credentials: 'include'"]
+    HELMET_GW["Helmet Middleware (server/src/app.ts)<br/>CSP, CORP: 'same-site', HSTS, nosniff"]
+    RATE_LIMIT_GW["Sliding-Window Rate Limiter (server/src/middleware/rateLimit.ts)<br/>60s/15m Windows, In-Memory Buckets"]
+    CSRF_GW["Double-Submit CSRF Guard (server/src/middleware/csrf.ts)<br/>ecv_csrf Cookie + X-CSRF-Token Header"]
+    CONCURRENCY_GW["AI Concurrency Guard (server/src/routes/public.ts)<br/>Max 5 Global AI Requests, Max 2 Per IP"]
+  end
+
+  subgraph SERVER_TIER["SERVER RUNTIME TIER: Node.js Express (server/src)"]
+    direction TB
+    STARTUP["Server Startup Sequence (index.ts -> config.ts -> app.ts)<br/>Stateless Mode Default, Graceful PostgreSQL Degradation"]
+    
+    subgraph ROUTERS["API Routing Architecture (server/src/routes)"]
+      R_PUBLIC["public.ts (25 Active Stateless Endpoints)<br/>/api/public/* — 100% In-Memory Processing"]
+      R_ROOT["app.ts System Endpoints<br/>GET /api/health (Uptime)<br/>GET /api/ai/status (Branded Provider Mask)"]
+      R_AUTH["auth.ts / profile.ts / master.ts / resumes.ts<br/>Authenticated Routes (Active when DB Configured)"]
+      R_UNMOUNTED["Unmounted Routers (Resolve safely to 404)<br/>billing.ts, applications.ts, discovery.ts, admin.ts,<br/>interview.ts, jobs.ts, imports.ts, dashboard.ts"]
+    end
+
+    subgraph CORE_ENGINES["Deterministic Core Processing Engines (server/src/engine)"]
+      E_PARSE["Parsing Engine (extract.ts, isolatedParser.ts)<br/>pdfjs-dist in Worker Thread, mammoth DOCX,<br/>zipGuard.ts Zip-Bomb Guard, Gutter Detection"]
+      E_ATS["Deterministic ATS Scoring Engine (ats.ts, audit.ts)<br/>5 Standard Categories (100 pts) + 9 Advanced Dimensions<br/>Power Verbs, Action Ratio, Google XYZ Metrics"]
+      E_MATCH["Job Matching Engine (jd.ts, match.ts)<br/>7 Weighted Components (35% Required, 15% Resp, etc.)<br/>Explainable Math, Source CV vs Unsupported Provenance"]
+      E_PDF["PDFKit Streaming Engine (pdf.ts, templates.ts)<br/>6 Layout Themes, 3 Margins, A4/Letter Sizing<br/>WinAnsi Unicode Sanitizer, Zero Disk Streaming Pipe"]
+    end
+
+    subgraph AI_PIPELINE["AI Engine & Truth Guard Subsystem (server/src/ai)"]
+      AI_PROVIDER["AI Provider Client (provider.ts)<br/>OpenAiCompatibleProvider / RuleBasedProvider<br/>Structured Zod Parsing, Adaptive 32K Retry"]
+      
+      subgraph SPECIALIST_AGENTS["Specialist Prompt Agents"]
+        AG_RESUME["resumeAgent.ts<br/>Bullet Rewriter (Google XYZ)"]
+        AG_COVER["coverLetterAgent.ts<br/>4 Tones, Paragraph Synthesis"]
+        AG_INTERVIEW["interviewAgent.ts<br/>Questions, STAR Rubric, Mock Report"]
+        AG_LINKEDIN["publicLinkedinAgent.ts<br/>Headlines, Narrative About, SEO"]
+        AG_RESEARCH["companyResearchAgent.ts<br/>Fact-Checked Business Intelligence"]
+      end
+
+      subgraph TRUTH_GUARD["Truth Guard™ Hallucination Interceptor (tailor.ts)"]
+        TG_INTERVAL["calculateIntervalUnionYears()<br/>Mathematical Union of Employment Intervals"]
+        TG_NUMS["masterNumbers Multiset<br/>Numeric Fact & Metric Guard (Strict Bounds)"]
+        TG_LEAD["getSupportedHeadcount()<br/>Leadership & Team Scale Bound Check"]
+        TG_REVERT["Deterministic Auto-Reversion<br/>Reverts Hallucinated Bullets to Master CV Baseline"]
+      end
+    end
+
+    subgraph SERVER_DATA_HANDLING["Zero-Disk Server Data Processing"]
+      RAM_MULTER["multer.memoryStorage()<br/>Volatile Buffer (Max 8MB, Discarded post-handler)"]
+      RAM_STREAM["Node.js Stream Pipe<br/>PDFKit -> HTTP Response (Zero Disk Files)"]
+      RAM_CACHE["In-Memory Query Cache<br/>Job Search Cache (10m TTL), Concurrency Maps"]
+    end
+  end
+
+  subgraph INFRASTRUCTURE_TIER["INFRASTRUCTURE & EXTERNAL CLOUD PROVIDERS"]
+    direction TB
+    EXT_NVIDIA["NVIDIA Cloud API (integrate.api.nvidia.com/v1)<br/>Model: nvidia/nemotron-3-ultra-550b-a55b<br/>reasoning_effort: 'medium', max_tokens: 8192-32768<br/>Branded publicly as 'AI Engine'"]
+    EXT_JOBS["Live Job APIs (Optional Fallback to Curated Presets)<br/>Adzuna UK API / Reed UK API / Custom JSON"]
+    EXT_EMAIL["Transactional Email Dispatch (Optional)<br/>Brevo / Resend / SendGrid API (Plaintext CV Dispatch)"]
+    EXT_SENTRY["Sentry Error Monitoring (Lightweight HTTP)<br/>PII-Scrubbed Text, Client & Server Exceptions"]
+    EXT_POSTGRES[("Optional PostgreSQL / Supabase Database<br/>25 Relational Tables, Row-Level Security (RLS)<br/>Completely Optional — System 100% Functional Without It")]
+  end
+
+  %% Client interactions
+  SPA --> |DOM & LocalStorage| FRONTEND_STORAGE
+  SPA --> |Dictation / Audio| BROWSER_APIS
+  EXTENSION --> |URL Parameters / JSON| P_JOBS
+  EXTENSION --> |DOM Parsing| P_BUILDER
+
+  %% Network calls
+  SPA --> |HTTPS Fetch withCredentials| CORS_GW
+  CORS_GW --> HELMET_GW
+  HELMET_GW --> RATE_LIMIT_GW
+  RATE_LIMIT_GW --> CSRF_GW
+  CSRF_GW --> CONCURRENCY_GW
+  CONCURRENCY_GW --> STARTUP
+
+  %% Routing flow
+  STARTUP --> ROUTERS
+  R_PUBLIC --> CORE_ENGINES
+  R_PUBLIC --> AI_PIPELINE
+  R_AUTH -.-> EXT_POSTGRES
+
+  %% Core engines interaction
+  E_PARSE --> RAM_MULTER
+  E_PDF --> RAM_STREAM
+  CORE_ENGINES --> AI_PIPELINE
+
+  %% AI Pipeline flow
+  AI_PIPELINE --> SPECIALIST_AGENTS
+  SPECIALIST_AGENTS --> AI_PROVIDER
+  AI_PROVIDER --> EXT_NVIDIA
+  SPECIALIST_AGENTS --> TRUTH_GUARD
+  TRUTH_GUARD --> |Verified or Reverted Bullets| R_PUBLIC
+
+  %% External calls
+  R_PUBLIC --> |Live Job Query| EXT_JOBS
+  R_PUBLIC --> |Transactional Send| EXT_EMAIL
+  STARTUP --> |Sanitized Error Forwarding| EXT_SENTRY
+  MAIN --> |Sanitized Client Error Forwarding| EXT_SENTRY
+
+  classDef clientStyle fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+  classDef networkStyle fill:#334155,stroke:#94a3b8,stroke-width:2px,color:#f8fafc;
+  classDef serverStyle fill:#0f172a,stroke:#818cf8,stroke-width:2px,color:#f8fafc;
+  classDef engineStyle fill:#1e1b4b,stroke:#c084fc,stroke-width:2px,color:#f8fafc;
+  classDef aiStyle fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#f8fafc;
+  classDef infraStyle fill:#451a03,stroke:#fb923c,stroke-width:2px,color:#f8fafc;
+  classDef storageStyle fill:#14532d,stroke:#4ade80,stroke-width:1px,color:#f8fafc;
+
+  class SPA,MAIN,ROUTER,P_LANDING,P_BUILDER,P_PREPARE,P_JOBS,P_APPS,P_INTERVIEW,P_LINKEDIN,EXTENSION,EXT_POPUP,EXT_CONTENT,EXT_STORAGE clientStyle;
+  class CORS_GW,HELMET_GW,RATE_LIMIT_GW,CSRF_GW,CONCURRENCY_GW networkStyle;
+  class STARTUP,ROUTERS,R_PUBLIC,R_ROOT,R_AUTH,R_UNMOUNTED serverStyle;
+  class CORE_ENGINES,E_PARSE,E_ATS,E_MATCH,E_PDF engineStyle;
+  class AI_PIPELINE,AI_PROVIDER,SPECIALIST_AGENTS,AG_RESUME,AG_COVER,AG_INTERVIEW,AG_LINKEDIN,AG_RESEARCH,TRUTH_GUARD,TG_INTERVAL,TG_NUMS,TG_LEAD,TG_REVERT aiStyle;
+  class EXT_NVIDIA,EXT_JOBS,EXT_EMAIL,EXT_SENTRY,EXT_POSTGRES infraStyle;
+  class FRONTEND_STORAGE,LS_DRAFT,LS_JOBS,LS_APPS,LS_IV_SESS,LS_IV_STAR,LS_LI_PROF,LS_LI_HIST,LS_RESEARCH,RAM_MULTER,RAM_STREAM,RAM_CACHE storageStyle;

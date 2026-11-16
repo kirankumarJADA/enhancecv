@@ -44,9 +44,40 @@ async function main(): Promise<void> {
 
   const app = await buildApp();
 
-  app.listen(config.port, () => {
+  const server = app.listen(config.port, () => {
     console.log(`Curevo AI server listening on http://localhost:${config.port}`);
   });
+
+  let isShuttingDown = false;
+  const gracefulShutdown = (signal: string) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    console.log(`Received ${signal}. Starting graceful shutdown...`);
+
+    const forceExitTimer = setTimeout(() => {
+      console.warn('Graceful shutdown timed out (10s limit exceeded). Forcing process exit.');
+      process.exit(1);
+    }, 10_000);
+    forceExitTimer.unref();
+
+    server.close(async () => {
+      console.log('HTTP server closed. In-flight requests drained.');
+      try {
+        if (isDbExplicitlyEnabled) {
+          const { closeDb } = await import('./db/db');
+          await closeDb();
+          console.log('PostgreSQL database pool closed cleanly.');
+        }
+      } catch (err: any) {
+        console.warn('Warning during database pool shutdown:', err?.message || err);
+      }
+      clearTimeout(forceExitTimer);
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }
 
 main().catch((err) => {

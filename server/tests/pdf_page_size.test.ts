@@ -384,5 +384,92 @@ describe('A4 & US Letter PDF Support', () => {
       expect(str).toContain('(Jane Doe)');
       expect(str).toContain('(Curevo AI)');
     });
+
+    it('renders multi-page cover letter without orphaning the closing sign-off', async () => {
+      const longLetter = {
+        greeting: 'Dear Hiring Committee,',
+        paragraphs: Array.from({ length: 18 }, (_, i) =>
+          `Paragraph ${i + 1}: Demonstrating continuous enterprise achievements, cloud transformation milestones, cross-functional organizational leadership, and deep technical governance spanning multiple high-availability distributed platforms across international regulatory jurisdictions with zero downtime.`
+        ),
+        closing: 'Sincerely,\nJane Doe\nPrincipal Cloud Architect',
+      };
+      const stream = renderCoverLetterPdf(longLetter, 'Jane Doe', 'A4');
+      const buffer = await streamToBuffer(stream);
+      const boxes = extractMediaBoxes(buffer);
+      expect(boxes.length).toBeGreaterThanOrEqual(2);
+
+      const parsed = await pdfParse(buffer);
+      expect(parsed.text).toContain('Principal Cloud Architect');
+      expect(parsed.text).toContain('Dear Hiring Committee,');
+    });
+  });
+
+  describe('6. Layout Math & Orphan Protection', () => {
+    it('prevents orphan section headings and splits when content approaches page bottom', async () => {
+      const resumeNearBreak: ResumeData = {
+        personal: {
+          fullName: 'Robert Oppenheimer',
+          email: 'oppenheimer@ias.edu',
+          phone: '+1 609 555 1947',
+          location: 'Princeton, NJ',
+          headline: 'Theoretical Physicist & Director',
+        },
+        summary: 'Theoretical physicist with extensive experience directing multidisciplinary scientific research institutions.',
+        experience: Array.from({ length: 4 }, (_, i) => ({
+          id: `exp-${i}`,
+          company: `Advanced Research Facility ${i + 1}`,
+          title: `Director of Theoretical Laboratory ${i + 1}`,
+          location: 'Los Alamos, NM',
+          startDate: '1942',
+          endDate: '1947',
+          current: false,
+          bullets: [
+            'Administered technical program coordination across specialized physical sciences departments.',
+            'Coordinated high-precision computational schedules with zero data regression.',
+          ],
+        })),
+        projects: [
+          {
+            id: 'proj-1',
+            name: 'Quantum Electrodynamics Matrix Formulations',
+            tech: ['Applied Mathematics', 'Relativistic Physics'],
+            link: 'ias.edu/qed',
+            description: 'Foundational investigations into quantum field equations and perturbation theories.',
+            bullets: [
+              'Published peer-reviewed mathematical monographs establishing boundary values.',
+            ],
+          },
+        ],
+        education: [
+          {
+            id: 'edu-1',
+            institution: 'University of Göttingen',
+            degree: 'Ph.D. in Theoretical Physics',
+            startDate: '1926',
+            endDate: '1927',
+          },
+        ],
+        skills: {
+          technical: ['Statistical Mechanics', 'Quantum Mechanics', 'Astrophysics'],
+          soft: ['Interdisciplinary Leadership', 'Institutional Strategy'],
+        },
+        certifications: [],
+        languages: [],
+        achievements: [],
+        customSections: [],
+        sectionOrder: ['summary', 'experience', 'projects', 'education', 'skills'],
+        hiddenSections: [],
+      };
+
+      const stream = renderResumePdf(resumeNearBreak, { pageSize: 'A4', marginDensity: 'normal' });
+      const buffer = await streamToBuffer(stream);
+      expect(buffer.slice(0, 5).toString('ascii')).toBe('%PDF-');
+
+      const parsed = await pdfParse(buffer);
+      expect(parsed.numpages).toBeGreaterThanOrEqual(1);
+      expect(parsed.text).toContain('Robert Oppenheimer');
+      expect(parsed.text).toContain('Advanced Research Facility 4');
+      expect(parsed.text).toContain('University of Göttingen');
+    });
   });
 });

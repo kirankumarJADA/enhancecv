@@ -109,6 +109,14 @@ async function request<T>(method: string, path: string, body?: unknown, isForm =
     }
   }
 
+  // Attach client-configured BYOK custom API key if present
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const customKey = window.localStorage.getItem('curevo_custom_ai_key_v1');
+    if (customKey && customKey.trim()) {
+      headers['X-Custom-AI-Key'] = customKey.trim();
+    }
+  }
+
   if (Object.keys(headers).length > 0) {
     init.headers = headers;
   }

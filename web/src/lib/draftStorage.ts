@@ -378,10 +378,17 @@ export function loadDraft(ownerId?: string | null): BuilderDraft | null {
   const key = getDraftStorageKey(ownerId);
   try {
     let raw = window.localStorage.getItem(key);
+    let foundInLegacyKey: string | null = null;
 
-    // Fallback for anonymous users: if nothing at ANONYMOUS_DRAFT_KEY, check legacy key
+    // Fallback for anonymous users: if nothing at ANONYMOUS_DRAFT_KEY, check legacy keys
     if (!raw && key === ANONYMOUS_DRAFT_KEY) {
       raw = window.localStorage.getItem(LEGACY_DRAFT_KEY);
+      if (raw) {
+        foundInLegacyKey = LEGACY_DRAFT_KEY;
+      } else {
+        raw = window.localStorage.getItem('curevo_draft_anonymous_v1');
+        if (raw) foundInLegacyKey = 'curevo_draft_anonymous_v1';
+      }
     }
 
     if (!raw) return null;
@@ -402,6 +409,16 @@ export function loadDraft(ownerId?: string | null): BuilderDraft | null {
       return null;
     }
 
+    // Seamless one-time forward migration to canonical key
+    if (foundInLegacyKey && raw) {
+      try {
+        window.localStorage.setItem(ANONYMOUS_DRAFT_KEY, raw);
+        window.localStorage.removeItem(foundInLegacyKey);
+      } catch {
+        // Safe ignore
+      }
+    }
+
     const prev = lastPersistedTimestamps.get(key) || 0;
     lastPersistedTimestamps.set(key, Math.max(prev, validated.savedAt));
     return validated;
@@ -418,7 +435,10 @@ export function hasStoredDraft(ownerId?: string | null): boolean {
   try {
     const exists = Boolean(window.localStorage.getItem(key));
     if (!exists && key === ANONYMOUS_DRAFT_KEY) {
-      return Boolean(window.localStorage.getItem(LEGACY_DRAFT_KEY));
+      return Boolean(
+        window.localStorage.getItem(LEGACY_DRAFT_KEY) ||
+        window.localStorage.getItem('curevo_draft_anonymous_v1')
+      );
     }
     return exists;
   } catch {
@@ -436,6 +456,7 @@ export function clearDraft(ownerId?: string | null): boolean {
     window.localStorage.removeItem(key);
     if (key === ANONYMOUS_DRAFT_KEY) {
       window.localStorage.removeItem(LEGACY_DRAFT_KEY);
+      window.localStorage.removeItem('curevo_draft_anonymous_v1');
     }
     lastPersistedTimestamps.delete(key);
     return true;

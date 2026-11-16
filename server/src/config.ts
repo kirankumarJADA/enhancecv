@@ -337,3 +337,24 @@ export function assertProductionAuthConfigIsSafe(env: NodeJS.ProcessEnv = proces
     throw new Error(`Production configuration validation failed:\n${res.errors.map((e) => `  - ${e}`).join('\n')}`);
   }
 }
+
+/**
+ * Returns the count of distinct AI API keys configured across environment variables
+ * for multi-key round-robin rotation and quota resilience.
+ */
+export function getAiKeyPoolCount(env: NodeJS.ProcessEnv = process.env): number {
+  const parseKeys = (raw?: string) =>
+    (raw || '')
+      .split(/[,\n]/)
+      .map((k) => k.trim())
+      .filter((k) => k.length > 0);
+
+  const keys = new Set([
+    ...parseKeys(env.NVIDIA_API_KEYS),
+    ...parseKeys(env.NVIDIA_API_KEY),
+    ...parseKeys(env.AI_API_KEYS),
+    ...parseKeys(env.AI_API_KEY),
+    ...parseKeys(env.OPENAI_API_KEY),
+  ]);
+  return keys.size;
+}

@@ -274,4 +274,38 @@ describe('Curevo AI — Browser Draft Storage Manager', () => {
     expect(sanitized?.summary.length).toBe(5000);
     expect(sanitized?.experience[0].company).toBe('Acme');
   });
+
+  it('9. seamlessly falls back to and migrates legacy curevo_draft_anonymous_v1', () => {
+    mockStore['curevo_draft_anonymous_v1'] = JSON.stringify({
+      version: CURRENT_DRAFT_VERSION,
+      savedAt: Date.now(),
+      mode: 'improve',
+      step: 'idle',
+      activeTab: 'preview',
+      selectedTemplate: 'classic',
+      selectedMarginDensity: 'normal',
+      selectedPageSize: 'A4',
+      activeJobText: '',
+      activeTargetRole: 'Legacy Engineer',
+      resume: null,
+      ats: null,
+      truth: null,
+      changeLog: [],
+      match: null,
+      coverLetter: null,
+      coverRole: '',
+      coverCompany: '',
+      coverJdText: '',
+      coverTone: 'professional',
+    });
+
+    expect(hasStoredDraft()).toBe(true);
+    const loaded = loadDraft();
+    expect(loaded).not.toBeNull();
+    expect(loaded?.activeTargetRole).toBe('Legacy Engineer');
+
+    // Should have migrated to DRAFT_STORAGE_KEY (ANONYMOUS_DRAFT_KEY) and removed from legacy
+    expect(mockStore[DRAFT_STORAGE_KEY]).toBeDefined();
+    expect(mockStore['curevo_draft_anonymous_v1']).toBeUndefined();
+  });
 });

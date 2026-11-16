@@ -139,7 +139,7 @@ export async function translateResume(
       )}`],
     ),
     schema: translationSchema,
-    maxTokens: 3000,
+    maxTokens: 4096,
     temperature: 0.2,
   });
 

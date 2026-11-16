@@ -17,7 +17,14 @@
 //   AI_MAX_RETRIES=2          bounded retries for timeout/429/5xx/malformed
 //   AI_MAX_ITERATIONS=2       agent critique loop bound
 
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { ZodType, ZodError } from 'zod';
+
+export interface AiRequestContext {
+  customApiKey?: string;
+}
+
+export const aiRequestContext = new AsyncLocalStorage<AiRequestContext>();
 
 export type AiErrorCode =
   | 'AI_NOT_CONFIGURED'
@@ -64,6 +71,7 @@ export interface AiProvider {
 export interface AiConfig {
   providerId: string;
   apiKey: string;
+  apiKeys?: string[];
   model: string;
   baseUrl: string;
   timeoutMs: number;
@@ -71,27 +79,45 @@ export interface AiConfig {
   maxIterations: number;
 }
 
+function parseKeyList(raw?: string): string[] {
+  if (!raw) return [];
+  return raw
+    .split(/[,\n]/)
+    .map((k) => k.trim())
+    .filter((k) => k.length > 0);
+}
+
 export function readAiConfigFromEnv(): AiConfig | null {
-  const nvidiaKey = process.env.NVIDIA_API_KEY || '';
-  const genericKey = process.env.AI_API_KEY || process.env.OPENAI_API_KEY || '';
+  const nvidiaKeys = [
+    ...parseKeyList(process.env.NVIDIA_API_KEYS),
+    ...parseKeyList(process.env.NVIDIA_API_KEY),
+  ];
+  const genericKeys = [
+    ...parseKeyList(process.env.AI_API_KEYS),
+    ...parseKeyList(process.env.AI_API_KEY),
+    ...parseKeyList(process.env.OPENAI_API_KEY),
+  ];
   const explicitProvider = (process.env.AI_PROVIDER || '').trim().toLowerCase();
 
   let providerId = explicitProvider;
-  let apiKey = '';
+  let apiKeys: string[] = [];
 
-  if (explicitProvider === 'nvidia' || (!explicitProvider && nvidiaKey)) {
+  if (explicitProvider === 'nvidia' || (!explicitProvider && nvidiaKeys.length > 0)) {
     providerId = 'nvidia';
-    apiKey = nvidiaKey || genericKey;
+    apiKeys = nvidiaKeys.length > 0 ? nvidiaKeys : genericKeys;
   } else if (
     explicitProvider === 'openai' ||
     explicitProvider === 'openai-compatible' ||
-    (!explicitProvider && genericKey)
+    (!explicitProvider && genericKeys.length > 0)
   ) {
     providerId = explicitProvider || 'nvidia';
-    apiKey = genericKey;
+    apiKeys = genericKeys;
   }
 
-  if (!providerId || providerId === 'none' || providerId === 'off' || !apiKey) return null;
+  // De-duplicate keys preserving order
+  apiKeys = Array.from(new Set(apiKeys));
+
+  if (!providerId || providerId === 'none' || providerId === 'off' || apiKeys.length === 0) return null;
 
   const isNvidia = providerId === 'nvidia';
   const defaultModel = isNvidia ? 'nvidia/nemotron-3-ultra-550b-a55b' : 'gpt-4o-mini';
@@ -99,7 +125,8 @@ export function readAiConfigFromEnv(): AiConfig | null {
 
   return {
     providerId,
-    apiKey,
+    apiKey: apiKeys[0] || '',
+    apiKeys,
     model: (process.env.AI_MODEL || defaultModel).trim(),
     baseUrl: (process.env.AI_BASE_URL || defaultBaseUrl).replace(/\/$/, ''),
     timeoutMs: boundedInt(process.env.AI_TIMEOUT_MS, 120_000, 1_000, 300_000),
@@ -123,21 +150,49 @@ export class OpenAiCompatibleProvider implements AiProvider {
   readonly name: string;
   readonly model: string;
   private apiKey: string;
+  private apiKeys: string[];
+  private currentKeyIndex = 0;
   private baseUrl: string;
   private timeoutMs: number;
   private maxRetries: number;
+  private supportsJsonFormat = true;
 
   constructor(cfg: AiConfig) {
     this.name = cfg.providerId;
     this.model = cfg.model;
     this.apiKey = cfg.apiKey;
+    this.apiKeys = cfg.apiKeys && cfg.apiKeys.length > 0 ? cfg.apiKeys : (cfg.apiKey ? [cfg.apiKey] : []);
     this.baseUrl = cfg.baseUrl;
     this.timeoutMs = cfg.timeoutMs;
     this.maxRetries = cfg.maxRetries;
   }
 
+  /**
+   * Retrieves the effective API key for the current request.
+   * Prioritizes request-scoped BYOK custom key from AsyncLocalStorage if provided,
+   * otherwise uses the active server-configured key from the rotation pool.
+   */
+  getActiveKey(): string {
+    const customKey = aiRequestContext.getStore()?.customApiKey?.trim();
+    if (customKey) return customKey;
+    if (this.apiKeys.length === 0) return this.apiKey;
+    return this.apiKeys[this.currentKeyIndex % this.apiKeys.length];
+  }
+
+  /**
+   * Rotates to the next server-configured key in the pool on HTTP 429 rate limit or 401/403 auth errors.
+   * Never rotates if a client-supplied BYOK custom key is active.
+   */
+  rotateKey(): boolean {
+    const hasCustom = Boolean(aiRequestContext.getStore()?.customApiKey?.trim());
+    if (hasCustom || this.apiKeys.length <= 1) return false;
+    this.currentKeyIndex = (this.currentKeyIndex + 1) % this.apiKeys.length;
+    console.warn(`ai name=${this.name} rotating to key index ${this.currentKeyIndex} (pool size: ${this.apiKeys.length})`);
+    return true;
+  }
+
   async completeJson<T>(req: JsonCompletionRequest<T>): Promise<T> {
-    const attempts = 1 + this.maxRetries;
+    const attempts = Math.max(1 + this.maxRetries, this.apiKeys.length > 1 ? this.apiKeys.length : 1);
     let lastError: AiUnavailableError = new AiUnavailableError('AI_UNAVAILABLE', 'AI request failed.');
     let currentReq: JsonCompletionRequest<T> = { ...req };
 
@@ -171,9 +226,9 @@ export class OpenAiCompatibleProvider implements AiProvider {
           if (!err.retryable) throw err;
           if (err.message.includes('token limit') || err.message.includes('truncated')) {
             const isUltra = this.model.toLowerCase().includes('ultra');
-            const currentMax = currentReq.maxTokens ?? (isUltra ? 8192 : 4000);
-            const step = isUltra ? 4096 : 1500;
-            const maxCap = isUltra ? 32768 : 8192;
+            const currentMax = currentReq.maxTokens ?? (isUltra ? 8192 : 4096);
+            const step = isUltra ? 4096 : 2048;
+            const maxCap = isUltra ? 32768 : 16384;
             currentReq = { ...currentReq, maxTokens: Math.min(maxCap, currentMax + step) };
           }
         } else {
@@ -192,12 +247,16 @@ export class OpenAiCompatibleProvider implements AiProvider {
       const isUltra = this.model.toLowerCase().includes('ultra');
       const isLightning = this.model.toLowerCase().includes('lightning');
 
-      const defaultMaxTokens = isUltra ? 8192 : 4000;
+      // Ensure max_tokens is set to at least 4096 (or 8192 for Ultra) to prevent mid-JSON resume truncation
+      const defaultMaxTokens = isUltra ? 8192 : 4096;
+      const requestedTokens = req.maxTokens ?? defaultMaxTokens;
+      const effectiveMaxTokens = Math.max(requestedTokens, isUltra ? 8192 : 4000);
+
       const payload: Record<string, unknown> = {
         model: this.model,
         stream: false,
         temperature: req.temperature ?? 0.2,
-        max_tokens: req.maxTokens ?? defaultMaxTokens,
+        max_tokens: effectiveMaxTokens,
         messages: [
           { role: 'system', content: req.system },
           { role: 'user', content: req.user },
@@ -208,28 +267,60 @@ export class OpenAiCompatibleProvider implements AiProvider {
       } else if (isLightning || this.name === 'nvidia') {
         payload.chat_template_kwargs = { enable_thinking: false };
       }
-      if (this.name === 'openai') {
+      if (this.supportsJsonFormat) {
         payload.response_format = { type: 'json_object' };
       }
 
+      const activeKey = this.getActiveKey();
       const res = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${activeKey}`,
         },
         signal: controller.signal,
         body: JSON.stringify(payload),
       });
 
       const logTag = `ai name=${this.name} model=${this.model} attempt=${attempt}`;
+
+      // Graceful fallback if endpoint rejects response_format (e.g. HTTP 400 with unrecognized parameter)
+      if (res.status === 400 && this.supportsJsonFormat && payload.response_format) {
+        const errorText = await res.text();
+        const isResponseFormatRejected =
+          /response_format|json_object|extra inputs|unrecognized parameter|unexpected/i.test(errorText);
+        if (isResponseFormatRejected) {
+          console.warn(`${logTag} endpoint rejected response_format; retrying in standard prompt mode.`);
+          this.supportsJsonFormat = false;
+          clearTimeout(timer);
+          return this.attempt(req, attempt);
+        }
+        throw new AiUnavailableError('AI_PROVIDER_ERROR', `The AI provider returned HTTP 400: ${errorText.slice(0, 150)}`, false);
+      }
+
       if (res.status === 429) {
         console.error(`${logTag} status=429 rate_limited`);
-        throw new AiUnavailableError('AI_RATE_LIMITED', 'The AI provider is rate limiting requests. Please try again shortly.', true);
+        const rotated = this.rotateKey();
+        throw new AiUnavailableError(
+          'AI_RATE_LIMITED',
+          rotated
+            ? 'The AI provider is rate limiting requests. Rotating to backup API key...'
+            : 'The AI provider is rate limiting requests. Please try again shortly.',
+          true
+        );
       }
       if (res.status === 401 || res.status === 403) {
         console.error(`${logTag} status=${res.status} auth_failed`);
+        const canRotate = this.apiKeys.length > 1 && attempt < this.apiKeys.length;
+        const rotated = canRotate ? this.rotateKey() : false;
+        if (rotated) {
+          throw new AiUnavailableError(
+            'AI_PROVIDER_ERROR',
+            `The AI provider rejected credentials (status ${res.status}). Rotating to next configured API key...`,
+            true
+          );
+        }
         throw new AiUnavailableError('AI_PROVIDER_ERROR', 'The AI provider rejected the configured credentials.', false);
       }
       if (!res.ok) {
@@ -283,10 +374,11 @@ export class OpenAiCompatibleProvider implements AiProvider {
       const rawContent = choice.message?.content ?? (typeof choice.text === 'string' ? choice.text : null);
       let content = typeof rawContent === 'string' ? rawContent.trim() : '';
 
-      // Strip embedded reasoning traces (<think>...</think>) if present in content
+      // Strip embedded reasoning traces (<think>...</think>) and sanitize output
       if (content.includes('<think>')) {
         content = content.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '').trim();
       }
+      content = sanitizeRawAiOutput(content);
 
       const hasReasoning = Boolean(choice.message?.reasoning_content);
 
@@ -738,59 +830,81 @@ function calculateContentScore(obj: unknown): number {
   return score;
 }
 
-/** Robust JSON extraction and parsing helper. */
-export function parseStructured<T>(raw: string, schema: ZodType<T>): T {
+/**
+ * Sanitizes raw AI model output:
+ * 1. Strips reasoning traces (<think>...</think> blocks, including unclosed trailing tags).
+ * 2. Strips markdown code fences (```json and ```).
+ * 3. Extracts the outermost valid JSON object/array ({...} or [...]) before calling JSON.parse().
+ */
+export function sanitizeRawAiOutput(raw: string): string {
   let text = (raw || '').trim();
+
+  // 1. Strip any <think>...</think> reasoning blocks
   if (text.includes('<think>')) {
     text = text.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '').trim();
   }
-  if (!text) {
-    throw new AiUnavailableError('AI_MALFORMED', 'AI returned an empty response.', true);
+
+  // 2. Strip markdown code fences (```json ... ``` or ``` ... ```)
+  const allFences = Array.from(text.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi));
+  if (allFences.length > 0) {
+    const jsonFence = allFences.find((m) => m[1].includes('{') || m[1].includes('['));
+    text = (jsonFence ? jsonFence[1] : allFences[0][1]).trim();
+  } else {
+    // Strip isolated opening or trailing fence markers
+    text = text.replace(/^```(?:json)?\s*/gi, '').replace(/\s*```$/g, '').trim();
   }
 
-  function tryParse(str: string): unknown {
+  function tryParseJson(str: string): boolean {
     const trimmed = str.trim();
-    if (!trimmed) return null;
+    if (!trimmed) return false;
     try {
-      return JSON.parse(trimmed);
+      JSON.parse(trimmed);
+      return true;
     } catch {
       try {
-        const sanitized = trimmed
+        const cleaned = trimmed
           .replace(/\/\/[^\n\r"]*(?=[\n\r])/g, '')
           .replace(/,(\s*[}\]])/g, '$1');
-        return JSON.parse(sanitized);
+        JSON.parse(cleaned);
+        return true;
       } catch {
-        return null;
+        return false;
       }
     }
   }
 
-  // 1. Collect all candidate JSON structures from raw text, code fences, balanced braces, and outermost slice
-  const candidates: unknown[] = [];
-
-  // 1a. Direct parse check (raw text is already valid JSON)
-  const direct = tryParse(text);
-  if (direct !== null && typeof direct === 'object') {
-    candidates.push(direct);
+  if (tryParseJson(text)) {
+    return text;
   }
 
-  // 1b. Scan all markdown code fences (```json ... ``` or ``` ... ```)
-  const fenceRegex = /```(?:json)?\s*([\s\S]*?)```/gi;
-  let match: RegExpExecArray | null;
-  while ((match = fenceRegex.exec(text)) !== null) {
-    const candidate = match[1].trim();
-    const p = tryParse(candidate);
-    if (p !== null && typeof p === 'object') {
-      candidates.push(p);
-    }
+  // 3. Extract the outermost valid JSON object/array ({...} or [...]) before calling JSON.parse()
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  const firstBracket = text.indexOf('[');
+  const lastBracket = text.lastIndexOf(']');
+
+  const hasObj = firstBrace !== -1 && lastBrace > firstBrace;
+  const hasArr = firstBracket !== -1 && lastBracket > firstBracket;
+
+  const objSlice = hasObj ? text.slice(firstBrace, lastBrace + 1).trim() : null;
+  const arrSlice = hasArr ? text.slice(firstBracket, lastBracket + 1).trim() : null;
+
+  const isObjValid = objSlice ? tryParseJson(objSlice) : false;
+  const isArrValid = arrSlice ? tryParseJson(arrSlice) : false;
+
+  if (isObjValid && (!isArrValid || (firstBrace <= firstBracket && lastBrace >= lastBracket))) {
+    return objSlice!;
+  }
+  if (isArrValid && (!isObjValid || (firstBracket <= firstBrace && lastBracket >= lastBrace))) {
+    return arrSlice!;
   }
 
-  // 1c. Balanced scanner: find candidate JSON objects or arrays inside surrounding prose
+  // If neither simple outermost slice is valid, scan for balanced JSON blocks
+  const balancedBlocks: string[] = [];
   for (let i = 0; i < text.length; i++) {
-    const startChar = text[i];
-    if (startChar !== '{' && startChar !== '[') continue;
-
-    const endChar = startChar === '{' ? '}' : ']';
+    const startCh = text[i];
+    if (startCh !== '{' && startCh !== '[') continue;
+    const endCh = startCh === '{' ? '}' : ']';
     let depth = 0;
     let inString = false;
     let escape = false;
@@ -810,15 +924,14 @@ export function parseStructured<T>(raw: string, schema: ZodType<T>): T {
         continue;
       }
       if (!inString) {
-        if (ch === startChar) {
+        if (ch === startCh) {
           depth++;
-        } else if (ch === endChar) {
+        } else if (ch === endCh) {
           depth--;
           if (depth === 0) {
             const candidate = text.slice(i, j + 1).trim();
-            const p = tryParse(candidate);
-            if (p !== null && typeof p === 'object') {
-              candidates.push(p);
+            if (tryParseJson(candidate)) {
+              balancedBlocks.push(candidate);
             }
             break;
           }
@@ -827,11 +940,122 @@ export function parseStructured<T>(raw: string, schema: ZodType<T>): T {
     }
   }
 
-  // 1d. Fallback: Outermost brace slice
-  const firstBrace = text.indexOf('{');
-  const lastBrace = text.lastIndexOf('}');
-  if (firstBrace !== -1 && lastBrace > firstBrace) {
-    const candidate = text.slice(firstBrace, lastBrace + 1).trim();
+  if (balancedBlocks.length > 0) {
+    // Prefer objects over arrays if present, and sort by length descending
+    balancedBlocks.sort((a, b) => {
+      const aIsObj = a.startsWith('{');
+      const bIsObj = b.startsWith('{');
+      if (aIsObj && !bIsObj) return -1;
+      if (!aIsObj && bIsObj) return 1;
+      return b.length - a.length;
+    });
+    return balancedBlocks[0];
+  }
+
+  // Fallback: outermost slice if present, else original text
+  if (hasObj && (!hasArr || firstBrace < firstBracket)) {
+    return objSlice!;
+  } else if (hasArr) {
+    return arrSlice!;
+  }
+
+  return text;
+}
+
+/** Robust JSON extraction and parsing helper. */
+export function parseStructured<T>(raw: string, schema: ZodType<T>): T {
+  const sanitized = sanitizeRawAiOutput(raw);
+  if (!sanitized) {
+    throw new AiUnavailableError('AI_MALFORMED', 'AI returned an empty response.', true);
+  }
+
+  function tryParse(str: string): unknown {
+    const trimmed = str.trim();
+    if (!trimmed) return null;
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      try {
+        const cleaned = trimmed
+          .replace(/\/\/[^\n\r"]*(?=[\n\r])/g, '')
+          .replace(/,(\s*[}\]])/g, '$1');
+        return JSON.parse(cleaned);
+      } catch {
+        return null;
+      }
+    }
+  }
+
+  // 1. Collect all candidate JSON structures from sanitized text, code fences, and balanced scanner
+  const candidates: unknown[] = [];
+
+  // 1a. Direct parse check on sanitized text (outermost JSON extracted)
+  const direct = tryParse(sanitized);
+  if (direct !== null && typeof direct === 'object') {
+    candidates.push(direct);
+  }
+
+  // 1b. Scan all markdown code fences from original raw text as fallback
+  const fenceRegex = /```(?:json)?\s*([\s\S]*?)```/gi;
+  let match: RegExpExecArray | null;
+  while ((match = fenceRegex.exec(raw)) !== null) {
+    const candidate = match[1].trim();
+    const p = tryParse(candidate);
+    if (p !== null && typeof p === 'object') {
+      candidates.push(p);
+    }
+  }
+
+  // 1c. Balanced scanner across sanitized text (and raw text if different) for candidate JSON objects or arrays inside prose
+  const textsToScan = raw !== sanitized ? [sanitized, raw] : [sanitized];
+  for (const scanText of textsToScan) {
+    for (let i = 0; i < scanText.length; i++) {
+      const startChar = scanText[i];
+      if (startChar !== '{' && startChar !== '[') continue;
+
+      const endChar = startChar === '{' ? '}' : ']';
+      let depth = 0;
+      let inString = false;
+      let escape = false;
+
+      for (let j = i; j < scanText.length; j++) {
+        const ch = scanText[j];
+        if (escape) {
+          escape = false;
+          continue;
+        }
+        if (ch === '\\' && inString) {
+          escape = true;
+          continue;
+        }
+        if (ch === '"') {
+          inString = !inString;
+          continue;
+        }
+        if (!inString) {
+          if (ch === startChar) {
+            depth++;
+          } else if (ch === endChar) {
+            depth--;
+            if (depth === 0) {
+              const candidate = scanText.slice(i, j + 1).trim();
+              const p = tryParse(candidate);
+              if (p !== null && typeof p === 'object') {
+                candidates.push(p);
+              }
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 1d. Fallback: Outermost brace slice on raw text
+  const rawFirstBrace = raw.indexOf('{');
+  const rawLastBrace = raw.lastIndexOf('}');
+  if (rawFirstBrace !== -1 && rawLastBrace > rawFirstBrace) {
+    const candidate = raw.slice(rawFirstBrace, rawLastBrace + 1).trim();
     const p = tryParse(candidate);
     if (p !== null && typeof p === 'object') {
       candidates.push(p);

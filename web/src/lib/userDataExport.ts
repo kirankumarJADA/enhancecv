@@ -21,8 +21,10 @@ export interface CurevoUserDataExport {
   };
 }
 
-const STORAGE_KEYS = {
-  resumeDraft: 'curevo_draft_anonymous_v1',
+export const CUSTOM_AI_KEY_STORAGE = 'curevo_custom_ai_key_v1';
+
+export const STORAGE_KEYS = {
+  resumeDraft: 'curevo_builder_draft_v1_anonymous',
   savedJobs: 'curevo_saved_jobs_v1',
   applications: 'curevo_applications_v1',
   interviewSessions: 'curevo_interview_sessions_v1',
@@ -48,7 +50,10 @@ export function exportAllCurevoData(): CurevoUserDataExport {
     exportedAt: new Date().toISOString(),
     source: 'Curevo AI Data Portability Hub',
     data: {
-      resumeDrafts: safeGet(STORAGE_KEYS.resumeDraft),
+      resumeDrafts:
+        safeGet(STORAGE_KEYS.resumeDraft) ||
+        safeGet('curevo_draft_anonymous_v1') ||
+        safeGet('curevo_builder_draft_v1'),
       savedJobs: (safeGet(STORAGE_KEYS.savedJobs) as unknown[]) || [],
       applications: (safeGet(STORAGE_KEYS.applications) as unknown[]) || [],
       interviewSessions: (safeGet(STORAGE_KEYS.interviewSessions) as unknown[]) || [],
@@ -123,7 +128,13 @@ export function importAllCurevoData(jsonText: string): { ok: boolean; message: s
 }
 
 export function clearAllCurevoData(): void {
-  for (const key of Object.values(STORAGE_KEYS)) {
+  const allKeysToClear = [
+    ...Object.values(STORAGE_KEYS),
+    'curevo_draft_anonymous_v1',
+    'curevo_builder_draft_v1',
+    CUSTOM_AI_KEY_STORAGE,
+  ];
+  for (const key of allKeysToClear) {
     try {
       localStorage.removeItem(key);
     } catch {

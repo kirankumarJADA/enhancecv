@@ -1,0 +1,375 @@
+%% CUREVO AI — COMPLETE USER JOURNEY EXECUTION FLOWS
+%% 10 End-to-End Sequence & State Transition Diagrams
+%% Verified via Source Code Trace and Subagent Architectural Audit
+
+sequenceDiagram
+  autonumber
+  title Journey 1: First-Time Visitor Landing & Anonymous Session Initialization
+
+  actor User as Candidate Browser
+  participant Edge as Vercel Edge / CDN
+  participant Web as React 18 SPA (web/src)
+  participant LocalStore as Browser LocalStorage
+  participant API as Node.js API (Render / localhost)
+
+  User->>Edge: GET / (https://curevo.dpdns.org)
+  Edge-->>User: 200 OK (index.html, JS/CSS bundles)
+  User->>Web: main.tsx bootstraps React 18 Root
+  Web->>Web: initGlobalErrorMonitoring() hooks window.onerror & unhandledrejection
+  Web->>LocalStore: Check draft storage probe (__curevo_storage_probe__)
+  Web->>API: GET /api/ai/status (rateLimit: 120/min)
+  API-->>Web: 200 OK { enabled: true, provider: "AI Engine", model: "AI Engine", maxIterations: 2 }
+  User->>Web: Clicks "Launch Free CV Builder" or navigates to /builder
+  Web->>LocalStore: loadDraft(null) queries "curevo_builder_draft_v1_anonymous"
+  LocalStore-->>Web: null (No prior draft found)
+  Web->>Web: Sets step = 'idle', mode = 'improve', creates blank in-memory session
+  Web-->>User: Renders PublicBuilder view with 3 modes (Improve, Create, ATS)
+
+---
+
+sequenceDiagram
+  autonumber
+  title Journey 2: Resume Document Upload, Ingestion, AI Improvement & Truth Guard Verification
+
+  actor User as Candidate
+  participant Web as PublicBuilder.tsx
+  participant API as Express Router (/api/public)
+  participant Multer as RAM Buffer (Multer)
+  participant Worker as Node.js Isolated Worker Thread
+  participant ATS as Deterministic ATS Engine
+  participant LLM as NVIDIA Nemotron AI
+  participant TG as Truth Guard Interceptor
+  participant Storage as LocalStorage
+
+  User->>Web: Drops file (resume.pdf / resume.docx, <=8MB)
+  Web->>Web: Validates extension (.pdf, .docx, .txt) & file size (<8MB)
+  Web->>API: POST /api/public/parse (multipart FormData)
+  API->>Multer: Stores in memory buffer (multer.memoryStorage())
+  
+  alt File is PDF
+    API->>Worker: parsePdfInWorker(buffer) with 15s timeout
+    Worker->>Worker: pdfjs-dist extracts text items, detects 2-column gutters
+    Worker-->>API: Extracted lines array & layout structure
+  else File is DOCX
+    API->>API: zipGuard.ts inspects Central Directory (Zip-bomb & entry bounds)
+    API->>Worker: parseDocxInWorker(buffer) with 15s timeout
+    Worker->>Worker: mammoth.convertToHtml extracts raw paragraphs & headings
+    Worker-->>API: Extracted lines array
+  end
+
+  API->>API: Deterministic extraction (contact info, sections, dates, bullets, skills)
+  API->>ATS: analyseATS(resume) computes 5 standard dimensions
+  ATS-->>API: Overall score (e.g. 64/100) + check breakdowns
+  API-->>Web: 200 OK { resume, ats, audit, confidence, notes }
+  Web->>Web: Populates editor state, displays before ATS score
+
+  User->>Web: Clicks "Improve Resume with AI Engine" (Optionally inputs target role / JD)
+  Web->>API: POST /api/public/improve { resume, targetRole, jobText }
+  API->>API: aiConcurrencyGuard checks global (<5) and IP (<1) limits
+  API->>LLM: POST chat/completions (nemotron-3-ultra-550b-a55b, reasoning_effort: 'medium')
+  LLM-->>API: JSON payload with rewritten Google XYZ bullets
+  API->>TG: tailorResume() executes Truth Guard Validation
+  
+  TG->>TG: calculateIntervalUnionYears(master) = 5.2 yrs
+  TG->>TG: Verify claimed duration <= 5.2 yrs (Rejects fabricated 12 years)
+  TG->>TG: Verify numbers against masterNumbers multiset (Allows <= bounds, flags hallucinated $)
+  TG->>TG: Verify leadership headcount against getSupportedHeadcount()
+  
+  alt Truth Guard passes
+    TG-->>API: Accepted tailored bullets
+  else Fact fabrication or hallucination detected
+    TG->>TG: Reverts affected bullets to verified Master CV source bullets
+    TG-->>API: Sanitized bullets + changeLog recording rejected claims
+  end
+
+  API->>ATS: Deterministic re-verification (atsAfter)
+  API-->>Web: 200 OK { resume, atsBefore, atsAfter, changeLog, truth, agent }
+  Web->>Storage: Debounced autosave (1200ms) to "curevo_builder_draft_v1_anonymous"
+  Web-->>User: Displays improved CV, diff changelog, and updated ATS score ring
+
+---
+
+sequenceDiagram
+  autonumber
+  title Journey 3: Cold Resume Creation from Scratch
+
+  actor User as Candidate
+  participant Web as PublicBuilder.tsx (Mode: Create)
+  participant Editor as ResumeFormEditor.tsx
+  participant Coach as Client Writing Coach (writingCoach.ts)
+  participant API as Express Router (/api/public)
+  participant Storage as LocalStorage
+
+  User->>Web: Selects "Create from Scratch" (/builder?mode=create)
+  Web->>Editor: Renders blank structured CV form sections
+  User->>Editor: Enters contact info, work experiences, skills
+  User->>Editor: Types bullet: "Worked on website performance"
+  Editor->>Coach: analyseBulletLocal("Worked on website performance")
+  Coach-->>Editor: Flags weak opener "Worked on", suggests power verb ("Architected", "Accelerated"), prompts for metric
+  User->>Editor: Edits bullet: "Accelerated API response times by 40% via Redis caching"
+  Coach-->>Editor: Green checkmark (Google XYZ formula satisfied: Action + Impact + Method)
+  User->>Web: Clicks "Generate Structured Resume"
+  Web->>API: POST /api/public/create { createForm, targetRole }
+  API->>API: Sanitizes fields, applies standard section hierarchy
+  API-->>Web: 200 OK { resume, ats, match, changeLog, truth }
+  Web->>Storage: Autosaves to "curevo_builder_draft_v1_anonymous"
+  Web-->>User: Displays complete CV in live vector preview with template selector
+
+---
+
+sequenceDiagram
+  autonumber
+  title Journey 4: Target Job Description Matching & Truth-Grounded Tailoring
+
+  actor User as Candidate
+  participant Web as PublicBuilder.tsx (Tab: Match / Tailor)
+  participant API as Express Router (/api/public)
+  participant JD as JD Engine (jd.ts)
+  participant Match as Match Engine (match.ts)
+  participant LLM as NVIDIA Nemotron AI
+  participant TG as Truth Guard Interceptor
+
+  User->>Web: Pastes target job description text into match panel
+  User->>Web: Clicks "Analyze Match & Gaps"
+  Web->>API: POST /api/public/match { resume: activeResume, jobText }
+  API->>JD: analyseJobDescription(jobText)
+  JD->>JD: Extracts title, seniority, required skills, preferred skills, domain terms
+  JD-->>API: Structured JobAnalysis
+  API->>Match: computeJobMatch(resume, jobAnalysis)
+  Match->>Match: Computes 7 weighted components (35% required, 15% resp, 15% exp, etc.)
+  Match->>Match: Assigns EvidenceProvenance (source_cv vs unsupported)
+  Match-->>API: MatchAnalysis { score: 72, matchedSkills, missingSkills, advisory }
+  API-->>Web: 200 OK { job, match }
+  Web-->>User: Displays Match Ring (72%), matched skills pills, and candidate evidence prompt
+
+  opt Candidate Attestation (Addressing Missing Skills)
+    User->>Web: Attests missing skill "Docker" with verified bullet proof
+    Web->>Web: Appends attested entry to resume data
+  end
+
+  User->>Web: Clicks "Tailor Resume for Role"
+  Web->>API: POST /api/public/improve { resume, jobText, targetRole }
+  API->>LLM: Tailoring prompt with strict Truth Guard constraints
+  LLM-->>API: Generated candidate draft
+  API->>TG: Audit candidate draft against original Master CV facts
+  TG->>TG: Reverts any unsupported skills or inflated durations to Master CV baseline
+  TG-->>API: Verified tailored resume + truth audit report
+  API-->>Web: 200 OK { resume: tailoredResume, matchAfter: 91, truth }
+  Web-->>User: Displays tailored CV ready for export
+
+---
+
+sequenceDiagram
+  autonumber
+  title Journey 5: Tailored Cover Letter Synthesis & PDF Download
+
+  actor User as Candidate
+  participant Web as PublicBuilder.tsx (Tab: Cover Letter)
+  participant API as Express Router (/api/public)
+  participant LLM as NVIDIA Nemotron AI
+  participant TG as Truth Guard (sanitiseParagraph)
+  participant PDF as PDFKit Streaming Engine
+
+  User->>Web: Enters company name, target role, selects tone ("confident")
+  User->>Web: Clicks "Generate Cover Letter"
+  Web->>API: POST /api/public/cover-letter { resume, jobDescription, targetRole, company, tone }
+  API->>API: Validates CV facts exist (>=1 experience, >=1 skill)
+  API->>LLM: Prompts Nemotron with candidate facts + company context
+  LLM-->>API: 3-4 structured letter paragraphs
+  API->>TG: sanitiseParagraph() checks each paragraph for unsupported claims
+  TG-->>API: Sanitized letter text + rejectedCount
+  API-->>Web: 200 OK { letter, targetRole, company, rejectedCount, isFallback: false }
+  Web-->>User: Renders editable cover letter in browser
+
+  User->>Web: Clicks "Download Cover Letter PDF"
+  Web->>API: POST /api/public/cover-letter/pdf { letter, candidateName, role, company, pageSize: "A4" }
+  API->>PDF: renderCoverLetterPdf() generates single-column PDFKit stream
+  PDF-->>API: Readable binary stream
+  API-->>Web: 200 OK (Content-Type: application/pdf, Content-Disposition: attachment)
+  Web->>Web: window.URL.createObjectURL(blob), clicks hidden anchor, revokes URL
+  Web-->>User: Browser downloads "Candidate_Name_Cover_Letter.pdf"
+
+---
+
+sequenceDiagram
+  autonumber
+  title Journey 6: Job Discovery, Real-time Fit Scoring & Kanban Handoff
+
+  actor User as Candidate
+  participant Web as Jobs.tsx (/jobs)
+  participant API as Express Router (/api/public/jobs)
+  participant JobSource as jobSource.ts (Adzuna / Reed / Presets)
+  participant Match as Match Engine (/api/public/match)
+  participant Storage as LocalStorage
+
+  User->>Web: Opens /jobs, enters "Senior React Engineer", filters "Remote"
+  Web->>API: GET /api/public/jobs/status
+  API-->>Web: 200 OK { configured: true, provider: "Adzuna UK" }
+  Web->>API: POST /api/public/jobs/discover { query: "Senior React Engineer", remoteType: "remote" }
+  API->>JobSource: searchJobsWithCache(preferences) (10m memory TTL)
+  JobSource-->>API: 20 normalized DiscoveredJob listings
+  API-->>Web: 200 OK { jobs, total, source: "adzuna" }
+  Web-->>User: Renders job cards
+
+  User->>Web: Clicks "Calculate Fit" on a vacancy card
+  Web->>Storage: loadActiveDraftResume() reads CV draft
+  Web->>API: POST /api/public/match { resume: activeResume, jobText: vacancy.description }
+  API->>Match: computeJobMatch()
+  Match-->>API: MatchAnalysis { score: 86, matchedSkills, missingSkills }
+  API-->>Web: 200 OK { match }
+  Web-->>User: Displays 86% match badge on card
+
+  User->>Web: Clicks "Save Job"
+  Web->>Storage: saveJob(jobWithScore) appends to "curevo_saved_jobs_v1"
+  User->>Web: Clicks "Prepare Application"
+  Web->>Storage: createApplicationFromJob(job) saves to "curevo_applications_v1"
+  Web->>Web: Navigates to /prepare-application?jobId=...
+
+---
+
+sequenceDiagram
+  autonumber
+  title Journey 7: Interactive Kanban Application Pipeline Tracking
+
+  actor User as Candidate
+  participant Web as Applications.tsx (/applications)
+  participant Storage as LocalStorage (curevo_applications_v1)
+  participant Research as CompanyResearchModal.tsx
+  participant API as Express Router (/api/public)
+
+  User->>Web: Opens /applications
+  Web->>Storage: getApplications() loads application records
+  Storage-->>Web: Array of TrackedApplication objects
+  Web-->>User: Renders 5-column Kanban (Saved, Applied, Interview, Offer, Rejected)
+
+  User->>Web: Drags card from "Saved" to "Interview" column
+  Web->>Storage: updateApplicationStatus(id, "INTERVIEW") updates record
+  Web-->>User: Card snaps into "Interview" column; updates metrics
+
+  User->>Web: Clicks "Research Company" on an application card
+  Web->>Research: Opens CompanyResearchModal for "Nomos Bank"
+  Research->>Storage: getCompanyResearch("Nomos Bank") checks cache
+  
+  alt In Cache
+    Storage-->>Research: Cached company intelligence
+  else Not in Cache
+    Research->>API: POST /api/public/company-research { company: "Nomos Bank" }
+    API-->>Research: 200 OK { research: { products, culture, interviewTips } }
+    Research->>Storage: saveCompanyResearch("Nomos Bank", data)
+  end
+  Research-->>User: Displays verified business model, interview questions, culture tips
+
+  User->>Web: Clicks "Export CSV"
+  Web->>Web: Generates CSV blob and triggers download "curevo-job-applications-YYYY-MM-DD.csv"
+
+---
+
+sequenceDiagram
+  autonumber
+  title Journey 8: AI Interview Preparation & Voice-Enabled Mock Interview Simulation
+
+  actor User as Candidate
+  participant Web as Interview.tsx (/interview)
+  participant Speech as Web Speech API (Browser Hardware)
+  participant API as Express Router (/api/public/interview)
+  participant LLM as NVIDIA Nemotron AI
+  participant Storage as LocalStorage
+
+  User->>Web: Enters role "Staff Backend Engineer", company "Stripe", selects difficulty "Senior"
+  User->>Web: Clicks "Generate Interview Pack"
+  Web->>API: POST /api/public/interview/prep { role, company, difficulty: "senior", resume }
+  API->>LLM: Synthesizes technical, behavioral, situational questions + 7-day study plan
+  LLM-->>API: Question pack JSON
+  API-->>Web: 200 OK { questions: [...], studyPlan: [...] }
+  Web-->>User: Renders categorized questions with sample answers & study plan
+
+  User->>Web: Switches to "Mock Interview" tab, selects 3 questions, clicks "Start Simulation"
+  Web->>Speech: speakQuestion(firstQuestion.text)
+  Speech-->>User: Reads question aloud through device speakers via window.speechSynthesis
+  
+  User->>Web: Clicks microphone icon to answer
+  Web->>Speech: VoiceTranscriber starts SpeechRecognition (webkitSpeechRecognition)
+  User->>Speech: Speaks answer into device microphone
+  Speech-->>Web: Emits real-time transcribed text tokens into answer field
+  User->>Web: Clicks "Submit Answer"
+  
+  Web->>API: POST /api/public/interview/mock-evaluate { question, answer, role }
+  API->>LLM: Evaluates against STAR rubric, clarity, impact, and Truth Guard
+  LLM-->>API: Feedback, score dimensions, and adaptive follow-up question
+  API-->>Web: 200 OK { evaluation: { score: 85, feedback, nextQuestion } }
+  Web-->>User: Displays feedback, scores, and transitions to question 2
+
+  User->>Web: Completes all 3 questions
+  Web->>API: POST /api/public/interview/mock-final { transcript }
+  API->>LLM: Generates final competency breakdown report
+  LLM-->>API: Final report JSON
+  API-->>Web: 200 OK { overallScore: 88, categoryBreakdown, actionItems }
+  Web->>Storage: saveInterviewSession() persists transcript to "curevo_interview_sessions_v1"
+  Web-->>User: Displays comprehensive final performance report
+
+---
+
+sequenceDiagram
+  autonumber
+  title Journey 9: LinkedIn Profile Optimization & Keyword Ranking
+
+  actor User as Candidate
+  participant Web as LinkedIn.tsx (/linkedin)
+  participant Storage as LocalStorage
+  participant API as Express Router (/api/public/linkedin)
+  participant LLM as NVIDIA Nemotron AI
+
+  User->>Web: Opens /linkedin
+  Web->>Storage: Reads active CV from "curevo_builder_draft_v1_anonymous"
+  Web-->>User: Pre-populates target role, industry, and core skills
+  User->>Web: Clicks "Optimize LinkedIn Profile"
+  Web->>API: POST /api/public/linkedin/optimize { headline, about, targetRole, industry, skills, experience }
+  API->>API: aiConcurrencyGuard check
+  API->>LLM: Prompts Nemotron for 4 headline variants, narrative About section, quantified bullets, SEO keywords
+  LLM-->>API: Structured optimization JSON
+  API-->>Web: 200 OK { headline, about, experience, recruiterKeywords, meta }
+  Web->>Storage: saveLinkedInOptimization() appends run to "curevo_linkedin_history_v1" (capped at 30)
+  Web-->>User: Renders tabbed view: Headlines (Hook, Value, Minimal, Creative), About Story, Enhanced Bullets, SEO Keywords
+  User->>Web: Clicks "Copy to Clipboard" on selected headline
+  Web-->>User: Copies text, triggers toast notification
+
+---
+
+sequenceDiagram
+  autonumber
+  title Journey 10: Complete Candidate Data Sovereignty, JSON Backup & Atomic Erasure
+
+  actor User as Candidate
+  participant Web as DataPrivacyModal.tsx
+  participant Exporter as userDataExport.ts
+  participant LocalStore as Browser LocalStorage
+  participant DOM as Browser Document Engine
+
+  User->>Web: Clicks "Privacy & Data" in navigation footer
+  Web->>Exporter: exportAllCurevoData() scans all localStorage keys
+  Exporter->>LocalStore: Reads draft, jobs, applications, sessions, stories, linkedin, research
+  LocalStore-->>Exporter: JSON data chunks
+  Exporter-->>Web: Summary metadata (e.g. 1 draft, 4 jobs, 2 applications, 1 interview)
+  Web-->>User: Displays data sovereignty dashboard showing local data inventory
+
+  User->>Web: Clicks "Download Unified JSON Backup"
+  Web->>Exporter: downloadAllCurevoDataJson()
+  Exporter->>DOM: Creates application/json Blob and triggers download "curevo_complete_backup_YYYY-MM-DD.json"
+  DOM-->>User: Saves file to local computer disk
+
+  opt Restore from Backup
+    User->>Web: Uploads prior backup JSON file
+    Web->>DOM: FileReader.readAsText(file) parses backup schema
+    Web->>Exporter: importAllCurevoData(jsonText)
+    Exporter->>LocalStore: Writes restored keys back into localStorage
+    Exporter-->>Web: Dispatches onDataChanged() event
+    Web-->>User: Hydrates full application state instantly
+  end
+
+  User->>Web: Clicks "Delete All Data"
+  Web-->>User: Prompts with confirmation warning: "This action cannot be undone."
+  User->>Web: Confirms deletion
+  Web->>Exporter: clearAllCurevoData()
+  Exporter->>LocalStore: removeItem() on all 8 Curevo keys
+  Exporter->>Web: Resets all in-memory React component states to pristine empty defaults
+  Web-->>User: Displays "All local data purged" confirmation toast

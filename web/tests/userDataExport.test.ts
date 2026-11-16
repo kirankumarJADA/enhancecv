@@ -3,6 +3,8 @@ import {
   exportAllCurevoData,
   importAllCurevoData,
   clearAllCurevoData,
+  STORAGE_KEYS,
+  CUSTOM_AI_KEY_STORAGE,
 } from '../src/lib/userDataExport';
 
 describe('Curevo AI — User Data Sovereignty & Portability (Phase 9P)', () => {
@@ -76,13 +78,36 @@ describe('Curevo AI — User Data Sovereignty & Portability (Phase 9P)', () => {
     expect(result2.message).toContain('incompatible backup format');
   });
 
-  it('clears all user data completely on request', () => {
-    localStorage.setItem('curevo_saved_jobs_v1', JSON.stringify([{ id: 'job_1' }]));
-    localStorage.setItem('curevo_applications_v1', JSON.stringify([{ id: 'app_1' }]));
+  it('clears all user data completely on request including custom AI key and legacy draft keys', () => {
+    localStorage.setItem(STORAGE_KEYS.savedJobs, JSON.stringify([{ id: 'job_1' }]));
+    localStorage.setItem(STORAGE_KEYS.applications, JSON.stringify([{ id: 'app_1' }]));
+    localStorage.setItem(STORAGE_KEYS.resumeDraft, JSON.stringify({ version: 1, mode: 'create' }));
+    localStorage.setItem('curevo_draft_anonymous_v1', JSON.stringify({ version: 1, legacy: true }));
+    localStorage.setItem('curevo_builder_draft_v1', JSON.stringify({ version: 1, legacy: true }));
+    localStorage.setItem(CUSTOM_AI_KEY_STORAGE, 'nvapi-user-custom-secret');
 
     clearAllCurevoData();
 
-    expect(localStorage.getItem('curevo_saved_jobs_v1')).toBeNull();
-    expect(localStorage.getItem('curevo_applications_v1')).toBeNull();
+    expect(localStorage.getItem(STORAGE_KEYS.savedJobs)).toBeNull();
+    expect(localStorage.getItem(STORAGE_KEYS.applications)).toBeNull();
+    expect(localStorage.getItem(STORAGE_KEYS.resumeDraft)).toBeNull();
+    expect(localStorage.getItem('curevo_draft_anonymous_v1')).toBeNull();
+    expect(localStorage.getItem('curevo_builder_draft_v1')).toBeNull();
+    expect(localStorage.getItem(CUSTOM_AI_KEY_STORAGE)).toBeNull();
+  });
+
+  it('exports canonical draft key and supports legacy key fallback', () => {
+    expect(STORAGE_KEYS.resumeDraft).toBe('curevo_builder_draft_v1_anonymous');
+
+    // Case A: Saved under canonical key
+    localStorage.setItem('curevo_builder_draft_v1_anonymous', JSON.stringify({ version: 1, title: 'Canonical Draft' }));
+    let exported = exportAllCurevoData();
+    expect((exported.data.resumeDrafts as any)?.title).toBe('Canonical Draft');
+
+    // Case B: Fallback to legacy key if canonical not set
+    localStorage.removeItem('curevo_builder_draft_v1_anonymous');
+    localStorage.setItem('curevo_draft_anonymous_v1', JSON.stringify({ version: 1, title: 'Legacy Draft' }));
+    exported = exportAllCurevoData();
+    expect((exported.data.resumeDrafts as any)?.title).toBe('Legacy Draft');
   });
 });
