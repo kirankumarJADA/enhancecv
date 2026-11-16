@@ -58,6 +58,7 @@ import type {
   LanguageItem,
   CustomSection,
   SectionKey,
+  SkillCategory,
 } from '../types';
 import { DEFAULT_SECTION_ORDER } from '../types';
 
@@ -517,6 +518,7 @@ export function validateResume(data: unknown): ResumeData {
   // Skills
   let technical: string[] = [];
   let soft: string[] = [];
+  let categories: SkillCategory[] | undefined = undefined;
   if (raw.skills !== undefined && raw.skills !== null) {
     if (typeof raw.skills !== 'object' || Array.isArray(raw.skills)) {
       throw new AppError('VALIDATION_ERROR', 'Skills must be an object.', 400);
@@ -554,6 +556,18 @@ export function validateResume(data: unknown): ResumeData {
         }
         return s;
       });
+    }
+    if (raw.skills.categories !== undefined && raw.skills.categories !== null) {
+      if (Array.isArray(raw.skills.categories)) {
+        categories = raw.skills.categories
+          .filter((c: unknown) => c && typeof c === 'object' && !Array.isArray(c))
+          .map((c: any) => ({
+            category: typeof c.category === 'string' ? c.category.slice(0, 100) : 'Skills',
+            items: Array.isArray(c.items)
+              ? c.items.filter((it: unknown) => typeof it === 'string').map((it: string) => it.slice(0, 100))
+              : [],
+          }));
+      }
     }
   }
 
@@ -713,7 +727,7 @@ export function validateResume(data: unknown): ResumeData {
     experience,
     education,
     projects,
-    skills: { technical, soft },
+    skills: { technical, soft, categories },
     certifications,
     languages,
     achievements,

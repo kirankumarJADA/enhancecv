@@ -668,9 +668,9 @@ export function parseEducation(sections: SectionSpan[], warnings: string[]): Raw
       const institutionPart = parts.find((p) => INSTITUTION_RE.test(p));
       if (institutionPart) {
         institution = cleanStrayPipes(institutionPart.replace(range?.display || '', '').replace(/[\s\-–—]+$/, ''));
-        field = parts.filter((p) => p !== institutionPart).map(cleanStrayPipes).join(', ');
+        field = parts.filter((p) => p !== institutionPart && !/^(?:19|20)\d{2}$/.test(p)).map(cleanStrayPipes).join(', ');
       } else {
-        field = parts.map(cleanStrayPipes).join(', ');
+        field = parts.filter((p) => !/^(?:19|20)\d{2}$/.test(p)).map(cleanStrayPipes).join(', ');
       }
       items.push({
         degree: degree.charAt(0).toUpperCase() + degree.slice(1),
@@ -691,10 +691,15 @@ export function parseEducation(sections: SectionSpan[], warnings: string[]): Raw
     } else if (items.length > 0) {
       const last = items[items.length - 1];
       const gradeMatch = text.match(/((?:cgpa|gpa|percentage|aggregate)\s*[:\-]?\s*(\d{1,3}(?:\.\d+)?)(?:\s*\/\s*(?:10|100))?|(\d{1,2}(?:\.\d+)?)\s*\/\s*10|\d{1,3}(?:\.\d+)?\s*%)/i);
-      if (!last.institution && text.length < 120 && !isBulletLine(text)) {
+      const isDateLine = /^(?:[|\s•·\-–—]+)?(?:19|20)\d{2}\b/.test(text) || Boolean(findDateRange(text));
+      if (gradeMatch) {
+        if (!last.grade) last.grade = cleanStrayPipes(gradeMatch[0]);
+        const cleanedInst = cleanStrayPipes(text.replace(gradeMatch[0], ''));
+        if (cleanedInst && !last.institution && !isDateLine) {
+          last.institution = cleanedInst;
+        }
+      } else if (!last.institution && text.length < 120 && !isBulletLine(text) && !isDateLine) {
         last.institution = cleanStrayPipes(text);
-      } else if (gradeMatch && !last.grade) {
-        last.grade = cleanStrayPipes(gradeMatch[0]);
       }
     }
   }
@@ -836,6 +841,25 @@ export function parseProjects(sections: SectionSpan[]): RawProject[] {
         continue;
       }
 
+      // Non-bullet line handling:
+      // If the current project has a description and NO bullets yet, join continuation lines into a single continuous description!
+      if (projects.length > 0 && projects[projects.length - 1].bullets.length === 0 && projects[projects.length - 1].description) {
+        projects[projects.length - 1].description = cleanStrayPipes(
+          `${projects[projects.length - 1].description} ${text}`.replace(/\s+/g, ' ')
+        );
+        continue;
+      }
+
+      // If the current project has bullets and this line looks like a wrapped continuation line:
+      if (projects.length > 0 && projects[projects.length - 1].bullets.length > 0) {
+        const cur = projects[projects.length - 1];
+        const lastBullet = cur.bullets[cur.bullets.length - 1];
+        if (/^[a-z]/.test(text) || /[,;:\-]$/.test(lastBullet) || text.length > 80) {
+          cur.bullets[cur.bullets.length - 1] = cleanStrayPipes(`${lastBullet} ${text}`.replace(/\s+/g, ' '));
+          continue;
+        }
+      }
+
       if (text.length < 90) {
         projects.push({
           name: cleanStrayPipes(text.replace(/^\d+[.)]\s*/, '')),
@@ -844,8 +868,14 @@ export function parseProjects(sections: SectionSpan[]): RawProject[] {
           bullets: [],
           tech: [],
         });
-      } else if (projects.length > 0 && !projects[projects.length - 1].description) {
-        projects[projects.length - 1].description = cleanStrayPipes(text);
+      } else if (projects.length > 0) {
+        if (!projects[projects.length - 1].description) {
+          projects[projects.length - 1].description = cleanStrayPipes(text);
+        } else {
+          projects[projects.length - 1].description = cleanStrayPipes(
+            `${projects[projects.length - 1].description} ${text}`.replace(/\s+/g, ' ')
+          );
+        }
       }
     }
   }
@@ -963,6 +993,39 @@ export function parseInterestLines(sections: SectionSpan[]): string[] {
 
 // ----------------------------------------------------- languages, achievements, custom
 
+export const SPOKEN_LANGUAGES = new Set([
+  'english', 'telugu', 'hindi', 'tamil', 'kannada', 'malayalam', 'marathi', 'bengali',
+  'gujarati', 'punjabi', 'urdu', 'odia', 'assamese', 'sanskrit',
+  'spanish', 'french', 'german', 'mandarin', 'chinese', 'japanese', 'korean', 'arabic',
+  'russian', 'portuguese', 'italian', 'dutch', 'swedish', 'polish', 'turkish', 'vietnamese',
+  'thai', 'indonesian', 'malay', 'greek', 'hebrew', 'czech', 'danish', 'finnish', 'norwegian',
+  'hungarian', 'romanian', 'ukrainian', 'persian', 'farsi', 'tagalog', 'filipino', 'swahili',
+  'cantonese', 'latin',
+]);
+
+export const TECHNICAL_TERMS_BLACKLIST = new Set([
+  'shell', 'yaml', 'bash', 'frameworks', 'jpa', 'ingress', 'dlq', 'micrometer', 'practices',
+  'scrum', 'agile', 'kanban', 'git', 'docker', 'kubernetes', 'aws', 'gcp', 'azure', 'linux',
+  'sql', 'nosql', 'python', 'java', 'c', 'c++', 'c#', 'rust', 'golang', 'go', 'ruby', 'php',
+  'typescript', 'javascript', 'html', 'css', 'react', 'angular', 'vue', 'node', 'nodejs',
+  'spring', 'springboot', 'kafka', 'redis', 'graphql', 'rest', 'api', 'ci/cd', 'cicd',
+  'terraform', 'ansible', 'helm', 'promql', 'grafana', 'prometheus', 'datadog', 'observability',
+  'devops', 'cloud', 'databases', 'tools', 'languages', 'frontend', 'backend', 'microservices',
+]);
+
+const SPOKEN_PROFICIENCY_RE = /^(native|fluent|bilingual|conversational|intermediate|basic|proficient|working|elementary|mother\s*tongue|c2|c1|b2|b1|a2|a1)\b/i;
+
+export function isSpokenLanguage(name: string, proficiency?: string): boolean {
+  const norm = cleanStrayPipes(name).toLowerCase().trim();
+  if (!norm || norm.length < 2) return false;
+  if (TECHNICAL_TERMS_BLACKLIST.has(norm)) return false;
+  if (SPOKEN_LANGUAGES.has(norm)) return true;
+  if (proficiency && SPOKEN_PROFICIENCY_RE.test(proficiency.trim())) {
+    return !TECHNICAL_TERMS_BLACKLIST.has(norm);
+  }
+  return false;
+}
+
 export function parseLanguages(sections: SectionSpan[]): { name: string; proficiency?: string }[] {
   const languages: { name: string; proficiency?: string }[] = [];
   for (const span of sections.filter((s) => s.key.split('+').includes('languages'))) {
@@ -972,9 +1035,16 @@ export function parseLanguages(sections: SectionSpan[]): { name: string; profici
       for (const part of splitSkillList(text)) {
         const m = part.match(/^([A-Za-z]+)\s*\(([^)]+)\)$/) || part.match(/^([A-Za-z]+)\s*[-–—:]\s*(.+)$/);
         if (m) {
-          languages.push({ name: m[1], proficiency: m[2] });
+          const name = cleanStrayPipes(m[1]);
+          const proficiency = cleanStrayPipes(m[2]);
+          if (isSpokenLanguage(name, proficiency)) {
+            languages.push({ name, proficiency });
+          }
         } else if (/^[A-Za-z]{3,}$/.test(part)) {
-          languages.push({ name: part });
+          const name = cleanStrayPipes(part);
+          if (isSpokenLanguage(name)) {
+            languages.push({ name });
+          }
         }
       }
     }

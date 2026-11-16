@@ -168,7 +168,10 @@ function buildAgentUserPrompt(input: EvidenceInput, task: string): string {
   });
   master.projects.forEach((p, i) => {
     lines.push(`PROJECT[${i}] id=${p.id} | ${p.name}${p.tech?.length ? ` | tech: ${p.tech.join(', ')}` : ''}`);
-    p.bullets.forEach((b, j) => lines.push(`  BULLET idx=${j}: ${b}`));
+    if (p.description?.trim()) {
+      lines.push(`  DESCRIPTION: ${p.description.replace(/\s+/g, ' ').trim()}`);
+    }
+    p.bullets.forEach((b, j) => lines.push(`  BULLET idx=${j}: ${b.replace(/\s+/g, ' ').trim()}`));
   });
   lines.push(`SKILLS technical: ${master.skills.technical.join(', ') || '(none)'}`);
   lines.push(`SKILLS soft: ${master.skills.soft.join(', ') || '(none)'}`);
@@ -634,9 +637,14 @@ function resumeSnapshot(resume: ResumeData): string {
   return JSON.stringify({
     summary: resume.summary,
     bullets: [
-      ...resume.experience.flatMap((e) => e.bullets.map((b, i) => ({ itemId: e.id, index: i, text: b }))),
-      ...resume.projects.flatMap((p) => p.bullets.map((b, i) => ({ itemId: p.id, index: i, text: b }))),
+      ...resume.experience.flatMap((e) => e.bullets.map((b, i) => ({ itemId: e.id, index: i, text: b.replace(/\s+/g, ' ').trim() }))),
+      ...resume.projects.flatMap((p) => p.bullets.map((b, i) => ({ itemId: p.id, index: i, text: b.replace(/\s+/g, ' ').trim() }))),
     ],
+    projects: resume.projects.map((p) => ({
+      itemId: p.id,
+      name: p.name,
+      description: p.description?.replace(/\s+/g, ' ').trim() || '',
+    })),
     skills: resume.skills.technical,
   });
 }

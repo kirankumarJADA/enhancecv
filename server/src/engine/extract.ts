@@ -29,6 +29,7 @@ import {
   parseCertifications,
   parseInterestLines,
   parseLanguages,
+  isSpokenLanguage,
   parseAchievements,
   parseSummary,
 } from './extraction/fields';
@@ -168,9 +169,14 @@ export function extractFromLines(input: ParsedLine[], meta: ExtractionMeta): Ext
 
   const rawLanguages = parseLanguages(sections);
   const techLower = new Set(skills.technical.map((t) => t.toLowerCase()));
+  if (skills.categories) {
+    for (const cat of skills.categories) {
+      for (const item of cat.items) techLower.add(item.toLowerCase());
+    }
+  }
   const filteredLanguages = rawLanguages.filter((l) => {
     const isTech = techLower.has(l.name.toLowerCase());
-    return !isTech || Boolean(l.proficiency);
+    return (!isTech || Boolean(l.proficiency)) && isSpokenLanguage(l.name, l.proficiency);
   });
   const languages = filteredLanguages.map((l, i) => ({
     id: makeId('lang', i + 1),

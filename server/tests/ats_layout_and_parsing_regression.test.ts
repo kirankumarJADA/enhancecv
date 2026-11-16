@@ -193,4 +193,99 @@ describe('ATS-Grade Resume Parsing & Single-Page Layout Regression Suite', () =>
     expect(projectsIdx).toBeGreaterThan(experienceIdx);
     expect(certsIdx).toBeGreaterThan(projectsIdx);
   });
+
+  it('omits role headline from contact line and keeps Name on line 1 with contact on line 2', async () => {
+    const { resume } = extractResumeFromText(STRUCTURED_MULTI_CATEGORY_RESUME_TEXT);
+    resume.personal.headline = 'Data Science Virtual Intern';
+
+    const stream = renderResumePdf(resume, { pageSize: 'A4' });
+    const buffer = await streamToBuffer(stream);
+    const parsed = await pdfParse(buffer);
+
+    // Headline / current role must NOT appear in the contact line
+    expect(parsed.text).not.toContain('Data Science Virtual Intern');
+    // Name appears first
+    expect(parsed.text.indexOf('Alex Morgan')).toBeLessThan(parsed.text.indexOf('Austin, TX'));
+    // Contact information contains coordinates without headline
+    expect(parsed.text).toContain('Austin, TX');
+    expect(parsed.text).toContain('+1 (512) 555-0199');
+    expect(parsed.text).toContain('alex.morgan@cloudtech.io');
+    expect(parsed.text).toContain('linkedin.com/in/alexmorgan');
+    expect(parsed.text).toContain('alexmorgan');
+  });
+
+  it('joins multi-line project descriptions into continuous strings without dropping wrapped lines', () => {
+    const projectText = `
+Alex Morgan
+Austin, TX | alex@example.com
+
+PROJECTS
+• Distributed File Processing System. 4-service Java/Spring Boot microservices architecture
+processing 50GB logs daily using Apache Kafka, MinIO S3 object storage, and PostgreSQL.
+• Implemented distributed tracing with OpenTelemetry and Jaeger collecting 50M spans daily.
+`;
+    const { resume } = extractResumeFromText(projectText);
+    expect(resume.projects.length).toBe(1);
+    const proj = resume.projects[0];
+    expect(proj.name).toBe('Distributed File Processing System');
+    // Ensure wrapped line "processing 50GB logs daily..." was joined into the description!
+    expect(proj.description).toContain('4-service Java/Spring Boot microservices architecture');
+    expect(proj.description).toContain('processing 50GB logs daily using Apache Kafka');
+    expect(proj.bullets.length).toBe(1);
+    expect(proj.bullets[0]).toContain('OpenTelemetry');
+  });
+
+  it('strictly restricts LANGUAGES to human spoken languages and filters out technical tokens', () => {
+    const mixedLanguagesText = `
+Alex Morgan
+Austin, TX | alex@example.com
+
+LANGUAGES
+English (Native), Telugu (Fluent), Hindi, Shell, YAML, Frameworks, JPA, Ingress, DLQ, Micrometer, Practices, Scrum
+`;
+    const { resume } = extractResumeFromText(mixedLanguagesText);
+    const langNames = resume.languages.map((l) => l.name.toLowerCase());
+
+    // Spoken human languages must be kept
+    expect(langNames).toContain('english');
+    expect(langNames).toContain('telugu');
+    expect(langNames).toContain('hindi');
+
+    // Technical tokens must be strictly rejected
+    expect(langNames).not.toContain('shell');
+    expect(langNames).not.toContain('yaml');
+    expect(langNames).not.toContain('frameworks');
+    expect(langNames).not.toContain('jpa');
+    expect(langNames).not.toContain('ingress');
+    expect(langNames).not.toContain('dlq');
+    expect(langNames).not.toContain('micrometer');
+    expect(langNames).not.toContain('practices');
+    expect(langNames).not.toContain('scrum');
+  });
+
+  it('renders education without stray pipes or leading | 2025', async () => {
+    const { resume } = extractResumeFromText(STRUCTURED_MULTI_CATEGORY_RESUME_TEXT);
+    resume.education = [
+      {
+        id: 'edu_1',
+        degree: 'Bachelor of Technology',
+        field: 'Computer Science',
+        institution: 'Vardhaman College of Engineering | | ',
+        startDate: '',
+        endDate: '2025',
+        grade: 'GPA: 3.8 / 4.0',
+        dateDisplay: ' | 2025',
+      },
+    ];
+
+    const stream = renderResumePdf(resume, { pageSize: 'A4' });
+    const buffer = await streamToBuffer(stream);
+    const parsed = await pdfParse(buffer);
+
+    expect(parsed.text).not.toContain(' |  | ');
+    expect(parsed.text).not.toContain(' | | ');
+    expect(parsed.text).not.toMatch(/\|\s*2025/);
+    expect(parsed.text).toContain('Bachelor of Technology, Computer Science');
+    expect(parsed.text).toContain('Vardhaman College of Engineering  |  GPA: 3.8 / 4.0');
+  });
 });
