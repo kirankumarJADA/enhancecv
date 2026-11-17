@@ -64,7 +64,7 @@ const CITY_LOCATION_RE = /^[A-Z][a-zA-Z.'’-]+(?:\s[A-Z][a-zA-Z.'’-]+)*,\s*(?
 const LOCATION_INLINE_RE = /\b([A-Z][a-zA-Z.'’-]+(?:\s[A-Z][a-zA-Z.'’-]+)*),\s*(?:[A-Z]{2}\b|[A-Z][a-zA-Z]+)\b/;
 // Degree vocabulary (case/punctuation tolerant). Alternation is ordered so
 // longer tokens win: "BSc" must match b sc before b s, "BBA" before "BA".
-const DEGREE_RE = /\b(b\.?\s?tech|b\.?\s?sc|b\.?\s?com|b\.?\s?b\.?\s?a\.?|b\.?\s?a\.?|b\.?\s?s\.?|b\.?\s?e\.?|bachelor'?s?|master'?s?|m\.?\s?tech|m\.?\s?sc|m\.?\s?com|m\.?\s?b\.?\s?a\.?|m\.?\s?a\.?|m\.?\s?s\.?|m\.?\s?e\.?|mba|mbbs|ph\.?\s?d|doctorate|post\s+graduate\s+diploma|pg\s+diploma|diploma|associate(?:'s)?\s+degree|beng|meng|hnd|a[\s-]?levels?|hsc|sslc|intermediate)\b/i;
+const DEGREE_RE = /\b(bachelor(?:\s+of\s+[a-zA-Z]+)?|master(?:\s+of\s+[a-zA-Z]+)?|b\.?\s?tech|b\.?\s?sc|b\.?\s?com|b\.?\s?b\.?\s?a\.?|b\.?\s?a\.?|b\.?\s?s\.?|b\.?\s?e\.?|bachelor'?s?|master'?s?|m\.?\s?tech|m\.?\s?sc|m\.?\s?com|m\.?\s?b\.?\s?a\.?|m\.?\s?a\.?|m\.?\s?s\.?|m\.?\s?e\.?|mba|mbbs|ph\.?\s?d|doctorate|post\s+graduate\s+diploma|pg\s+diploma|diploma|associate(?:'s)?\s+degree|beng|meng|hnd|a[\s-]?levels?|hsc|sslc|intermediate)\b/i;
 const INSTITUTION_RE = /\b(university|institute|college|school|polytechnic|vidyalaya|vidyalay|academy|campus|iit|nit|iiit|vit|bits)\b/i;
 // Strong institution evidence for the heading-less fallback: only these words
 // mark a line as education (deliberately excludes "academy"/"campus", which
@@ -540,7 +540,7 @@ export function parseExperience(sections: SectionSpan[], warnings: string[]): Ra
   const startEntry = (inlineText: string, range: { start: string; end: string; current: boolean; display: string }) => {
     flushPost(); // any unclaimed post-date lines belong to the previous entry
     const inlineParts = splitInlineHeader(inlineText);
-    const candidates = [...pending, ...inlineParts];
+    const candidates = [...pending, ...inlineParts].map(cleanStrayPipes).filter(Boolean);
     pending = [];
     const { title, company, location, ambiguous } = assignRoleCompany(candidates);
     entries.push({
@@ -567,7 +567,7 @@ export function parseExperience(sections: SectionSpan[], warnings: string[]): Ra
     }
     const range = findDateRange(text);
     if (range) {
-      const inline = cleanStrayPipes(text.replace(range.display, ''));
+      const inline = text.replace(range.display, '').replace(/^[|\s•·\-–—]+/, '').replace(/[|\s•·\-–—]+$/, '').trim();
       // A date range also appears inside long bullet sentences; treat it as an
       // entry anchor only when the line itself looks like a header.
       const looksLikeBulletSentence = isBulletLine(text) || (text.length > 140 && entries.length > 0);
@@ -845,6 +845,20 @@ export function parseProjects(sections: SectionSpan[]): RawProject[] {
         continue;
       }
 
+      if (linkMatch) {
+        const rawName = cleanStrayPipes(text.replace(linkMatch[0], '').replace(/^\d+[.)]\s*/, '').trim());
+        if (rawName && rawName.length < 90) {
+          projects.push({
+            name: rawName,
+            link: cleanStrayPipes(linkMatch[0]),
+            description: '',
+            bullets: [],
+            tech: [],
+          });
+          continue;
+        }
+      }
+
       if (isBullet) {
         if (projects.length > 0) {
           projects[projects.length - 1].bullets.push(cleanStrayPipes(text));
@@ -861,11 +875,15 @@ export function parseProjects(sections: SectionSpan[]): RawProject[] {
       }
 
       // Non-bullet line handling:
-      // If the current project has a description and NO bullets yet, join continuation lines into a single continuous description!
-      if (projects.length > 0 && projects[projects.length - 1].bullets.length === 0 && projects[projects.length - 1].description) {
-        projects[projects.length - 1].description = cleanStrayPipes(
-          `${projects[projects.length - 1].description} ${text}`.replace(/\s+/g, ' ')
-        );
+      // If the current project has NO bullets yet, populate/join its description!
+      if (projects.length > 0 && projects[projects.length - 1].bullets.length === 0) {
+        if (!projects[projects.length - 1].description) {
+          projects[projects.length - 1].description = cleanStrayPipes(text);
+        } else {
+          projects[projects.length - 1].description = cleanStrayPipes(
+            `${projects[projects.length - 1].description} ${text}`.replace(/\s+/g, ' ')
+          );
+        }
         continue;
       }
 
@@ -879,7 +897,7 @@ export function parseProjects(sections: SectionSpan[]): RawProject[] {
         }
       }
 
-      if (text.length < 90) {
+      if (text.length < 90 || (text.length < 120 && !/[.!?]$/.test(text))) {
         projects.push({
           name: cleanStrayPipes(text.replace(/^\d+[.)]\s*/, '')),
           link: linkMatch ? cleanStrayPipes(linkMatch[0]) : '',
@@ -1086,8 +1104,8 @@ export function parseSummary(sections: SectionSpan[]): string {
   const lines = sections
     .filter((s) => s.key.split('+').includes('summary'))
     .flatMap((s) => linesForPart(s, 'summary'))
-    .map((l) => l.text.trim())
-    .filter((t) => t && !isBulletLine(t));
+    .map((l) => stripBulletPrefix(l.text.trim()).trim())
+    .filter(Boolean);
   const summary = normalizeWhitespace(lines.join(' '));
-  return summary.slice(0, 600);
+  return summary.slice(0, 2000);
 }

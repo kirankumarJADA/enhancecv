@@ -104,9 +104,16 @@ async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     stream.on('data', (chunk: Buffer) => chunks.push(chunk));
-    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('end', () => {
+      const buf = Buffer.concat(chunks);
+      resolve(buf);
+    });
     stream.on('error', reject);
   });
+}
+
+async function safePdfParse(buffer: Buffer) {
+  return pdfParse(new Uint8Array(buffer) as unknown as Buffer);
 }
 
 function extractMediaBoxes(pdfBuffer: Buffer): { x: number; y: number; width: number; height: number }[] {
@@ -186,7 +193,7 @@ describe('A4 & US Letter PDF Support', () => {
           expect(boxes[0].height).toBeCloseTo(expectedDims.height, 1);
 
           // Verify text extractability
-          const parsed = await pdfParse(buffer);
+          const parsed = await safePdfParse(buffer);
           expect(parsed.text).toContain('Jane Doe');
           expect(parsed.text).toContain('CloudScale Technologies');
           expect(parsed.text).toContain('Principal Cloud Architect');
@@ -207,7 +214,7 @@ describe('A4 & US Letter PDF Support', () => {
         expect(boxes[0].width).toBeCloseTo(PAGE_DIMENSIONS.A4.width, 1);
         expect(boxes[0].height).toBeCloseTo(PAGE_DIMENSIONS.A4.height, 1);
 
-        const parsed = await pdfParse(buffer);
+        const parsed = await safePdfParse(buffer);
         expect(parsed.text).toContain('Jane Doe');
       });
 
@@ -218,7 +225,7 @@ describe('A4 & US Letter PDF Support', () => {
         expect(boxes[0].width).toBeCloseTo(PAGE_DIMENSIONS.LETTER.width, 1);
         expect(boxes[0].height).toBeCloseTo(PAGE_DIMENSIONS.LETTER.height, 1);
 
-        const parsed = await pdfParse(buffer);
+        const parsed = await safePdfParse(buffer);
         expect(parsed.text).toContain('Jane Doe');
       });
     }
@@ -287,7 +294,7 @@ describe('A4 & US Letter PDF Support', () => {
         expect(box.height).toBeCloseTo(PAGE_DIMENSIONS.A4.height, 1);
       }
 
-      const parsed = await pdfParse(buffer);
+      const parsed = await safePdfParse(buffer);
       expect(parsed.numpages).toBe(boxes.length);
       expect(parsed.text).toContain('Early Career Systems');
     });
@@ -337,7 +344,7 @@ describe('A4 & US Letter PDF Support', () => {
         expect(box.height).toBeCloseTo(PAGE_DIMENSIONS.LETTER.height, 1);
       }
 
-      const parsed = await pdfParse(buffer);
+      const parsed = await safePdfParse(buffer);
       expect(parsed.text).toContain('US Infrastructure Inc');
     });
   });
@@ -398,7 +405,7 @@ describe('A4 & US Letter PDF Support', () => {
       const boxes = extractMediaBoxes(buffer);
       expect(boxes.length).toBeGreaterThanOrEqual(2);
 
-      const parsed = await pdfParse(buffer);
+      const parsed = await safePdfParse(buffer);
       expect(parsed.text).toContain('Principal Cloud Architect');
       expect(parsed.text).toContain('Dear Hiring Committee,');
     });
@@ -465,7 +472,7 @@ describe('A4 & US Letter PDF Support', () => {
       const buffer = await streamToBuffer(stream);
       expect(buffer.slice(0, 5).toString('ascii')).toBe('%PDF-');
 
-      const parsed = await pdfParse(buffer);
+      const parsed = await safePdfParse(buffer);
       expect(parsed.numpages).toBeGreaterThanOrEqual(1);
       expect(parsed.text).toContain('Robert Oppenheimer');
       expect(parsed.text).toContain('Advanced Research Facility 4');

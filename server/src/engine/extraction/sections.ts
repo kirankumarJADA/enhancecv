@@ -6,6 +6,7 @@
 
 import type { ParsedLine, SectionSpan } from './types';
 import { findDateRange } from './dates';
+import { isBulletLine } from '../../lib/text';
 
 type HeadingDef = { key: string; re: RegExp };
 
@@ -46,18 +47,79 @@ function matchHeading(clean: string): string | null {
   return null;
 }
 
+/**
+ * Matches compound section headers (e.g., "APPLIED MACHINE LEARNING & DATA SCIENCE PROJECTS",
+ * "INDUSTRY & PRACTICAL EXPERIENCE", "EDUCATION & ACADEMIC CREDENTIALS") based on core section keywords.
+ */
+function matchCompoundHeading(clean: string): string | null {
+  // 1. Projects: PROJECT / PROJECTS
+  if (/\bprojects?\b/i.test(clean)) {
+    return 'projects';
+  }
+  // 2. Experience: EXPERIENCE / EMPLOYMENT / INTERNSHIP / HISTORY
+  if (/\b(experiences?|employment|internships?|history|work\s+history)\b/i.test(clean)) {
+    return 'experience';
+  }
+  // 3. Education: EDUCATION / ACADEMIC / CREDENTIAL
+  if (/\b(education|academics?|credentials?)\b/i.test(clean)) {
+    return 'education';
+  }
+  // 4. Skills: SKILL / SKILLS / COMPETENCIES / TECHNOLOGIES
+  if (/\b(skills?|competencies|technologies|proficiencies)\b/i.test(clean)) {
+    return 'skills';
+  }
+  // 5. Summary: SUMMARY / PROFILE / OBJECTIVE
+  if (/\b(summary|profiles?|objectives?)\b/i.test(clean)) {
+    return 'summary';
+  }
+  // 6. Certifications & Awards: CERTIFICATION / CERTIFICATES / AWARD
+  if (/\b(certifications?|certificates?|licenses?|licences?)\b/i.test(clean)) {
+    return 'certifications';
+  }
+  if (/\b(achievements?|awards?|honors?|honours?)\b/i.test(clean)) {
+    return 'achievements';
+  }
+  // 7. Languages
+  if (/\blanguages?\b/i.test(clean)) {
+    return 'languages';
+  }
+  // 8. Publications
+  if (/\b(publications?|research)\b/i.test(clean)) {
+    return 'publications';
+  }
+  // 9. Volunteering
+  if (/\b(volunteer(ing)?|community\s+service)\b/i.test(clean)) {
+    return 'volunteering';
+  }
+  // 10. Interests
+  if (/\b(interests?|hobbies)\b/i.test(clean)) {
+    return 'interests';
+  }
+  return null;
+}
+
+function isHeadingCasing(text: string, words: string[]): boolean {
+  // ALL CAPS (e.g. APPLIED MACHINE LEARNING & DATA SCIENCE PROJECTS)
+  if (/[A-Z]/.test(text) && text === text.toUpperCase()) return true;
+  // Title Case where significant words start with uppercase (e.g. Industry & Practical Experience)
+  const minorWords = new Set(['and', '&', 'of', 'in', 'for', 'the', 'to', 'a', 'an', 'with', 'at', 'by']);
+  const nonMinor = words.filter((w) => !minorWords.has(w.toLowerCase()));
+  return nonMinor.length > 0 && nonMinor.every((w) => /^[A-Z0-9]/.test(w));
+}
+
 /** Strips decoration and decides whether a line is a section heading. */
 export function detectHeading(line: ParsedLine): { key: string; title: string } | null {
   let text = line.text.trim();
   if (!text) return null;
-  if (line.isListItem) return null;
+  if (line.isListItem || isBulletLine(line.text)) return null;
   text = text.replace(/^[\s•·▪◦‣\-–*]+/, '').replace(/[\s:;•·]+$/, '').trim();
-  if (text.length === 0 || text.length > 48) return null;
+  if (text.length === 0 || text.length > 80) return null;
   if (/[.,!?]$/.test(text)) return null; // sentence, not a heading
+  if (text.includes(':') || text.includes(',') || text.includes('|') || /https?:|\/\//i.test(text)) return null;
   if (findDateRange(text)) return null; // a timeline line, not a heading
   if (text.includes('@')) return null;
   const words = text.split(/\s+/);
-  if (words.length > 6) return null;
+  if (words.length > 8) return null;
   // Guard against page headers/footers like "Page 2" and bare numbers.
   if (/^(page\s*)?[\d.ivxlcdm]+$/i.test(text)) return null;
 
@@ -65,15 +127,32 @@ export function detectHeading(line: ParsedLine): { key: string; title: string } 
   const key = matchHeading(text);
   if (key) return { key, title: text };
 
-  // Combined heading: "Certifications & Interests", "Skills & Tools" — both
-  // halves must independently be known headings.
+  // Combined heading: "Certifications & Interests", "Education & Academic Credentials", "Skills & Tools"
   const combined = text.match(COMBINED_SPLIT_RE);
   if (combined) {
-    const a = matchHeading(combined[1].trim());
-    const b = matchHeading(combined[2].trim());
-    if (a && b && a !== b) return { key: `${a}+${b}`, title: text };
-    if (a && b && a === b) return { key: a, title: text };
+    const leftPart = combined[1].trim();
+    const rightPart = combined[2].trim();
+    const a = matchHeading(leftPart) || matchCompoundHeading(leftPart);
+    const b = matchHeading(rightPart) || matchCompoundHeading(rightPart);
+    if (a && b) {
+      if (a === b) return { key: a, title: text };
+      // "Education & Academic Credentials" maps to education
+      if ((a === 'education' && /credentials?/i.test(rightPart)) || (b === 'education' && /credentials?/i.test(leftPart))) {
+        return { key: 'education', title: text };
+      }
+      return { key: `${a}+${b}`, title: text };
+    }
   }
+
+  // Compound Section Header Detection:
+  // Standalone short heading line (<= 8 words, ALL CAPS or Title Case, no trailing period)
+  if (isHeadingCasing(text, words)) {
+    const compoundKey = matchCompoundHeading(text);
+    if (compoundKey) {
+      return { key: compoundKey, title: text };
+    }
+  }
+
   return null;
 }
 

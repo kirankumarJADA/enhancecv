@@ -19,10 +19,10 @@ export const DEFAULT_PAGE_SIZE: PageSize = 'A4';
 
 export const ATS_STANDARD_ORDER: SectionKey[] = [
   'summary',
-  'education',
   'skills',
-  'experience',
   'projects',
+  'experience',
+  'education',
   'certifications',
   'languages',
   'achievements',
@@ -92,8 +92,8 @@ function styleFor(templateId?: string): TemplateStyle {
 }
 
 function formatDateRange(start: string, end: string, current: boolean): string {
-  const s = start || '';
-  const e = current ? 'Present' : end || '';
+  const s = cleanStrayPipes(start || '');
+  const e = current ? 'Present' : cleanStrayPipes(end || '');
   if (!s && !e) return '';
   if (s && e) return `${s} – ${e}`;
   return s || e;
@@ -105,8 +105,10 @@ function generateResumeDoc(resume: ResumeData, opts: RenderOpts = {}, tightLevel
   let margin = density === 'compact' ? 36 : density === 'spacious' ? 64 : 54;
   if (tightLevel === 1) {
     margin = 36;
-  } else if (tightLevel >= 2) {
-    margin = 30;
+  } else if (tightLevel === 2) {
+    margin = 28;
+  } else if (tightLevel >= 3) {
+    margin = 24;
   }
 
   const rawPageSize = opts.pageSize ? String(opts.pageSize).trim().toUpperCase() : DEFAULT_PAGE_SIZE;
@@ -119,26 +121,33 @@ function generateResumeDoc(resume: ResumeData, opts: RenderOpts = {}, tightLevel
   let bodySize = style.bodySize;
   let headingSize = style.headingSize;
   let nameSize = style.nameSize;
-  let minHeadingFollower = 45;
+  let minHeadingFollower = 40;
 
   if (tightLevel === 1) {
     lineGapMultiplier = 0.65;
-    sectionGapMultiplier = 0.5;
+    sectionGapMultiplier = 0.45;
     bodySize = Math.min(style.bodySize, 9.5);
     headingSize = Math.min(style.headingSize, 10);
     nameSize = Math.min(style.nameSize, 18);
-    minHeadingFollower = 28;
-  } else if (tightLevel >= 2) {
-    lineGapMultiplier = 0.5;
-    sectionGapMultiplier = 0.35;
+    minHeadingFollower = 22;
+  } else if (tightLevel === 2) {
+    lineGapMultiplier = 0.45;
+    sectionGapMultiplier = 0.3;
     bodySize = Math.min(style.bodySize, 9.0);
     headingSize = Math.min(style.headingSize, 9.5);
     nameSize = Math.min(style.nameSize, 16);
-    minHeadingFollower = 20;
+    minHeadingFollower = 16;
+  } else if (tightLevel >= 3) {
+    lineGapMultiplier = 0.35;
+    sectionGapMultiplier = 0.2;
+    bodySize = Math.min(style.bodySize, 8.5);
+    headingSize = Math.min(style.headingSize, 9.0);
+    nameSize = Math.min(style.nameSize, 15);
+    minHeadingFollower = 12;
   }
 
-  const effectiveLineGap = Math.max(0.5, style.lineGap * lineGapMultiplier);
-  const effectiveSectionGap = Math.max(0.2, style.sectionGap * sectionGapMultiplier);
+  const effectiveLineGap = Math.max(0.4, style.lineGap * lineGapMultiplier);
+  const effectiveSectionGap = Math.max(0.15, style.sectionGap * sectionGapMultiplier);
 
   const doc = new PDFDocument({
     size: pageSize,
@@ -282,14 +291,42 @@ function generateResumeDoc(resume: ResumeData, opts: RenderOpts = {}, tightLevel
   if (p.github) contactItems.push(cleanStrayPipes(p.github));
   if (p.portfolio) contactItems.push(cleanStrayPipes(p.portfolio));
 
-  const contactLine = contactItems.filter(Boolean).join('  |  ');
-  if (contactLine) {
-    doc.font(style.bodyFont).fontSize(bodySize - 0.5).fillColor(COLOR_MUTED).text(
-      sanitizePdfText(contactLine),
-      margin,
-      doc.y,
-      { width: contentWidth }
-    );
+  const filteredItems = contactItems.filter(Boolean);
+  if (filteredItems.length > 0) {
+    let contactFontSize = Math.min(bodySize - 0.5, 9.5);
+    doc.font(style.bodyFont).fontSize(contactFontSize);
+    const fullSingle = filteredItems.join('  |  ');
+    while (contactFontSize > 7.5 && doc.widthOfString(sanitizePdfText(fullSingle)) > contentWidth) {
+      contactFontSize -= 0.5;
+      doc.fontSize(contactFontSize);
+    }
+
+    const contactLines: string[] = [];
+    if (doc.widthOfString(sanitizePdfText(fullSingle)) <= contentWidth) {
+      contactLines.push(fullSingle);
+    } else {
+      let currentLine = '';
+      for (const item of filteredItems) {
+        const candidate = currentLine ? `${currentLine}  |  ${item}` : item;
+        if (doc.widthOfString(sanitizePdfText(candidate)) <= contentWidth) {
+          currentLine = candidate;
+        } else {
+          if (currentLine) contactLines.push(currentLine);
+          currentLine = item;
+        }
+      }
+      if (currentLine) contactLines.push(currentLine);
+    }
+
+    for (const line of contactLines) {
+      doc.font(style.bodyFont).fontSize(contactFontSize).fillColor(COLOR_MUTED).text(
+        sanitizePdfText(line),
+        margin,
+        doc.y,
+        { width: contentWidth, lineBreak: false }
+      );
+      doc.moveDown(0.1);
+    }
   }
 
   // Deduplication tracker
@@ -476,44 +513,55 @@ function generateResumeDoc(resume: ResumeData, opts: RenderOpts = {}, tightLevel
 }
 
 export function renderResumePdf(resume: ResumeData, opts: RenderOpts = {}): NodeJS.ReadableStream {
-  if (opts.marginDensity === 'compact') {
-    const doc = generateResumeDoc(resume, opts, 1);
-    doc.end();
-    return doc;
-  }
-
-  const trialDoc = generateResumeDoc(resume, opts, 0);
-  const pageCount = trialDoc.bufferedPageRange().count;
-
   // A resume with 4+ experience entries or 11+ experience bullets is an established multi-page candidate profile
   const isMultiPageProfile =
     (resume.experience && resume.experience.length >= 4) ||
     (resume.experience && resume.experience.reduce((n, e) => n + (e.bullets?.length || 0), 0) >= 11);
 
-  // Smart Single-Page Fit:
-  // If a standard candidate profile overflows onto page 2 (pageCount > 1),
-  // dynamically tighten spacing so it fits cleanly onto exactly 1 full page (numPages === 1).
-  if (!isMultiPageProfile && pageCount > 1) {
-    const tightDoc = generateResumeDoc(resume, opts, 1);
-    const tightCount = tightDoc.bufferedPageRange().count;
-    if (tightCount === 1) {
-      tightDoc.end();
-      return tightDoc;
+  if (opts.marginDensity === 'compact') {
+    const compactDoc = generateResumeDoc(resume, opts, 1);
+    const compactCount = compactDoc.bufferedPageRange().count;
+    if (compactCount === 1 || isMultiPageProfile) {
+      compactDoc.end();
+      return compactDoc;
     }
-    // Level 2 ultra-tightening
     const ultraDoc = generateResumeDoc(resume, opts, 2);
-    const ultraCount = ultraDoc.bufferedPageRange().count;
-    if (ultraCount === 1) {
+    if (ultraDoc.bufferedPageRange().count === 1) {
       ultraDoc.end();
       return ultraDoc;
     }
-    ultraDoc.end();
+    const maxTightDoc = generateResumeDoc(resume, opts, 3);
+    maxTightDoc.end();
+    return maxTightDoc;
+  }
+
+  const trialDoc = generateResumeDoc(resume, opts, 0);
+  const pageCount = trialDoc.bufferedPageRange().count;
+
+  // If trial document fits on 1 page or is an established multi-page profile, use it directly
+  if (pageCount === 1 || isMultiPageProfile) {
+    trialDoc.end();
+    return trialDoc;
+  }
+
+  // Smart Single-Page Fit:
+  // If a standard candidate profile overflows onto page 2 (pageCount > 1),
+  // dynamically tighten spacing so it fits cleanly onto exactly 1 full page (numPages === 1).
+  const tightDoc = generateResumeDoc(resume, opts, 1);
+  if (tightDoc.bufferedPageRange().count === 1) {
     tightDoc.end();
     return tightDoc;
   }
 
-  trialDoc.end();
-  return trialDoc;
+  const ultraDoc = generateResumeDoc(resume, opts, 2);
+  if (ultraDoc.bufferedPageRange().count === 1) {
+    ultraDoc.end();
+    return ultraDoc;
+  }
+
+  const maxTightDoc = generateResumeDoc(resume, opts, 3);
+  maxTightDoc.end();
+  return maxTightDoc;
 }
 
 export function pdfFileName(resume: ResumeData, role?: string): string {

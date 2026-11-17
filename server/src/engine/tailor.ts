@@ -539,7 +539,11 @@ export async function tailorResume(
   summaryParts.push(
     years !== null
       ? `${factualTitle} with ${years}+ ${years === 1 ? 'year' : 'years'} of hands-on experience${roleSpecialism ? ` in ${roleSpecialism}` : ''}.`
-      : `${factualTitle}${roleSpecialism ? ` specialising in ${roleSpecialism}` : ''}.`
+      : roleSpecialism
+        ? `${factualTitle} specialising in ${roleSpecialism}.`
+        : master.summary && master.summary.trim().length > 20
+          ? master.summary
+          : `${factualTitle} with hands-on project and technical delivery experience.`
   );
   if (quantified.length > 0) {
     const fact = quantified[0].replace(/\.$/, '').trim();
@@ -557,7 +561,10 @@ export async function tailorResume(
   const newSummary = summaryParts.join(' ').replace(/\s+/g, ' ').trim();
 
   const oldSummary = resume.summary;
-  if (newSummary && newSummary !== oldSummary && wordCount(newSummary) <= 110) {
+  // Preserve full multi-sentence candidate summary verbatim; never overwrite with a 2-word title fallback
+  if (newSummary.split(/\s+/).length <= 4 && oldSummary && oldSummary.trim().length >= 20) {
+    // Keep candidate's original multi-sentence summary intact
+  } else if (newSummary && newSummary !== oldSummary && wordCount(newSummary) <= 110) {
     resume.summary = newSummary;
     changeLog.push({
       type: 'summary',

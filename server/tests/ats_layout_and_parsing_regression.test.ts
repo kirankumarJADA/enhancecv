@@ -19,7 +19,11 @@ async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     stream.on('data', (c: Buffer) => chunks.push(c));
-    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('end', () => {
+      const buf = Buffer.concat(chunks);
+      const cleanUint8 = new Uint8Array(buf);
+      resolve(cleanUint8 as unknown as Buffer);
+    });
     stream.on('error', reject);
   });
 }
@@ -173,7 +177,7 @@ describe('ATS-Grade Resume Parsing & Single-Page Layout Regression Suite', () =>
     expect(parsed.text).not.toMatch(/\|\s*202\d/);
   });
 
-  it('renders sections in standard ATS order (Summary -> Education -> Skills -> Experience -> Projects -> Certifications)', async () => {
+  it('renders sections in standard ATS order (Summary -> Skills -> Projects -> Experience -> Education -> Certifications)', async () => {
     const { resume } = extractResumeFromText(STRUCTURED_MULTI_CATEGORY_RESUME_TEXT);
 
     const stream = renderResumePdf(resume, { pageSize: 'A4' });
@@ -181,18 +185,18 @@ describe('ATS-Grade Resume Parsing & Single-Page Layout Regression Suite', () =>
     const parsed = await pdfParse(buffer);
 
     const summaryIdx = parsed.text.indexOf('PROFESSIONAL SUMMARY');
-    const educationIdx = parsed.text.indexOf('EDUCATION');
     const skillsIdx = parsed.text.indexOf('TECHNICAL SKILLS');
-    const experienceIdx = parsed.text.indexOf('PROFESSIONAL EXPERIENCE');
     const projectsIdx = parsed.text.indexOf('PROJECTS');
+    const experienceIdx = parsed.text.indexOf('PROFESSIONAL EXPERIENCE');
+    const educationIdx = parsed.text.indexOf('EDUCATION');
     const certsIdx = parsed.text.indexOf('CERTIFICATIONS');
 
     expect(summaryIdx).toBeGreaterThan(-1);
-    expect(educationIdx).toBeGreaterThan(summaryIdx);
-    expect(skillsIdx).toBeGreaterThan(educationIdx);
-    expect(experienceIdx).toBeGreaterThan(skillsIdx);
-    expect(projectsIdx).toBeGreaterThan(experienceIdx);
-    expect(certsIdx).toBeGreaterThan(projectsIdx);
+    expect(skillsIdx).toBeGreaterThan(summaryIdx);
+    expect(projectsIdx).toBeGreaterThan(skillsIdx);
+    expect(experienceIdx).toBeGreaterThan(projectsIdx);
+    expect(educationIdx).toBeGreaterThan(experienceIdx);
+    expect(certsIdx).toBeGreaterThan(educationIdx);
   });
 
   it('omits role headline from contact line and keeps Name on line 1 with contact on line 2', async () => {
@@ -349,5 +353,109 @@ Software Engineer | Acme Corp | 2021 - Present
       const validated = validateResume(resume);
       expect(validated.skills.technical.length).toBeLessThanOrEqual(100);
     }).not.toThrow();
+  });
+
+  it('parses compound headers without section bleed, preserves summary, and renders 1-page PDF', async () => {
+    const rawResumeText = `
+Kiran Kumar
+Hyderabad, India | +91 9876543210 | kiran@example.com | linkedin.com/in/kirankumar | github.com/kirankumar
+
+PROFESSIONAL SUMMARY
+Results-driven Software Engineer with extensive experience in architecting distributed systems, cloud infrastructure, and enterprise machine learning platforms. Proven track record of designing high-throughput REST APIs and scaling microservices with 99.99% availability.
+
+TECHNICAL SKILLS
+Languages: Java 21, Python 3.12, TypeScript, SQL
+Frameworks: Spring Boot 3, FastAPI, React, Node.js
+Cloud & DevOps: AWS, Docker, Kubernetes, Terraform, CI/CD GitHub Actions
+Databases: PostgreSQL, Redis, MongoDB
+
+APPLIED MACHINE LEARNING & DATA SCIENCE PROJECTS
+Customer Churn Prediction Engine | https://github.com/kirankumar/churn-prediction
+End-to-end predictive pipeline analyzing customer usage telemetry with automated model retraining.
+• Engineered gradient boosting pipeline using XGBoost and Scikit-Learn achieving 94.2% ROC-AUC.
+• Deployed real-time inference microservice in FastAPI wrapped in Docker on AWS ECS.
+
+Distributed File Processing System | https://github.com/kirankumar/distributed-files
+High-performance asynchronous document parser processing 50,000 documents per minute.
+• Implemented worker pool in Java 21 with virtual threads and Kafka message queuing.
+
+INDUSTRY & PRACTICAL EXPERIENCE
+Data Science & Backend Intern | Acme Global Solutions | 01/2024 – 07/2024
+• Developed automated data extraction microservices reducing ingestion latency by 45%.
+• Architected PostgreSQL schema optimizations improving query throughput by 30%.
+
+EDUCATION & ACADEMIC CREDENTIALS
+Bachelor of Technology, Computer Science | Vardhaman College of Engineering | 08/2020 – 05/2024
+GPA: 3.8 / 4.0
+`;
+
+    const { resume } = extractResumeFromText(rawResumeText);
+
+    // 1. Verify all sections populate independently
+    // Summary
+    expect(resume.summary).toContain('Results-driven Software Engineer with extensive experience');
+    expect(resume.summary).toContain('99.99% availability');
+
+    // Skills: must NOT contain project descriptions or experience lines
+    expect(resume.skills.technical).toContain('Java 21');
+    expect(resume.skills.technical).toContain('Python 3.12');
+    expect(resume.skills.technical).not.toContain('Customer Churn Prediction');
+    expect(resume.skills.technical).not.toContain('Acme Global Solutions');
+    expect(resume.skills.categories).toBeDefined();
+    expect(resume.skills.categories!.length).toBeGreaterThanOrEqual(3);
+
+    // Projects: compound header "APPLIED MACHINE LEARNING & DATA SCIENCE PROJECTS"
+    expect(resume.projects.length).toBe(2);
+    expect(resume.projects[0].name).toBe('Customer Churn Prediction Engine');
+    expect(resume.projects[0].description).toContain('End-to-end predictive pipeline');
+    expect(resume.projects[0].bullets.length).toBeGreaterThanOrEqual(2);
+    expect(resume.projects[1].name).toBe('Distributed File Processing System');
+
+    // Experience: compound header "INDUSTRY & PRACTICAL EXPERIENCE"
+    expect(resume.experience.length).toBe(1);
+    expect(resume.experience[0].company).toContain('Acme Global Solutions');
+    expect(resume.experience[0].title).toContain('Data Science & Backend Intern');
+    expect(resume.experience[0].bullets.length).toBe(2);
+
+    // Education: compound header "EDUCATION & ACADEMIC CREDENTIALS"
+    expect(resume.education.length).toBe(1);
+    expect(resume.education[0].institution).toContain('Vardhaman College of Engineering');
+    expect(resume.education[0].degree).toContain('Bachelor of Technology');
+
+    // 2. Validate URLs and contact info
+    expect(resume.personal.linkedin).toBe('linkedin.com/in/kirankumar');
+    expect(resume.personal.github).toBe('github.com/kirankumar');
+
+    // 3. Render PDF and verify single-page fit and intact URLs
+    const pdfStream = renderResumePdf(resume, { pageSize: 'A4' });
+    const pdfBuffer = await streamToBuffer(pdfStream);
+    const parsedPdf = await pdfParse(pdfBuffer);
+
+    // Strict 1-Page Fit
+    expect(parsedPdf.numpages).toBe(1);
+
+    // Zero stray pipes
+    expect(parsedPdf.text).not.toContain(' |  | ');
+    expect(parsedPdf.text).not.toContain(' | | ');
+    expect(parsedPdf.text).not.toMatch(/\|\s*2024\s*\|/);
+
+    // URLs must stay intact on page (never broken mid-URL across lines like "github.com/\n")
+    expect(parsedPdf.text).toContain('linkedin.com/in/kirankumar');
+    expect(parsedPdf.text).toContain('github.com/kirankumar');
+    expect(parsedPdf.text).not.toMatch(/github\.com\/\s*\n\s*kirankumar/);
+    expect(parsedPdf.text).not.toMatch(/linkedin\.com\/in\/\s*\n\s*kirankumar/);
+
+    // Verify sections render in ATS order
+    const summaryIdx = parsedPdf.text.indexOf('PROFESSIONAL SUMMARY');
+    const skillsIdx = parsedPdf.text.indexOf('TECHNICAL SKILLS');
+    const projectsIdx = parsedPdf.text.indexOf('PROJECTS');
+    const expIdx = parsedPdf.text.indexOf('PROFESSIONAL EXPERIENCE');
+    const eduIdx = parsedPdf.text.indexOf('EDUCATION');
+
+    expect(summaryIdx).toBeGreaterThanOrEqual(0);
+    expect(skillsIdx).toBeGreaterThan(summaryIdx);
+    expect(projectsIdx).toBeGreaterThan(skillsIdx);
+    expect(expIdx).toBeGreaterThan(projectsIdx);
+    expect(eduIdx).toBeGreaterThan(expIdx);
   });
 });
